@@ -2,26 +2,43 @@
 // 之所以不用 --virtual-time-budget：那会让 requestAnimationFrame 几乎不触发，
 // 主循环跑不起来，测不出真实行为。
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-const CHROME_CANDIDATES = [
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-  'U:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'D:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-  'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-];
-
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// 浏览器安装位置按系统环境变量推导，不把某台机器的绝对路径写进仓库。
+// 装在别处时可以设 CHROME_PATH，或往 build/browser-path.txt 写一行可执行文件路径。
+function candidateBrowsers() {
+  const roots = [
+    process.env['ProgramW6432'],
+    process.env['ProgramFiles'],
+    process.env['ProgramFiles(x86)'],
+    process.env.LOCALAPPDATA ? join(process.env.LOCALAPPDATA, 'Programs') : null,
+  ].filter(Boolean);
+  const out = [];
+  for (const root of roots) {
+    out.push(join(root, 'Google', 'Chrome', 'Application', 'chrome.exe'));
+    out.push(join(root, 'Microsoft', 'Edge', 'Application', 'msedge.exe'));
+  }
+  for (const dir of (process.env.PATH || '').split(';')) {
+    if (dir) out.push(join(dir, 'chrome.exe'), join(dir, 'msedge.exe'));
+  }
+  return out;
+}
+
 export function findChrome() {
-  for (const p of CHROME_CANDIDATES) {
+  if (process.env.CHROME_PATH && existsSync(process.env.CHROME_PATH)) return process.env.CHROME_PATH;
+  for (const p of candidateBrowsers()) {
     if (existsSync(p)) return p;
   }
-  return CHROME_CANDIDATES[0];
+  const local = join(process.cwd(), 'build', 'browser-path.txt');
+  if (existsSync(local)) {
+    const p = readFileSync(local, 'utf8').trim();
+    if (p && existsSync(p)) return p;
+  }
+  throw new Error('没找到 Chrome 或 Edge：设 CHROME_PATH 环境变量，或在 build/browser-path.txt 写一行浏览器路径');
 }
 
 export async function launch({ port = 9411, width = 1600, height = 1000 } = {}) {

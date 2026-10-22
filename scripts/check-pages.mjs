@@ -1,14 +1,6 @@
 // 检查 GitHub Pages 上的成品是否已经上线，并确认它真的是那份自包含页面（不是开发入口）。
-// 用法：node scripts/check-pages.mjs [最多等几秒，默认 180]
-import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join } from 'node:path';
-
-const CRED_FILE = join(process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local'), 'life-studio', 'credentials.json');
-const cred = existsSync(CRED_FILE) ? JSON.parse(readFileSync(CRED_FILE, 'utf8').replace(/^\uFEFF/, '')) : {};
-const OWNER = (cred.owner || 'For-XiaoYi').toLowerCase();
-const REPO = cred.repo || 'My-GameOfLife';
-const URL_BASE = `https://${OWNER}.github.io/${REPO}/`;
+// 用法：node scripts/check-pages.mjs [最多等几秒，默认 180]；站点地址可用 SITE_URL 覆盖。
+const URL_BASE = process.env.SITE_URL || 'https://for-xiaoyi.github.io/My-GameOfLife/';
 
 const deadline = Date.now() + Number(process.argv[2] ?? 180) * 1000;
 const bust = () => `${URL_BASE}?t=${Date.now()}`;

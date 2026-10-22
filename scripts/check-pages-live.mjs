@@ -1,14 +1,9 @@
 // 用真浏览器打开线上 Pages 地址，确认它不只是"能下载"，而是真的能跑。
 // 用法：node scripts/check-pages-live.mjs [URL]
-import { existsSync, readFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { resolve } from 'node:path';
 import { launch } from './cdp.mjs';
 
-const CRED_FILE = join(process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local'), 'life-studio', 'credentials.json');
-const cred = existsSync(CRED_FILE) ? JSON.parse(readFileSync(CRED_FILE, 'utf8').replace(/^\uFEFF/, '')) : {};
-const owner = (cred.owner || 'For-XiaoYi').toLowerCase();
-const url = process.argv[2] || `https://${owner}.github.io/${cred.repo || 'My-GameOfLife'}/`;
+const url = process.argv[2] || process.env.SITE_URL || 'https://for-xiaoyi.github.io/My-GameOfLife/';
 
 const browser = await launch({ port: 9419 });
 const page = await browser.newPage(url);

@@ -1,36 +1,21 @@
 // 把当前项目发布成一个 GitHub 仓库（不依赖 git，直接走 Git Data API）。
 // 用法：
-//   node scripts/publish-github.mjs            # 用本地保存的凭据
-//   node scripts/publish-github.mjs --check    # 只验证凭据是否还有效
-//   $env:GITHUB_TOKEN='ghp_xxx'; node scripts/publish-github.mjs
+//   GITHUB_TOKEN=<pat> node scripts/publish-github.mjs            # 新建或更新仓库
+//   GITHUB_TOKEN=<pat> node scripts/publish-github.mjs --check    # 只验证 token 与仓库访问
 //
-// 凭据查找顺序：环境变量 GITHUB_TOKEN → %LOCALAPPDATA%\life-studio\credentials.json
-// 凭据文件放在仓库之外，避免被误提交；里面的 token 只对 My-GameOfLife 有 Contents 写权限。
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { homedir } from 'node:os';
+// token 需要目标仓库的 Contents 读写权限（仅新建仓库时还要 Administration 权限以外的常规创建权）。
+// 可选环境变量：REPO_NAME（默认 My-GameOfLife）、REPO_PRIVATE=false（建公开仓库）。
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
-const CRED_FILE = join(process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local'), 'life-studio', 'credentials.json');
-
-function loadCredentials() {
-  if (!existsSync(CRED_FILE)) return {};
-  try {
-    return JSON.parse(readFileSync(CRED_FILE, 'utf8').replace(/^\uFEFF/, ''));
-  } catch (e) {
-    console.warn(`凭据文件读不出来（${e.message}），忽略`);
-    return {};
-  }
-}
-
-const cred = loadCredentials();
-const TOKEN = process.env.GITHUB_TOKEN || cred.githubToken;
+const TOKEN = process.env.GITHUB_TOKEN;
 if (!TOKEN) {
-  console.error(`缺少 GitHub token：没有 GITHUB_TOKEN 环境变量，${CRED_FILE} 里也没有。`);
+  console.error('缺少 GITHUB_TOKEN 环境变量：需要一个有 Contents 读写权限的 PAT。');
   process.exit(1);
 }
 
 const CHECK_ONLY = process.argv.includes('--check');
-const REPO = process.env.REPO_NAME || cred.repo || 'My-GameOfLife';
+const REPO = process.env.REPO_NAME || 'My-GameOfLife';
 const PRIVATE = (process.env.REPO_PRIVATE ?? 'true') !== 'false';
 const ROOT = resolve('.');
 const SKIP_DIRS = new Set(['node_modules', 'build', 'dist', '.pnpm-store', '.git', '.tools']);
@@ -43,7 +28,7 @@ async function api(path, init = {}) {
       Authorization: `Bearer ${TOKEN}`,
       Accept: 'application/vnd.github+json',
       'X-GitHub-Api-Version': '2022-11-28',
-      'User-Agent': 'life-studio-publisher',
+      'User-Agent': 'game-of-life-publisher',
       ...(init.body ? { 'Content-Type': 'application/json' } : {}),
       ...(init.headers ?? {}),
     },
