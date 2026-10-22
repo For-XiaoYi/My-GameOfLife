@@ -1,5 +1,5 @@
 // 构建：用 esbuild 二进制把 TS 打成单文件 IIFE，再内联 CSS/JS 生成可双击打开的 HTML。
-// 不依赖 vite 的 node 包装层（它需要 spawn 子进程），因此在受限沙箱里也能跑。
+// 不依赖 vite 的 node 包装层，直接调 esbuild 二进制，产物只有一份、构建更快也更好排查。
 import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
