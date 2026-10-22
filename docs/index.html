@@ -1919,6 +1919,110 @@ body.dragging-sort {
   display: block;
   margin: 0 auto;
 }
+
+/* ---------- 画布设置窗口 ---------- */
+.set-wrap {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 18px;
+}
+
+.set-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.set-label {
+  font-size: 11.5px;
+  color: var(--dim);
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+.set-aspects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.set-aspects .chip.on {
+  background: var(--accent-dim);
+  border-color: rgba(108, 245, 210, 0.5);
+  color: var(--accent);
+}
+
+.set-longrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.set-seg {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.set-seg button {
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.set-seg button + button {
+  border-left: 1px solid var(--line);
+}
+
+.set-seg button.on {
+  background: rgba(108, 245, 210, 0.16);
+  color: var(--accent);
+}
+
+.set-right {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+#set-preview {
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #05080c;
+}
+
+.set-dims {
+  font-size: 12.5px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.set-warn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+@media (max-width: 700px) {
+  .set-wrap {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
   </head>
   <body>
@@ -1945,6 +2049,9 @@ body.dragging-sort {
           </button>
           <button class="menubtn" id="sel-edge" data-tip="边界规则">
             <span class="menubtn-label">环绕边界</span><i class="menubtn-caret"></i>
+          </button>
+          <button class="iconbtn" id="btn-settings" data-tip="画布设置：比例 / 尺寸 / 边界" aria-label="画布设置">
+            <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>
           </button>
           <button class="iconbtn chip" id="tgl-grid" data-tip="网格 (G)" aria-label="网格">
             <svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M9 4v16M15 4v16"/></svg>
@@ -4214,6 +4321,41 @@ body.dragging-sort {
   }
   PALETTE[0] = pack(DEAD_RGB);
   var LIVE_COLOR = "#6cf5d2";
+  function paintWorldPreview(world2, cvs) {
+    const ctx = cvs.getContext("2d");
+    if (!ctx) return;
+    const W = world2.width;
+    const H = world2.height;
+    const off = document.createElement("canvas");
+    off.width = W;
+    off.height = H;
+    const octx = off.getContext("2d");
+    if (!octx) return;
+    const img = octx.createImageData(W, H);
+    const buf = new Uint32Array(img.data.buffer);
+    const S = world2.stride;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const i = (y + 1) * S + x + 1;
+        buf[y * W + x] = world2.cells[i] ? PALETTE[world2.ageAt(i)] : PALETTE[0];
+      }
+    }
+    octx.putImageData(img, 0, 0);
+    ctx.clearRect(0, 0, cvs.width, cvs.height);
+    ctx.fillStyle = BG;
+    ctx.fillRect(0, 0, cvs.width, cvs.height);
+    const s = Math.min(cvs.width / W, cvs.height / H);
+    const dw = W * s;
+    const dh = H * s;
+    const dx = (cvs.width - dw) / 2;
+    const dy = (cvs.height - dh) / 2;
+    ctx.imageSmoothingEnabled = s < 1;
+    ctx.drawImage(off, dx, dy, dw, dh);
+    ctx.strokeStyle = "rgba(108, 245, 210, 0.55)";
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 1;
+    ctx.strokeRect(dx + 0.5, dy + 0.5, Math.max(1, dw - 1), Math.max(1, dh - 1));
+  }
   var Renderer = class {
     canvas;
     ctx;
@@ -4639,6 +4781,9 @@ body.dragging-sort {
     grid: true,
     /** 显示模式：0 关闭 / 1 网格 / 2 网格 + 世界边界 */
     display: 2,
+    /** 画布 / 世界比例（宽 / 高）与长边尺寸 */
+    aspect: 16 / 9,
+    longEdge: 1024,
     playing: false,
     unlimited: false,
     speed: 10,
@@ -4661,6 +4806,90 @@ body.dragging-sort {
   var fsTimer = 0;
   var canvas = el("board");
   var stageEl = el("stage");
+  var ASPECT_KEY = "life-studio:aspect";
+  var LONG_EDGE_KEY = "life-studio:long-edge";
+  var ASPECT_PRESETS = [
+    { label: "16:9", value: 16 / 9 },
+    { label: "21:9", value: 21 / 9 },
+    { label: "4:3", value: 4 / 3 },
+    { label: "1:1", value: 1 },
+    { label: "9:16", value: 9 / 16 }
+  ];
+  var LONG_EDGES = [512, 1024, 1920, 2048, 2560];
+  function dimsFor(aspect, longEdge) {
+    if (aspect >= 1) {
+      return { w: Math.max(8, Math.round(longEdge)), h: Math.max(8, Math.round(longEdge / aspect)) };
+    }
+    return { w: Math.max(8, Math.round(longEdge * aspect)), h: Math.max(8, Math.round(longEdge)) };
+  }
+  function loadCanvasShape() {
+    try {
+      const a = Number(localStorage.getItem(ASPECT_KEY));
+      if (Number.isFinite(a) && a > 0.2 && a < 6) state.aspect = a;
+      const l = Number(localStorage.getItem(LONG_EDGE_KEY));
+      if (Number.isFinite(l) && l >= 128 && l <= 8192) state.longEdge = l;
+    } catch {
+    }
+  }
+  function saveCanvasShape() {
+    try {
+      localStorage.setItem(ASPECT_KEY, String(state.aspect));
+      localStorage.setItem(LONG_EDGE_KEY, String(state.longEdge));
+    } catch {
+    }
+  }
+  function syncShapeFromWorld() {
+    if (!world) return;
+    state.aspect = world.width / world.height;
+    state.longEdge = Math.max(world.width, world.height);
+  }
+  function layoutCanvas() {
+    const box = stageEl.getBoundingClientRect();
+    if (box.width <= 0 || box.height <= 0) return;
+    const pad = 16;
+    const availW = Math.max(40, box.width - pad * 2);
+    const availH = Math.max(40, box.height - pad * 2);
+    const r = world.width / world.height;
+    let w = availW;
+    let h = w / r;
+    if (h > availH) {
+      h = availH;
+      w = h * r;
+    }
+    const cssW = Math.max(40, Math.round(w));
+    const cssH = Math.max(40, Math.round(h));
+    if (cssW === renderer.cssW && cssH === renderer.cssH) return;
+    renderer.resize(cssW, cssH);
+    uiDirty = true;
+  }
+  function applyWorldShape(w, h, edge) {
+    if (state.playing) setPlaying(false);
+    const old = world;
+    const nw = new World(w, h);
+    nw.edge = edge;
+    const ox = Math.round((w - old.width) / 2);
+    const oy = Math.round((h - old.height) / 2);
+    for (let y = 0; y < old.height; y++) {
+      for (let x = 0; x < old.width; x++) {
+        if (!old.cells[(y + 1) * old.stride + x + 1]) continue;
+        const nx = x + ox;
+        const ny = y + oy;
+        if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+        nw.set(nx, ny, 1);
+      }
+    }
+    nw.recompute();
+    world = nw;
+    history = new History(world);
+    renderer.attach(world);
+    state.selection = [];
+    updateSelBar();
+    layoutCanvas();
+    view.fit(world.width, world.height, renderer.cssW, renderer.cssH);
+    syncRecenterButton();
+    updateZoomBounds();
+    uiDirty = true;
+  }
   function sliderToSpeed(v) {
     return SPEED_MIN * Math.pow(SPEED_MAX / SPEED_MIN, v / 100);
   }
@@ -4683,19 +4912,6 @@ body.dragging-sort {
     if (pulsar) stampPattern(w, pulsar, cx + 20, cy - 30, 0, false);
     if (penta) stampPattern(w, penta, cx - 26, cy + 18, 0, false);
     if (rp) stampPattern(w, rp, cx + 44, cy + 26, 0, false);
-  }
-  function rebuildWorld(width, height, edge, seed = false) {
-    world = new World(width, height);
-    world.edge = edge;
-    if (seed) seedShowcase(world);
-    history = new History(world);
-    renderer.attach(world);
-    state.selection = [];
-    updateSelBar();
-    if (renderer.cssW > 0) fitWorld();
-    syncRecenterButton();
-    updateZoomBounds();
-    uiDirty = true;
   }
   function advanceOne() {
     const codes = world.step();
@@ -4887,7 +5103,7 @@ body.dragging-sort {
   var sizeMenu = null;
   var edgeMenu = null;
   function syncWorldMenus() {
-    sizeMenu?.setValue(String(world.width));
+    sizeMenu?.setValue(String(state.longEdge));
     edgeMenu?.setValue(world.edge);
   }
   function makeMenu(btn, cfg) {
@@ -5002,7 +5218,8 @@ body.dragging-sort {
         value = v;
         paint();
       },
-      getValue: () => value
+      getValue: () => value,
+      close
     };
   }
   var UNDO_BYTES = 24 * 1024 * 1024;
@@ -7339,7 +7556,7 @@ body.dragging-sort {
     for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
     const payload = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
     const base = location.href.split("#")[0];
-    return `${base}#w=${world.width}&e=${world.edge}&g=${world.gen}&xy=${x0},${y0}&s=${payload}`;
+    return `${base}#w=${world.width}&h=${world.height}&e=${world.edge}&g=${world.gen}&xy=${x0},${y0}&s=${payload}`;
   }
   function applyShareFromHash() {
     const hash = location.hash.replace(/^#/, "");
@@ -7361,7 +7578,8 @@ body.dragging-sort {
       const parsed = parsePatternText(text);
       if (!parsed) return false;
       const size = Number(params.get("w")) || 1024;
-      world = new World(size, size);
+      const sizeH = Number(params.get("h")) || size;
+      world = new World(size, sizeH);
       world.edge = params.get("e") === "dead" ? "dead" : "wrap";
       const [px, py] = (params.get("xy") ?? "0,0").split(",").map(Number);
       world.stamp(parsed.cells, parsed.width, parsed.height, px || 0, py || 0);
@@ -7440,6 +7658,129 @@ body.dragging-sort {
       body.querySelector("#st-clips").addEventListener("click", () => void openClips());
       body.querySelector("#st-share").addEventListener("click", openShare);
       body.querySelector("#st-rle").addEventListener("click", openRle);
+    });
+  }
+  function openCanvasSettings() {
+    const draft = { aspect: state.aspect, longEdge: state.longEdge, edge: world.edge };
+    let longMenu = null;
+    openModal("画布设置", (body) => {
+      body.innerHTML = `
+      <div class="set-wrap">
+        <div class="set-left">
+          <div class="set-label">比例</div>
+          <div class="set-aspects" id="set-aspects"></div>
+          <div class="set-label">长边</div>
+          <div class="set-longrow">
+            <button type="button" class="menubtn" id="set-long"><span class="menubtn-label">1024</span><i class="menubtn-caret"></i></button>
+            <button type="button" class="btn tiny" id="set-match">匹配屏幕</button>
+          </div>
+          <div class="set-label">边界</div>
+          <div class="set-seg" id="set-edge">
+            <button type="button" data-edge="wrap">环绕</button>
+            <button type="button" data-edge="dead">死亡</button>
+          </div>
+        </div>
+        <div class="set-right">
+          <canvas id="set-preview"></canvas>
+          <div class="set-dims" id="set-dims"></div>
+          <button type="button" class="btn tiny" id="set-1to1">1:1 像素</button>
+        </div>
+      </div>
+      <div class="set-warn">
+        <span>应用后保留当前图案并居中放入新世界，超出部分裁切；回溯历史会重置。</span>
+        <button type="button" class="btn tiny" id="set-snap">先存快照</button>
+      </div>
+      <div class="btn-row" style="justify-content:flex-end;margin-top:12px">
+        <button type="button" class="btn" id="set-cancel">取消</button>
+        <button type="button" class="btn primary" id="set-apply">应用</button>
+      </div>`;
+      const aspects = body.querySelector("#set-aspects");
+      for (const p of ASPECT_PRESETS) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "chip";
+        b.dataset.aspect = String(p.value);
+        b.textContent = p.label;
+        b.addEventListener("click", () => {
+          draft.aspect = p.value;
+          paint();
+        });
+        aspects.append(b);
+      }
+      const preview = body.querySelector("#set-preview");
+      const dimsEl = body.querySelector("#set-dims");
+      const paint = () => {
+        const d = dimsFor(draft.aspect, draft.longEdge);
+        let pw = 300;
+        let ph = Math.round(300 / draft.aspect);
+        if (ph > 210) {
+          ph = 210;
+          pw = Math.round(210 * draft.aspect);
+        }
+        preview.width = Math.max(80, pw);
+        preview.height = Math.max(60, ph);
+        paintWorldPreview(world, preview);
+        dimsEl.textContent = `${d.w} × ${d.h}`;
+        for (const b of body.querySelectorAll("#set-aspects .chip")) {
+          b.classList.toggle("on", Math.abs(Number(b.dataset.aspect) - draft.aspect) < 0.01);
+        }
+        for (const b of body.querySelectorAll("#set-edge button")) {
+          b.classList.toggle("on", b.dataset.edge === draft.edge);
+        }
+        longMenu?.setValue(String(draft.longEdge));
+      };
+      longMenu = makeMenu(body.querySelector("#set-long"), {
+        options: LONG_EDGES.map((v) => ({ value: String(v), label: String(v) })),
+        value: String(draft.longEdge),
+        onChange: (v) => {
+          draft.longEdge = Number(v);
+          paint();
+        }
+      });
+      for (const b of body.querySelectorAll("#set-edge button")) {
+        b.addEventListener("click", () => {
+          draft.edge = b.dataset.edge === "dead" ? "dead" : "wrap";
+          paint();
+        });
+      }
+      body.querySelector("#set-match").addEventListener("click", () => {
+        const dpr = window.devicePixelRatio || 1;
+        const pw = Math.round(screen.width * dpr);
+        const ph = Math.round(screen.height * dpr);
+        const target = pw / ph;
+        let best = ASPECT_PRESETS[0];
+        for (const p of ASPECT_PRESETS) {
+          if (Math.abs(Math.log(p.value / target)) < Math.abs(Math.log(best.value / target))) best = p;
+        }
+        draft.aspect = best.value;
+        draft.longEdge = Math.max(pw, ph);
+        paint();
+        toast(`已按屏幕 ${pw} × ${ph} 套用 ${best.label}`);
+      });
+      body.querySelector("#set-1to1").addEventListener("click", () => {
+        const dpr = window.devicePixelRatio || 1;
+        view.scale = view.clampScale(1 / dpr);
+        uiDirty = true;
+        toast("已切到 1:1 像素：一个细胞对应一个物理像素");
+      });
+      body.querySelector("#set-snap").addEventListener("click", () => {
+        void store.saveSnapshot(makeSnapshot(`${world.width}×${world.height} 切换前`)).then(() => toast("已存快照"));
+      });
+      body.querySelector("#set-cancel").addEventListener("click", () => closeModal());
+      body.querySelector("#set-apply").addEventListener("click", () => {
+        const d = dimsFor(draft.aspect, draft.longEdge);
+        state.aspect = draft.aspect;
+        state.longEdge = draft.longEdge;
+        saveCanvasShape();
+        applyWorldShape(d.w, d.h, draft.edge);
+        closeModal();
+        toast(`世界 ${d.w} × ${d.h} · ${draft.edge === "wrap" ? "环绕" : "死亡"}边界`);
+      });
+      paint();
+      modalCleanup = () => {
+        longMenu?.close();
+        longMenu = null;
+      };
     });
   }
   function updateFsBar() {
@@ -7583,6 +7924,7 @@ body.dragging-sort {
     el("btn-studio").addEventListener("click", openStudioBridge);
     el("btn-fullscreen").addEventListener("click", toggleImmersive);
     el("btn-help").addEventListener("click", openHelp);
+    el("btn-settings").addEventListener("click", openCanvasSettings);
     el("btn-recenter").addEventListener("click", recenterView);
     el("fs-play").addEventListener("click", () => {
       setPlaying(!state.playing);
@@ -7620,18 +7962,16 @@ body.dragging-sort {
       setPaletteCollapsed(!el("palette").classList.contains("collapsed"));
     });
     sizeMenu = makeMenu(el("sel-size"), {
-      options: [
-        { value: "512", label: "512 × 512" },
-        { value: "1024", label: "1024 × 1024" },
-        { value: "2048", label: "2048 × 2048" }
-      ],
-      value: String(world.width),
+      options: LONG_EDGES.map((v) => ({ value: String(v), label: `长边 ${v}` })),
+      value: String(state.longEdge),
       onChange: (v) => {
-        const size = Number(v);
-        if (size === world.width) return;
-        if (state.playing) setPlaying(false);
-        rebuildWorld(size, size, world.edge, true);
-        toast(`世界已重建为 ${size}×${size}`);
+        const long = Number(v);
+        const d = dimsFor(state.aspect, long);
+        if (d.w === world.width && d.h === world.height) return;
+        state.longEdge = long;
+        saveCanvasShape();
+        applyWorldShape(d.w, d.h, world.edge);
+        toast(`世界已重建为 ${d.w} × ${d.h}（长边 ${long}）`);
         flushUi();
       }
     });
@@ -7677,22 +8017,25 @@ body.dragging-sort {
     } catch {
       auto = null;
     }
+    loadCanvasShape();
     const fromLink = applyShareFromHash();
     if (fromLink) {
+      syncShapeFromWorld();
     } else if (auto && auto.width > 0) {
       world = new World(auto.width, auto.height);
       world.edge = auto.edge;
       world.loadPacked(auto.packed, auto.population, auto.gen);
+      syncShapeFromWorld();
       syncWorldMenus();
     } else {
-      world = new World(1024, 1024);
+      const d = dimsFor(state.aspect, state.longEdge);
+      world = new World(d.w, d.h);
       seedShowcase(world);
     }
     history = new History(world);
     renderer.attach(world);
     buildPalette();
-    const r = stageEl.getBoundingClientRect();
-    renderer.resize(r.width, r.height);
+    layoutCanvas();
     if (window.innerWidth <= 700) setPaletteCollapsed(true);
     if (auto && auto.view && !fromLink) view.setView(auto.view);
     else fitContent();
@@ -7828,11 +8171,10 @@ body.dragging-sort {
     new ResizeObserver(() => {
       const box = stageEl.getBoundingClientRect();
       if (box.width === 0 || box.height === 0) return;
-      if (box.width === renderer.cssW && box.height === renderer.cssH) return;
       const w0 = view.screenToWorld(renderer.cssW / 2, renderer.cssH / 2);
-      renderer.resize(box.width, box.height);
+      layoutCanvas();
       const p0 = view.worldToScreen(w0.x, w0.y);
-      view.panBy(box.width / 2 - p0.x, box.height / 2 - p0.y);
+      view.panBy(renderer.cssW / 2 - p0.x, renderer.cssH / 2 - p0.y);
       updateZoomBounds();
       uiDirty = true;
     }).observe(stageEl);

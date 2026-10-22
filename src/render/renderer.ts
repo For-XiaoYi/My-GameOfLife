@@ -52,6 +52,48 @@ for (let s = 0; s < AGE_STOPS.length - 1; s++) {
 PALETTE[0] = pack(DEAD_RGB);
 export const LIVE_COLOR = '#6cf5d2';
 
+/**
+ * 设置窗口里的实时预览：把当前世界按目标比例缩进一张小画布，并画出世界边界虚线。
+ * 不新建 World、不跑演化，只做一次像素搬运。
+ */
+export function paintWorldPreview(world: World, cvs: HTMLCanvasElement): void {
+  const ctx = cvs.getContext('2d');
+  if (!ctx) return;
+  const W = world.width;
+  const H = world.height;
+  const off = document.createElement('canvas');
+  off.width = W;
+  off.height = H;
+  const octx = off.getContext('2d');
+  if (!octx) return;
+  const img = octx.createImageData(W, H);
+  const buf = new Uint32Array(img.data.buffer);
+  const S = world.stride;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = (y + 1) * S + x + 1;
+      buf[y * W + x] = world.cells[i] ? PALETTE[world.ageAt(i)] : PALETTE[0];
+    }
+  }
+  octx.putImageData(img, 0, 0);
+
+  ctx.clearRect(0, 0, cvs.width, cvs.height);
+  ctx.fillStyle = BG;
+  ctx.fillRect(0, 0, cvs.width, cvs.height);
+  const s = Math.min(cvs.width / W, cvs.height / H);
+  const dw = W * s;
+  const dh = H * s;
+  const dx = (cvs.width - dw) / 2;
+  const dy = (cvs.height - dh) / 2;
+  ctx.imageSmoothingEnabled = s < 1;
+  ctx.drawImage(off, dx, dy, dw, dh);
+  ctx.strokeStyle = 'rgba(108, 245, 210, 0.55)';
+  ctx.setLineDash([4, 4]);
+  ctx.lineWidth = 1;
+  ctx.strokeRect(dx + 0.5, dy + 0.5, Math.max(1, dw - 1), Math.max(1, dh - 1));
+}
+
+
 export interface Ghost {
   cells: Uint8Array;
   w: number;

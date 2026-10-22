@@ -1911,3 +1911,107 @@ body.dragging-sort {
   display: block;
   margin: 0 auto;
 }
+
+/* ---------- 画布设置窗口 ---------- */
+.set-wrap {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: 18px;
+}
+
+.set-left {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.set-label {
+  font-size: 11.5px;
+  color: var(--dim);
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+.set-aspects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.set-aspects .chip.on {
+  background: var(--accent-dim);
+  border-color: rgba(108, 245, 210, 0.5);
+  color: var(--accent);
+}
+
+.set-longrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.set-seg {
+  display: inline-flex;
+  width: fit-content;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.set-seg button {
+  height: 30px;
+  padding: 0 14px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.set-seg button + button {
+  border-left: 1px solid var(--line);
+}
+
+.set-seg button.on {
+  background: rgba(108, 245, 210, 0.16);
+  color: var(--accent);
+}
+
+.set-right {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+#set-preview {
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #05080c;
+}
+
+.set-dims {
+  font-size: 12.5px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.set-warn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--line);
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+@media (max-width: 700px) {
+  .set-wrap {
+    grid-template-columns: 1fr;
+  }
+}

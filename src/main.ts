@@ -1,4 +1,4 @@
-import { World } from './core/world.ts';
+import { World, type EdgeMode } from './core/world.ts';
 import { History } from './core/history.ts';
 import {
   renderPattern,
@@ -15,7 +15,7 @@ import {
 import { parsePatternText, toRle } from './core/rle.ts';
 import { Store, uid, type SnapshotRecord, type ClipRecord } from './core/storage.ts';
 import { Viewport } from './view/viewport.ts';
-import { Renderer, makeThumb, type Ghost, type ShapePreview } from './render/renderer.ts';
+import { Renderer, makeThumb, paintWorldPreview, type Ghost, type ShapePreview } from './render/renderer.ts';
 
 // ──────────────────────────────────────────────────────────────────────────
 // DOM 小工具
@@ -78,6 +78,9 @@ const state = {
   grid: true,
   /** 显示模式：0 关闭 / 1 网格 / 2 网格 + 世界边界 */
   display: 2 as 0 | 1 | 2,
+  /** 画布 / 世界比例（宽 / 高）与长边尺寸 */
+  aspect: 16 / 9,
+  longEdge: 1024,
   playing: false,
   unlimited: false,
   speed: 10,
@@ -102,6 +105,111 @@ let fsTimer = 0;
 
 const canvas = el<HTMLCanvasElement>('board');
 const stageEl = el('stage');
+
+// ──────────────────────────────────────────────────────────────────────────
+// 画布比例：取景框 = 世界比例，画布在舞台里居中留边
+// ──────────────────────────────────────────────────────────────────────────
+const ASPECT_KEY = 'life-studio:aspect';
+const LONG_EDGE_KEY = 'life-studio:long-edge';
+
+const ASPECT_PRESETS: Array<{ label: string; value: number }> = [
+  { label: '16:9', value: 16 / 9 },
+  { label: '21:9', value: 21 / 9 },
+  { label: '4:3', value: 4 / 3 },
+  { label: '1:1', value: 1 },
+  { label: '9:16', value: 9 / 16 },
+];
+
+const LONG_EDGES = [512, 1024, 1920, 2048, 2560];
+
+/** 长边 + 比例 → 世界尺寸；比例 ≥1 时长边是宽，否则是高。 */
+function dimsFor(aspect: number, longEdge: number): { w: number; h: number } {
+  if (aspect >= 1) {
+    return { w: Math.max(8, Math.round(longEdge)), h: Math.max(8, Math.round(longEdge / aspect)) };
+  }
+  return { w: Math.max(8, Math.round(longEdge * aspect)), h: Math.max(8, Math.round(longEdge)) };
+}
+
+function loadCanvasShape(): void {
+  try {
+    const a = Number(localStorage.getItem(ASPECT_KEY));
+    if (Number.isFinite(a) && a > 0.2 && a < 6) state.aspect = a;
+    const l = Number(localStorage.getItem(LONG_EDGE_KEY));
+    if (Number.isFinite(l) && l >= 128 && l <= 8192) state.longEdge = l;
+  } catch {
+    /* 本地存储不可用就用默认值 */
+  }
+}
+
+function saveCanvasShape(): void {
+  try {
+    localStorage.setItem(ASPECT_KEY, String(state.aspect));
+    localStorage.setItem(LONG_EDGE_KEY, String(state.longEdge));
+  } catch {
+    /* 忽略 */
+  }
+}
+
+/** 从当前世界反推比例与长边（载入快照 / 分享链接 / 自动存档后调用）。 */
+function syncShapeFromWorld(): void {
+  if (!world) return;
+  state.aspect = world.width / world.height;
+  state.longEdge = Math.max(world.width, world.height);
+}
+
+/** 画布按世界比例居中显示（letterbox），不再铺满舞台。 */
+function layoutCanvas(): void {
+  const box = stageEl.getBoundingClientRect();
+  if (box.width <= 0 || box.height <= 0) return;
+  const pad = 16;
+  const availW = Math.max(40, box.width - pad * 2);
+  const availH = Math.max(40, box.height - pad * 2);
+  const r = world.width / world.height;
+  let w = availW;
+  let h = w / r;
+  if (h > availH) {
+    h = availH;
+    w = h * r;
+  }
+  const cssW = Math.max(40, Math.round(w));
+  const cssH = Math.max(40, Math.round(h));
+  if (cssW === renderer.cssW && cssH === renderer.cssH) return;
+  renderer.resize(cssW, cssH);
+  uiDirty = true;
+}
+
+/**
+ * 换世界尺寸 / 边界模式，**保留现有内容**：以旧世界中心对齐新世界中心逐格搬运，
+ * 缩小时超出的部分被裁掉。
+ */
+function applyWorldShape(w: number, h: number, edge: EdgeMode): void {
+  if (state.playing) setPlaying(false);
+  const old = world;
+  const nw = new World(w, h);
+  nw.edge = edge;
+  const ox = Math.round((w - old.width) / 2);
+  const oy = Math.round((h - old.height) / 2);
+  for (let y = 0; y < old.height; y++) {
+    for (let x = 0; x < old.width; x++) {
+      if (!old.cells[(y + 1) * old.stride + x + 1]) continue;
+      const nx = x + ox;
+      const ny = y + oy;
+      if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+      nw.set(nx, ny, 1);
+    }
+  }
+  nw.recompute();
+  world = nw;
+  history = new History(world);
+  renderer.attach(world);
+  state.selection = [];
+  updateSelBar();
+  layoutCanvas();
+  view.fit(world.width, world.height, renderer.cssW, renderer.cssH);
+  syncRecenterButton();
+  updateZoomBounds();
+  uiDirty = true;
+}
 
 // ──────────────────────────────────────────────────────────────────────────
 // 速度映射
@@ -134,20 +242,6 @@ function seedShowcase(w: World): void {
   if (pulsar) stampPattern(w, pulsar, cx + 20, cy - 30, 0, false);
   if (penta) stampPattern(w, penta, cx - 26, cy + 18, 0, false);
   if (rp) stampPattern(w, rp, cx + 44, cy + 26, 0, false);
-}
-
-function rebuildWorld(width: number, height: number, edge: 'wrap' | 'dead', seed = false): void {
-  world = new World(width, height);
-  world.edge = edge;
-  if (seed) seedShowcase(world);
-  history = new History(world);
-  renderer.attach(world);
-  state.selection = [];
-  updateSelBar();
-  if (renderer.cssW > 0) fitWorld();
-  syncRecenterButton();
-  updateZoomBounds();
-  uiDirty = true;
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -391,6 +485,7 @@ interface MenuOption {
 interface Menu {
   setValue(v: string): void;
   getValue(): string;
+  close(): void;
 }
 
 let sizeMenu: Menu | null = null;
@@ -398,7 +493,7 @@ let edgeMenu: Menu | null = null;
 
 /** 把顶栏两个下拉的显示同步到当前世界。 */
 function syncWorldMenus(): void {
-  sizeMenu?.setValue(String(world.width));
+  sizeMenu?.setValue(String(state.longEdge));
   edgeMenu?.setValue(world.edge);
 }
 
@@ -530,6 +625,7 @@ function makeMenu(
       paint();
     },
     getValue: () => value,
+    close,
   };
 }
 
@@ -3281,7 +3377,7 @@ function shareLink(): string | null {
   for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
   const payload = btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
   const base = location.href.split('#')[0];
-  return `${base}#w=${world.width}&e=${world.edge}&g=${world.gen}&xy=${x0},${y0}&s=${payload}`;
+  return `${base}#w=${world.width}&h=${world.height}&e=${world.edge}&g=${world.gen}&xy=${x0},${y0}&s=${payload}`;
 }
 
 /** 打开带 #w=...&s=... 的链接时还原世界。 */
@@ -3305,7 +3401,9 @@ function applyShareFromHash(): boolean {
     const parsed = parsePatternText(text);
     if (!parsed) return false;
     const size = Number(params.get('w')) || 1024;
-    world = new World(size, size);
+    // 旧链接只有 w，按方形兼容；新链接带 h
+    const sizeH = Number(params.get('h')) || size;
+    world = new World(size, sizeH);
     world.edge = params.get('e') === 'dead' ? 'dead' : 'wrap';
     const [px, py] = (params.get('xy') ?? '0,0').split(',').map(Number);
     world.stamp(parsed.cells, parsed.width, parsed.height, px || 0, py || 0);
@@ -3399,6 +3497,144 @@ function openStudioBridge(): void {
 // ──────────────────────────────────────────────────────────────────────────
 // 全屏 / 沉浸观察
 // ──────────────────────────────────────────────────────────────────────────
+// ──────────────────────────────────────────────────────────────────────────
+// 画布设置：比例 / 长边 / 边界 + 实时预览
+// ──────────────────────────────────────────────────────────────────────────
+function openCanvasSettings(): void {
+  const draft = { aspect: state.aspect, longEdge: state.longEdge, edge: world.edge };
+  let longMenu: Menu | null = null;
+
+  openModal('画布设置', (body) => {
+    body.innerHTML = `
+      <div class="set-wrap">
+        <div class="set-left">
+          <div class="set-label">比例</div>
+          <div class="set-aspects" id="set-aspects"></div>
+          <div class="set-label">长边</div>
+          <div class="set-longrow">
+            <button type="button" class="menubtn" id="set-long"><span class="menubtn-label">1024</span><i class="menubtn-caret"></i></button>
+            <button type="button" class="btn tiny" id="set-match">匹配屏幕</button>
+          </div>
+          <div class="set-label">边界</div>
+          <div class="set-seg" id="set-edge">
+            <button type="button" data-edge="wrap">环绕</button>
+            <button type="button" data-edge="dead">死亡</button>
+          </div>
+        </div>
+        <div class="set-right">
+          <canvas id="set-preview"></canvas>
+          <div class="set-dims" id="set-dims"></div>
+          <button type="button" class="btn tiny" id="set-1to1">1:1 像素</button>
+        </div>
+      </div>
+      <div class="set-warn">
+        <span>应用后保留当前图案并居中放入新世界，超出部分裁切；回溯历史会重置。</span>
+        <button type="button" class="btn tiny" id="set-snap">先存快照</button>
+      </div>
+      <div class="btn-row" style="justify-content:flex-end;margin-top:12px">
+        <button type="button" class="btn" id="set-cancel">取消</button>
+        <button type="button" class="btn primary" id="set-apply">应用</button>
+      </div>`;
+
+    const aspects = body.querySelector<HTMLElement>('#set-aspects')!;
+    for (const p of ASPECT_PRESETS) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'chip';
+      b.dataset.aspect = String(p.value);
+      b.textContent = p.label;
+      b.addEventListener('click', () => {
+        draft.aspect = p.value;
+        paint();
+      });
+      aspects.append(b);
+    }
+
+    const preview = body.querySelector<HTMLCanvasElement>('#set-preview')!;
+    const dimsEl = body.querySelector<HTMLElement>('#set-dims')!;
+
+    const paint = (): void => {
+      const d = dimsFor(draft.aspect, draft.longEdge);
+      let pw = 300;
+      let ph = Math.round(300 / draft.aspect);
+      if (ph > 210) {
+        ph = 210;
+        pw = Math.round(210 * draft.aspect);
+      }
+      preview.width = Math.max(80, pw);
+      preview.height = Math.max(60, ph);
+      paintWorldPreview(world, preview);
+      dimsEl.textContent = `${d.w} × ${d.h}`;
+      for (const b of body.querySelectorAll<HTMLElement>('#set-aspects .chip')) {
+        b.classList.toggle('on', Math.abs(Number(b.dataset.aspect) - draft.aspect) < 0.01);
+      }
+      for (const b of body.querySelectorAll<HTMLElement>('#set-edge button')) {
+        b.classList.toggle('on', b.dataset.edge === draft.edge);
+      }
+      longMenu?.setValue(String(draft.longEdge));
+    };
+
+    longMenu = makeMenu(body.querySelector<HTMLElement>('#set-long')!, {
+      options: LONG_EDGES.map((v) => ({ value: String(v), label: String(v) })),
+      value: String(draft.longEdge),
+      onChange: (v) => {
+        draft.longEdge = Number(v);
+        paint();
+      },
+    });
+
+    for (const b of body.querySelectorAll<HTMLElement>('#set-edge button')) {
+      b.addEventListener('click', () => {
+        draft.edge = b.dataset.edge === 'dead' ? 'dead' : 'wrap';
+        paint();
+      });
+    }
+
+    body.querySelector('#set-match')!.addEventListener('click', () => {
+      const dpr = window.devicePixelRatio || 1;
+      const pw = Math.round(screen.width * dpr);
+      const ph = Math.round(screen.height * dpr);
+      const target = pw / ph;
+      let best = ASPECT_PRESETS[0]!;
+      for (const p of ASPECT_PRESETS) {
+        if (Math.abs(Math.log(p.value / target)) < Math.abs(Math.log(best.value / target))) best = p;
+      }
+      draft.aspect = best.value;
+      draft.longEdge = Math.max(pw, ph);
+      paint();
+      toast(`已按屏幕 ${pw} × ${ph} 套用 ${best.label}`);
+    });
+
+    body.querySelector('#set-1to1')!.addEventListener('click', () => {
+      const dpr = window.devicePixelRatio || 1;
+      view.scale = view.clampScale(1 / dpr);
+      uiDirty = true;
+      toast('已切到 1:1 像素：一个细胞对应一个物理像素');
+    });
+
+    body.querySelector('#set-snap')!.addEventListener('click', () => {
+      void store.saveSnapshot(makeSnapshot(`${world.width}×${world.height} 切换前`)).then(() => toast('已存快照'));
+    });
+
+    body.querySelector('#set-cancel')!.addEventListener('click', () => closeModal());
+    body.querySelector('#set-apply')!.addEventListener('click', () => {
+      const d = dimsFor(draft.aspect, draft.longEdge);
+      state.aspect = draft.aspect;
+      state.longEdge = draft.longEdge;
+      saveCanvasShape();
+      applyWorldShape(d.w, d.h, draft.edge);
+      closeModal();
+      toast(`世界 ${d.w} × ${d.h} · ${draft.edge === 'wrap' ? '环绕' : '死亡'}边界`);
+    });
+
+    paint();
+    modalCleanup = () => {
+      longMenu?.close();
+      longMenu = null;
+    };
+  });
+}
+
 function updateFsBar(): void {
   el('fs-gen').textContent = `第 ${nf.format(world.gen)} 代`;
   el('fs-pop').textContent = `人口 ${nf.format(world.population)}`;
@@ -3564,6 +3800,7 @@ function bindUi(): void {
   el('btn-studio').addEventListener('click', openStudioBridge);
   el('btn-fullscreen').addEventListener('click', toggleImmersive);
   el('btn-help').addEventListener('click', openHelp);
+  el('btn-settings').addEventListener('click', openCanvasSettings);
   el('btn-recenter').addEventListener('click', recenterView);
   el('fs-play').addEventListener('click', () => {
     setPlaying(!state.playing);
@@ -3607,18 +3844,16 @@ function bindUi(): void {
   });
 
   sizeMenu = makeMenu(el('sel-size'), {
-    options: [
-      { value: '512', label: '512 × 512' },
-      { value: '1024', label: '1024 × 1024' },
-      { value: '2048', label: '2048 × 2048' },
-    ],
-    value: String(world.width),
+    options: LONG_EDGES.map((v) => ({ value: String(v), label: `长边 ${v}` })),
+    value: String(state.longEdge),
     onChange: (v) => {
-      const size = Number(v);
-      if (size === world.width) return;
-      if (state.playing) setPlaying(false);
-      rebuildWorld(size, size, world.edge, true);
-      toast(`世界已重建为 ${size}×${size}`);
+      const long = Number(v);
+      const d = dimsFor(state.aspect, long);
+      if (d.w === world.width && d.h === world.height) return;
+      state.longEdge = long;
+      saveCanvasShape();
+      applyWorldShape(d.w, d.h, world.edge);
+      toast(`世界已重建为 ${d.w} × ${d.h}（长边 ${long}）`);
       flushUi();
     },
   });
@@ -3678,16 +3913,20 @@ async function boot(): Promise<void> {
     auto = null;
   }
 
+  loadCanvasShape();
   const fromLink = applyShareFromHash();
   if (fromLink) {
     /* 世界已经由链接里的图案建好 */
+    syncShapeFromWorld();
   } else if (auto && auto.width > 0) {
     world = new World(auto.width, auto.height);
     world.edge = auto.edge;
     world.loadPacked(auto.packed, auto.population, auto.gen);
+    syncShapeFromWorld();
     syncWorldMenus();
   } else {
-    world = new World(1024, 1024);
+    const d = dimsFor(state.aspect, state.longEdge);
+    world = new World(d.w, d.h);
     seedShowcase(world);
   }
 
@@ -3695,8 +3934,7 @@ async function boot(): Promise<void> {
   renderer.attach(world);
   buildPalette();
 
-  const r = stageEl.getBoundingClientRect();
-  renderer.resize(r.width, r.height);
+  layoutCanvas();
   // 窄屏先把图案库收起来，给画布留出空间
   if (window.innerWidth <= 700) setPaletteCollapsed(true);
   if (auto && auto.view && !fromLink) view.setView(auto.view);
@@ -3801,11 +4039,10 @@ async function boot(): Promise<void> {
   new ResizeObserver(() => {
     const box = stageEl.getBoundingClientRect();
     if (box.width === 0 || box.height === 0) return;
-    if (box.width === renderer.cssW && box.height === renderer.cssH) return;
     const w0 = view.screenToWorld(renderer.cssW / 2, renderer.cssH / 2);
-    renderer.resize(box.width, box.height);
+    layoutCanvas();
     const p0 = view.worldToScreen(w0.x, w0.y);
-    view.panBy(box.width / 2 - p0.x, box.height / 2 - p0.y);
+    view.panBy(renderer.cssW / 2 - p0.x, renderer.cssH / 2 - p0.y);
     updateZoomBounds();
     uiDirty = true;
   }).observe(stageEl);
