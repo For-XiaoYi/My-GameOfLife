@@ -1946,9 +1946,6 @@ type DragPayload = { kind: 'pat' | 'cat'; id: string } | null;
 const expandedCats = new Set<string>();
 let dragPayload: DragPayload = null;
 let dropSlot: HTMLElement | null = null;
-// 被拖动的那一项要等拖拽真正开始（第一次 dragover）后才从列表里抽走：
-// 在 dragstart 里就设 display:none 会让浏览器当场取消整次拖拽。
-let dragSourceEl: HTMLElement | null = null;
 
 function afterEdit(): void {
   saveLibraryConfig();
@@ -2068,16 +2065,6 @@ function setDropMark(target: HTMLElement | null): void {
   if (target) target.classList.add('drop-into');
 }
 
-function clearDropMarks(): void {
-  if (dropMark) {
-    dropMark.classList.remove('drop-into', 'drop-target');
-    dropMark = null;
-  }
-  for (const n of document.querySelectorAll('.drop-target, .drop-into')) {
-    n.classList.remove('drop-target', 'drop-into');
-  }
-}
-
 /**
  * 拖动时用一个占位槽标出落点：槽插进去以后，其它方块会被挤开，
  * 松手后图案/分类会落到哪里一眼就能看出来。
@@ -2102,7 +2089,6 @@ function endDrag(): void {
   dropSlot?.remove();
   dropSlot = null;
   dragPayload = null;
-  dragSourceEl = null;
   dropMark = null;
   for (const n of document.querySelectorAll('.dragging, .drop-into, .drop-target')) {
     n.classList.remove('dragging', 'drop-into', 'drop-target');
@@ -2120,29 +2106,108 @@ function gridOf(block: HTMLElement, catId: string): HTMLElement {
   return g;
 }
 
-function onPaletteDragOver(e: DragEvent): void {
+// ── 指针驱动的排序 ────────────────────────────────────────────────────
+// 为什么不用 HTML5 拖拽：拖拽期间源元素不能移出布局（移了浏览器会取消整次拖拽），
+// 于是被拖走的方块必然留下一个"空洞"。换成 pointer 事件后，源方块可以立刻收起，
+// 只留一个跟手的浮动预览，落点用占位槽表示。
+interface PointerDrag {
+  kind: 'pat' | 'cat';
+  id: string;
+  source: HTMLElement;
+  ghost: HTMLElement;
+  startX: number;
+  startY: number;
+  active: boolean;
+  pointerId: number;
+}
+
+let pdrag: PointerDrag | null = null;
+
+function beginPointerDrag(
+  e: PointerEvent,
+  kind: 'pat' | 'cat',
+  id: string,
+  source: HTMLElement,
+): void {
+  if (e.button !== 0 || pdrag) return;
+  const ghost = source.cloneNode(true) as HTMLElement;
+  ghost.classList.remove('dragging', 'drop-target', 'drop-into');
+  ghost.classList.add('drag-ghost');
+  ghost.style.width = `${source.offsetWidth}px`;
+  ghost.style.height = `${source.offsetHeight}px`;
+  ghost.style.display = 'none';
+  document.body.append(ghost);
+  pdrag = {
+    kind,
+    id,
+    source,
+    ghost,
+    startX: e.clientX,
+    startY: e.clientY,
+    active: false,
+    pointerId: e.pointerId,
+  };
+  window.addEventListener('pointermove', onPointerDragMove);
+  window.addEventListener('pointerup', onPointerDragEnd);
+  window.addEventListener('pointercancel', onPointerDragEnd);
+}
+
+function onPointerDragMove(e: PointerEvent): void {
+  const d = pdrag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  if (!d.active) {
+    // 几像素的阈值：太灵敏会把点击也当成拖拽
+    if (Math.abs(e.clientX - d.startX) + Math.abs(e.clientY - d.startY) < 5) return;
+    d.active = true;
+    dragPayload = { kind: d.kind, id: d.id };
+    d.source.style.display = 'none';
+    d.ghost.style.display = 'block';
+    document.body.classList.add('dragging-sort');
+  }
+  d.ghost.style.transform = `translate(${Math.round(e.clientX)}px, ${Math.round(e.clientY)}px) translate(-50%, -50%)`;
+  const hit = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+  updateDropTarget(hit, e.clientX, e.clientY);
+  autoScrollPalette(e.clientY);
+}
+
+function onPointerDragEnd(e: PointerEvent): void {
+  const d = pdrag;
+  if (!d || e.pointerId !== d.pointerId) return;
+  window.removeEventListener('pointermove', onPointerDragMove);
+  window.removeEventListener('pointerup', onPointerDragEnd);
+  window.removeEventListener('pointercancel', onPointerDragEnd);
+  pdrag = null;
+  d.ghost.remove();
+  d.source.style.display = '';
+  document.body.classList.remove('dragging-sort');
+  if (d.active) commitPointerDrop();
+  else endDrag();
+}
+
+/** 拖到列表上下边缘时自动滚动。 */
+function autoScrollPalette(clientY: number): void {
+  const list = el('palette-list');
+  const r = list.getBoundingClientRect();
+  const margin = 40;
+  if (clientY < r.top + margin) list.scrollTop -= 14;
+  else if (clientY > r.bottom - margin) list.scrollTop += 14;
+}
+
+/** 根据指针下的元素更新占位槽与高亮。 */
+function updateDropTarget(t: HTMLElement | null, clientX: number, clientY: number): void {
   const p = dragPayload;
   const list = el('palette-list');
-  const t = e.target as HTMLElement | null;
-  if (!p || !t || !list.contains(t)) return;
-
-  // 指针落在占位槽自己身上：保持原位不动。
-  // 槽参与布局是必须的（要占出落点空间），但对指针必须透明，
-  // 否则它会成为 dragover 目标 → 落点被算成"空白处" → 槽跳走 → 下一帧跳回来。
+  if (!p) return;
+  if (!t || !list.contains(t)) return;
+  // 占位槽对指针透明（pointer-events:none），正常不会命中，这里再兜一层
   if (t.closest('.drop-slot')) return;
-
-  // 拖拽已经真的开始了，这时才把源项从列表里抽走
-  if (dragSourceEl && !dragSourceEl.classList.contains('dragging')) {
-    dragSourceEl.classList.add('dragging');
-  }
 
   if (p.kind === 'cat') {
     const block = t.closest<HTMLElement>('.edit-cat');
     if (!block) return;
-    e.preventDefault();
     const r = block.getBoundingClientRect();
-    const ratio = r.height > 0 ? (e.clientY - r.top) / r.height : 0.5;
-    // 中间死区：手指/鼠标停在元素中部时不动槽，避免槽与元素互相推挤造成抖动
+    const ratio = r.height > 0 ? (clientY - r.top) / r.height : 0.5;
+    // 中间死区：指针停在元素中部时不动槽，避免槽与元素互相推挤造成抖动
     if (ratio >= 0.35 && ratio <= 0.65) return;
     putSlot(list, ratio > 0.65 ? block.nextElementSibling : block);
     setDropMark(block);
@@ -2152,7 +2217,6 @@ function onPaletteDragOver(e: DragEvent): void {
   // 拖的是图案
   const stash = t.closest<HTMLElement>('.stash-sec');
   if (stash) {
-    e.preventDefault();
     const g = gridOf(stash, '');
     g.dataset.stash = '1';
     putSlot(g, null);
@@ -2164,11 +2228,8 @@ function onPaletteDragOver(e: DragEvent): void {
   if (tile) {
     const grid = tile.parentElement;
     if (grid && grid.classList.contains('edit-grid')) {
-      e.preventDefault();
       const r = tile.getBoundingClientRect();
-      const ratio = r.width > 0 ? (e.clientX - r.left) / r.width : 0.5;
-      // 中间 30% 是死区：槽不动，元素也就不会被推来推去。
-      // 没有这个死区时，槽一插入就把方块挤开，指针落到另一侧，下一帧槽又跳回来。
+      const ratio = r.width > 0 ? (clientX - r.left) / r.width : 0.5;
       if (ratio >= 0.35 && ratio <= 0.65) return;
       putSlot(grid as HTMLElement, ratio > 0.65 ? tile.nextElementSibling : tile);
       setDropMark(null);
@@ -2176,11 +2237,9 @@ function onPaletteDragOver(e: DragEvent): void {
     }
   }
 
-  // 落在某个分类的网格、标题或空隙上：就留在**这个**分类里，
-  // 不要甩到整个列表末尾（那也会造成来回跳）。
+  // 落在某个分类的网格、标题或空隙上：留在**这个**分类里
   const block = t.closest<HTMLElement>('.edit-cat');
   if (block) {
-    e.preventDefault();
     const grid = t.closest<HTMLElement>('.edit-grid') ?? gridOf(block, block.dataset.catId ?? '');
     putSlot(grid, null);
     setDropMark(block);
@@ -2188,7 +2247,6 @@ function onPaletteDragOver(e: DragEvent): void {
   }
 
   // 真的落在列表末尾的空白上：放到最后一个分类的末尾
-  e.preventDefault();
   const blocks = [...list.querySelectorAll<HTMLElement>('.edit-cat')];
   const last = blocks[blocks.length - 1];
   if (p.kind === 'pat') {
@@ -2202,12 +2260,14 @@ function onPaletteDragOver(e: DragEvent): void {
   }
 }
 
-function onPaletteDrop(e: DragEvent): void {
+/** 松手：按占位槽的位置提交排序 / 归类。 */
+function commitPointerDrop(): void {
   const p = dragPayload;
-  if (!p) return;
-  e.preventDefault();
   const slot = dropSlot;
-  if (!slot) return;
+  if (!p || !slot) {
+    endDrag();
+    return;
+  }
   const parent = slot.parentElement as HTMLElement | null;
   // 先把落点信息取下来：endDrag 会把占位槽从 DOM 里删掉，之后就读不到兄弟节点了
   const before = (slot.nextElementSibling as HTMLElement | null) ?? null;
@@ -2229,18 +2289,15 @@ function onPaletteDrop(e: DragEvent): void {
 function patternTile(pat: LibPattern, catId: string | null): HTMLElement {
   const tile = document.createElement('div');
   tile.className = 'edit-tile';
-  tile.draggable = true;
   tile.dataset.patId = pat.id;
   tile.title =
     catId === null
       ? `${pat.name} · 双击或点「取出」放回图案库`
       : `${pat.name}${pat.custom ? '（自定义）' : ''} · 拖到别的分类或仓库`;
-  tile.addEventListener('dragstart', (e) => {
-    dragPayload = { kind: 'pat', id: pat.id };
-    dragSourceEl = tile;
-    e.dataTransfer?.setData('text/plain', pat.id);
+  tile.addEventListener('pointerdown', (e) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    beginPointerDrag(e, 'pat', pat.id, tile);
   });
-  tile.addEventListener('dragend', endDrag);
 
   const c = document.createElement('canvas');
   c.width = 52;
@@ -2333,13 +2390,11 @@ function buildEditPanel(): void {
 
     const head = document.createElement('div');
     head.className = 'edit-cat-head';
-    head.draggable = true;
-    head.addEventListener('dragstart', (e) => {
-      dragPayload = { kind: 'cat', id: cat.id };
-      dragSourceEl = wrap;
-      e.dataTransfer?.setData('text/plain', cat.id);
+    head.addEventListener('pointerdown', (e) => {
+      // 标题里的输入框和按钮照常工作，不抢它们的指针
+      if ((e.target as HTMLElement).closest('input,button,select')) return;
+      beginPointerDrag(e, 'cat', cat.id, wrap);
     });
-    head.addEventListener('dragend', endDrag);
 
     const toggle = mkButton(expandedCats.has(cat.id) ? '▾' : '▸', 'tiny', () => {
       if (expandedCats.has(cat.id)) expandedCats.delete(cat.id);
@@ -3243,28 +3298,8 @@ function bindUi(): void {
     if (t.closest('.pat')) return;
     if (state.patternId) deselectPattern();
   });
-  // 编辑模式里的拖拽排序：dragover 负责摆占位槽，drop 负责落位
-  // 注意：dragover 必须无条件 preventDefault，否则浏览器认为这里不接受放置，
-  // 松手就不会产生 drop 事件（拖到空隙上时尤其明显）。
-  const plist = el('palette-list');
-  plist.addEventListener('dragenter', (e) => {
-    if (!dragPayload) return;
-    e.preventDefault();
-  });
-  plist.addEventListener('dragover', (e) => {
-    if (!dragPayload) return;
-    e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-    onPaletteDragOver(e);
-  });
-  plist.addEventListener('drop', onPaletteDrop);
-  plist.addEventListener('dragleave', (e) => {
-    if (!plist.contains(e.relatedTarget as Node | null)) {
-      clearDropMarks();
-      dropSlot?.remove();
-      dropSlot = null;
-    }
-  });
+  // 编辑模式的排序改成指针驱动（见 beginPointerDrag），不再需要 dragenter/dragover/drop
+  // 这一套 HTML5 事件；指针事件统一挂在 window 上，拖出侧栏也能继续。
   el('btn-save-preset').addEventListener('click', openSavePreset);
   el('btn-sel-cancel').addEventListener('click', () => {
     clearSelection();

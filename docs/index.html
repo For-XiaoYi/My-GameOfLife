@@ -479,6 +479,8 @@ button.icon {
 }
 
 .edit-tile {
+  /* 指针驱动的排序要吃掉触摸滚动，否则手机上拖不动 */
+  touch-action: none;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -1775,6 +1777,34 @@ kbd {
   color: var(--dim);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* ---------- 指针驱动的排序 ---------- */
+body.dragging-sort {
+  cursor: grabbing;
+}
+
+.edit-cat-head {
+  touch-action: none;
+}
+
+.drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 300;
+  pointer-events: none;
+  opacity: 0.92;
+  border-radius: 10px;
+  border: 1px solid rgba(108, 245, 210, 0.55);
+  background: var(--panel-solid);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.drag-ghost canvas {
+  display: block;
+  margin: 0 auto;
 }
 </style>
   </head>
@@ -6053,7 +6083,6 @@ kbd {
   var expandedCats = /* @__PURE__ */ new Set();
   var dragPayload = null;
   var dropSlot = null;
-  var dragSourceEl = null;
   function afterEdit() {
     saveLibraryConfig();
     buildPalette();
@@ -6153,15 +6182,6 @@ kbd {
     dropMark = target;
     if (target) target.classList.add("drop-into");
   }
-  function clearDropMarks() {
-    if (dropMark) {
-      dropMark.classList.remove("drop-into", "drop-target");
-      dropMark = null;
-    }
-    for (const n of document.querySelectorAll(".drop-target, .drop-into")) {
-      n.classList.remove("drop-target", "drop-into");
-    }
-  }
   function dragSlot() {
     if (!dropSlot) {
       const s = document.createElement("div");
@@ -6179,7 +6199,6 @@ kbd {
     dropSlot?.remove();
     dropSlot = null;
     dragPayload = null;
-    dragSourceEl = null;
     dropMark = null;
     for (const n of document.querySelectorAll(".dragging, .drop-into, .drop-target")) {
       n.classList.remove("dragging", "drop-into", "drop-target");
@@ -6194,21 +6213,77 @@ kbd {
     block.append(g);
     return g;
   }
-  function onPaletteDragOver(e) {
+  var pdrag = null;
+  function beginPointerDrag(e, kind, id, source) {
+    if (e.button !== 0 || pdrag) return;
+    const ghost = source.cloneNode(true);
+    ghost.classList.remove("dragging", "drop-target", "drop-into");
+    ghost.classList.add("drag-ghost");
+    ghost.style.width = `${source.offsetWidth}px`;
+    ghost.style.height = `${source.offsetHeight}px`;
+    ghost.style.display = "none";
+    document.body.append(ghost);
+    pdrag = {
+      kind,
+      id,
+      source,
+      ghost,
+      startX: e.clientX,
+      startY: e.clientY,
+      active: false,
+      pointerId: e.pointerId
+    };
+    window.addEventListener("pointermove", onPointerDragMove);
+    window.addEventListener("pointerup", onPointerDragEnd);
+    window.addEventListener("pointercancel", onPointerDragEnd);
+  }
+  function onPointerDragMove(e) {
+    const d = pdrag;
+    if (!d || e.pointerId !== d.pointerId) return;
+    if (!d.active) {
+      if (Math.abs(e.clientX - d.startX) + Math.abs(e.clientY - d.startY) < 5) return;
+      d.active = true;
+      dragPayload = { kind: d.kind, id: d.id };
+      d.source.style.display = "none";
+      d.ghost.style.display = "block";
+      document.body.classList.add("dragging-sort");
+    }
+    d.ghost.style.transform = `translate(${Math.round(e.clientX)}px, ${Math.round(e.clientY)}px) translate(-50%, -50%)`;
+    const hit = document.elementFromPoint(e.clientX, e.clientY);
+    updateDropTarget(hit, e.clientX, e.clientY);
+    autoScrollPalette(e.clientY);
+  }
+  function onPointerDragEnd(e) {
+    const d = pdrag;
+    if (!d || e.pointerId !== d.pointerId) return;
+    window.removeEventListener("pointermove", onPointerDragMove);
+    window.removeEventListener("pointerup", onPointerDragEnd);
+    window.removeEventListener("pointercancel", onPointerDragEnd);
+    pdrag = null;
+    d.ghost.remove();
+    d.source.style.display = "";
+    document.body.classList.remove("dragging-sort");
+    if (d.active) commitPointerDrop();
+    else endDrag();
+  }
+  function autoScrollPalette(clientY) {
+    const list = el("palette-list");
+    const r = list.getBoundingClientRect();
+    const margin = 40;
+    if (clientY < r.top + margin) list.scrollTop -= 14;
+    else if (clientY > r.bottom - margin) list.scrollTop += 14;
+  }
+  function updateDropTarget(t, clientX, clientY) {
     const p = dragPayload;
     const list = el("palette-list");
-    const t = e.target;
-    if (!p || !t || !list.contains(t)) return;
+    if (!p) return;
+    if (!t || !list.contains(t)) return;
     if (t.closest(".drop-slot")) return;
-    if (dragSourceEl && !dragSourceEl.classList.contains("dragging")) {
-      dragSourceEl.classList.add("dragging");
-    }
     if (p.kind === "cat") {
       const block2 = t.closest(".edit-cat");
       if (!block2) return;
-      e.preventDefault();
       const r = block2.getBoundingClientRect();
-      const ratio = r.height > 0 ? (e.clientY - r.top) / r.height : 0.5;
+      const ratio = r.height > 0 ? (clientY - r.top) / r.height : 0.5;
       if (ratio >= 0.35 && ratio <= 0.65) return;
       putSlot(list, ratio > 0.65 ? block2.nextElementSibling : block2);
       setDropMark(block2);
@@ -6216,7 +6291,6 @@ kbd {
     }
     const stash = t.closest(".stash-sec");
     if (stash) {
-      e.preventDefault();
       const g = gridOf(stash, "");
       g.dataset.stash = "1";
       putSlot(g, null);
@@ -6227,9 +6301,8 @@ kbd {
     if (tile) {
       const grid = tile.parentElement;
       if (grid && grid.classList.contains("edit-grid")) {
-        e.preventDefault();
         const r = tile.getBoundingClientRect();
-        const ratio = r.width > 0 ? (e.clientX - r.left) / r.width : 0.5;
+        const ratio = r.width > 0 ? (clientX - r.left) / r.width : 0.5;
         if (ratio >= 0.35 && ratio <= 0.65) return;
         putSlot(grid, ratio > 0.65 ? tile.nextElementSibling : tile);
         setDropMark(null);
@@ -6238,13 +6311,11 @@ kbd {
     }
     const block = t.closest(".edit-cat");
     if (block) {
-      e.preventDefault();
       const grid = t.closest(".edit-grid") ?? gridOf(block, block.dataset.catId ?? "");
       putSlot(grid, null);
       setDropMark(block);
       return;
     }
-    e.preventDefault();
     const blocks = [...list.querySelectorAll(".edit-cat")];
     const last = blocks[blocks.length - 1];
     if (p.kind === "pat") {
@@ -6257,12 +6328,13 @@ kbd {
       setDropMark(last ?? null);
     }
   }
-  function onPaletteDrop(e) {
+  function commitPointerDrop() {
     const p = dragPayload;
-    if (!p) return;
-    e.preventDefault();
     const slot = dropSlot;
-    if (!slot) return;
+    if (!p || !slot) {
+      endDrag();
+      return;
+    }
     const parent = slot.parentElement;
     const before = slot.nextElementSibling ?? null;
     endDrag();
@@ -6281,15 +6353,12 @@ kbd {
   function patternTile(pat, catId) {
     const tile = document.createElement("div");
     tile.className = "edit-tile";
-    tile.draggable = true;
     tile.dataset.patId = pat.id;
     tile.title = catId === null ? `${pat.name} · 双击或点「取出」放回图案库` : `${pat.name}${pat.custom ? "（自定义）" : ""} · 拖到别的分类或仓库`;
-    tile.addEventListener("dragstart", (e) => {
-      dragPayload = { kind: "pat", id: pat.id };
-      dragSourceEl = tile;
-      e.dataTransfer?.setData("text/plain", pat.id);
+    tile.addEventListener("pointerdown", (e) => {
+      if (e.target.closest("button")) return;
+      beginPointerDrag(e, "pat", pat.id, tile);
     });
-    tile.addEventListener("dragend", endDrag);
     const c = document.createElement("canvas");
     c.width = 52;
     c.height = 34;
@@ -6372,13 +6441,10 @@ kbd {
       wrap.dataset.catId = cat.id;
       const head = document.createElement("div");
       head.className = "edit-cat-head";
-      head.draggable = true;
-      head.addEventListener("dragstart", (e) => {
-        dragPayload = { kind: "cat", id: cat.id };
-        dragSourceEl = wrap;
-        e.dataTransfer?.setData("text/plain", cat.id);
+      head.addEventListener("pointerdown", (e) => {
+        if (e.target.closest("input,button,select")) return;
+        beginPointerDrag(e, "cat", cat.id, wrap);
       });
-      head.addEventListener("dragend", endDrag);
       const toggle = mkButton(expandedCats.has(cat.id) ? "▾" : "▸", "tiny", () => {
         if (expandedCats.has(cat.id)) expandedCats.delete(cat.id);
         else expandedCats.add(cat.id);
@@ -7170,25 +7236,6 @@ kbd {
       if (state.paletteMode === "edit") return;
       if (t.closest(".pat")) return;
       if (state.patternId) deselectPattern();
-    });
-    const plist = el("palette-list");
-    plist.addEventListener("dragenter", (e) => {
-      if (!dragPayload) return;
-      e.preventDefault();
-    });
-    plist.addEventListener("dragover", (e) => {
-      if (!dragPayload) return;
-      e.preventDefault();
-      if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
-      onPaletteDragOver(e);
-    });
-    plist.addEventListener("drop", onPaletteDrop);
-    plist.addEventListener("dragleave", (e) => {
-      if (!plist.contains(e.relatedTarget)) {
-        clearDropMarks();
-        dropSlot?.remove();
-        dropSlot = null;
-      }
     });
     el("btn-save-preset").addEventListener("click", openSavePreset);
     el("btn-sel-cancel").addEventListener("click", () => {

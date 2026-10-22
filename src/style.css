@@ -471,6 +471,8 @@ button.icon {
 }
 
 .edit-tile {
+  /* 指针驱动的排序要吃掉触摸滚动，否则手机上拖不动 */
+  touch-action: none;
   position: relative;
   display: flex;
   flex-direction: column;
@@ -1767,4 +1769,32 @@ kbd {
   color: var(--dim);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+/* ---------- 指针驱动的排序 ---------- */
+body.dragging-sort {
+  cursor: grabbing;
+}
+
+.edit-cat-head {
+  touch-action: none;
+}
+
+.drag-ghost {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 300;
+  pointer-events: none;
+  opacity: 0.92;
+  border-radius: 10px;
+  border: 1px solid rgba(108, 245, 210, 0.55);
+  background: var(--panel-solid);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.55);
+  overflow: hidden;
+}
+
+.drag-ghost canvas {
+  display: block;
+  margin: 0 auto;
 }
