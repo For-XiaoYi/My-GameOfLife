@@ -10,7 +10,10 @@
     "build:vite": "tsc --noEmit && vite build && node scripts/postbuild.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "test": "node --experimental-strip-types scripts/selftest.ts"
+    "test": "node --experimental-strip-types scripts/selftest.ts",
+    "check": "node scripts/check.mjs",
+    "publish:gh": "node scripts/publish-github.mjs",
+    "check:gh": "node scripts/publish-github.mjs --check"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

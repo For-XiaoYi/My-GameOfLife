@@ -1,17 +1,36 @@
 // 把当前项目发布成一个 GitHub 仓库（不依赖 git，直接走 Git Data API）。
 // 用法：
-//   $env:GITHUB_TOKEN='ghp_xxx'; node scripts/publish-github.mjs [仓库名]
-// 环境变量：GITHUB_TOKEN（必填）、REPO_NAME（可选，默认 conway-life）、REPO_PRIVATE（默认 true）
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+//   node scripts/publish-github.mjs            # 用本地保存的凭据
+//   node scripts/publish-github.mjs --check    # 只验证凭据是否还有效
+//   $env:GITHUB_TOKEN='ghp_xxx'; node scripts/publish-github.mjs
+//
+// 凭据查找顺序：环境变量 GITHUB_TOKEN → %LOCALAPPDATA%\life-studio\credentials.json
+// 凭据文件放在仓库之外，避免被误提交；里面的 token 只对 My-GameOfLife 有 Contents 写权限。
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join, relative, resolve } from 'node:path';
 
-const TOKEN = process.env.GITHUB_TOKEN;
+const CRED_FILE = join(process.env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local'), 'life-studio', 'credentials.json');
+
+function loadCredentials() {
+  if (!existsSync(CRED_FILE)) return {};
+  try {
+    return JSON.parse(readFileSync(CRED_FILE, 'utf8').replace(/^\uFEFF/, ''));
+  } catch (e) {
+    console.warn(`凭据文件读不出来（${e.message}），忽略`);
+    return {};
+  }
+}
+
+const cred = loadCredentials();
+const TOKEN = process.env.GITHUB_TOKEN || cred.githubToken;
 if (!TOKEN) {
-  console.error('缺少 GITHUB_TOKEN 环境变量');
+  console.error(`缺少 GitHub token：没有 GITHUB_TOKEN 环境变量，${CRED_FILE} 里也没有。`);
   process.exit(1);
 }
 
-const REPO = process.env.REPO_NAME || process.argv[2] || 'conway-life';
+const CHECK_ONLY = process.argv.includes('--check');
+const REPO = process.env.REPO_NAME || cred.repo || 'My-GameOfLife';
 const PRIVATE = (process.env.REPO_PRIVATE ?? 'true') !== 'false';
 const ROOT = resolve('.');
 const SKIP_DIRS = new Set(['node_modules', 'build', 'dist', '.pnpm-store', '.git', '.tools']);
@@ -57,9 +76,23 @@ function collect(dir, out = []) {
 
 const files = collect(ROOT).sort();
 const totalBytes = files.reduce((n, f) => n + statSync(join(ROOT, f)).size, 0);
-console.log(`准备发布 ${files.length} 个文件，共 ${(totalBytes / 1024).toFixed(0)} KB`);
 
 const me = await api('/user');
+
+if (CHECK_ONLY) {
+  console.log(`凭据有效：${me.login}`);
+  try {
+    const r = await api(`/repos/${me.login}/${REPO}`);
+    console.log(`仓库可访问：${r.full_name}（${r.private ? '私有' : '公开'}，默认分支 ${r.default_branch}）`);
+    console.log(`地址：${r.html_url}`);
+  } catch (e) {
+    console.log(`但访问 ${REPO} 失败：${e.message}`);
+    process.exitCode = 1;
+  }
+  process.exit(process.exitCode ?? 0);
+}
+
+console.log(`准备发布 ${files.length} 个文件，共 ${(totalBytes / 1024).toFixed(0)} KB`);
 console.log(`账号：${me.login}`);
 
 let repo = null;

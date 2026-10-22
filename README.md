@@ -59,3 +59,17 @@ scripts/
 路径往上解析依赖，找不到 vite 的传递依赖（rollup/esbuild）。`scripts/build.mjs` 直接找
 `@esbuild/win32-x64` 的 exe 来打包，避开这一层。`pnpm dev`（vite 开发服务器）同样受这个问题
 影响，起不来时用 `pnpm build` + 直接打开 HTML 即可。
+
+## 常用命令
+
+| 命令 | 作用 |
+| --- | --- |
+| `pnpm build` | 类型检查 + 打包出 `dist/index.html` 和根目录的 `生命游戏.html` |
+| `pnpm test` | 纯 Node 的算法自检（规则、历史回溯、图案周期、机枪节奏） |
+| `pnpm check` | 用 CDP 驱动无头 Chrome 做端到端检查（19 项，含交互与像素断言） |
+| `pnpm check:gh` | 检查发布凭据是否仍然有效 |
+| `pnpm publish:gh` | 把当前目录同步到 GitHub 仓库（走 Git Data API，不需要装 git） |
+
+发布脚本的凭据放在仓库之外的 `%LOCALAPPDATA%\life-studio\credentials.json`，只有当前用户能读，
+不会被提交。想换仓库或换 token，改这个文件即可。
+
