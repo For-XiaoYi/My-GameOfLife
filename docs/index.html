@@ -1667,6 +1667,106 @@ kbd {
   }
 }
 
+/* ---------- 自绘下拉（替代原生 select） ---------- */
+.menubtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 4px 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background-color: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 0.14s,
+    border-color 0.14s;
+}
+
+.menubtn:hover {
+  background-color: rgba(108, 245, 210, 0.1);
+  border-color: var(--line-strong);
+}
+
+.menubtn.open {
+  background-color: rgba(108, 245, 210, 0.12);
+  border-color: rgba(108, 245, 210, 0.55);
+}
+
+.menubtn:focus-visible {
+  outline: none;
+  border-color: rgba(108, 245, 210, 0.65);
+  box-shadow: 0 0 0 3px rgba(108, 245, 210, 0.14);
+}
+
+.menubtn-caret {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  opacity: 0.65;
+  margin-right: 4px;
+}
+
+.menubtn.open .menubtn-caret {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.menu-pop {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 250;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 10px;
+  background: #0c151c;
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.62);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.menu-item .menu-check {
+  width: 12px;
+  color: var(--accent);
+  opacity: 0;
+}
+
+.menu-item.on {
+  color: var(--accent);
+}
+
+.menu-item.on .menu-check {
+  opacity: 1;
+}
+
+.menu-item:hover,
+.menu-item.active {
+  background-color: rgba(108, 245, 210, 0.12);
+}
+
 /* ---------- 顶栏图标按钮 ---------- */
 .iconbtn {
   width: 30px;
@@ -1827,15 +1927,12 @@ body.dragging-sort {
         </div>
 
         <div class="top-actions">
-          <select id="sel-size" title="世界尺寸">
-            <option value="512">512 × 512</option>
-            <option value="1024" selected>1024 × 1024</option>
-            <option value="2048">2048 × 2048</option>
-          </select>
-          <select id="sel-edge" title="边界规则">
-            <option value="wrap">环绕边界</option>
-            <option value="dead">死亡边界</option>
-          </select>
+          <button class="menubtn" id="sel-size" data-tip="世界尺寸">
+            <span class="menubtn-label">1024 × 1024</span><i class="menubtn-caret"></i>
+          </button>
+          <button class="menubtn" id="sel-edge" data-tip="边界规则">
+            <span class="menubtn-label">环绕边界</span><i class="menubtn-caret"></i>
+          </button>
           <button class="iconbtn chip" id="tgl-grid" data-tip="网格 (G)" aria-label="网格">
             <svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M9 4v16M15 4v16"/></svg>
           </button>
@@ -4712,6 +4809,127 @@ body.dragging-sort {
     document.addEventListener("pointerdown", hide, true);
     window.addEventListener("scroll", hide, true);
   }
+  var sizeMenu = null;
+  var edgeMenu = null;
+  function syncWorldMenus() {
+    sizeMenu?.setValue(String(world.width));
+    edgeMenu?.setValue(world.edge);
+  }
+  function makeMenu(btn, cfg) {
+    let value = cfg.value;
+    let pop = null;
+    let activeIndex = 0;
+    const label = btn.querySelector(".menubtn-label");
+    const paint = () => {
+      const opt = cfg.options.find((o) => o.value === value);
+      if (label) label.textContent = opt ? opt.label : value;
+    };
+    const items = () => pop ? [...pop.querySelectorAll(".menu-item")] : [];
+    const highlight = () => {
+      for (const [i, n] of items().entries()) n.classList.toggle("active", i === activeIndex);
+    };
+    const onDocPointer = (e) => {
+      if (!pop) return;
+      const t = e.target;
+      if (!pop.contains(t) && !btn.contains(t)) close();
+    };
+    const onDocKey = (e) => {
+      if (!pop) return;
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        activeIndex = Math.min(cfg.options.length - 1, activeIndex + 1);
+        highlight();
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        activeIndex = Math.max(0, activeIndex - 1);
+        highlight();
+      } else if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        const opt = cfg.options[activeIndex];
+        if (opt) pick(opt.value);
+      }
+    };
+    const onViewport = () => close();
+    function close() {
+      if (!pop) return;
+      pop.remove();
+      pop = null;
+      btn.classList.remove("open");
+      document.removeEventListener("pointerdown", onDocPointer, true);
+      document.removeEventListener("keydown", onDocKey, true);
+      window.removeEventListener("scroll", onViewport, true);
+      window.removeEventListener("resize", onViewport);
+    }
+    function pick(v) {
+      if (v !== value) {
+        value = v;
+        paint();
+        cfg.onChange(v);
+      }
+      close();
+    }
+    function open() {
+      close();
+      const panel = document.createElement("div");
+      panel.className = "menu-pop";
+      panel.setAttribute("role", "listbox");
+      activeIndex = 0;
+      cfg.options.forEach((o, i) => {
+        const item = document.createElement("button");
+        item.type = "button";
+        item.className = "menu-item";
+        item.setAttribute("role", "option");
+        item.dataset.value = o.value;
+        if (o.value === value) {
+          item.classList.add("on");
+          item.setAttribute("aria-selected", "true");
+          activeIndex = i;
+        }
+        const check = document.createElement("span");
+        check.className = "menu-check";
+        check.textContent = "✓";
+        const text = document.createElement("span");
+        text.className = "menu-label";
+        text.textContent = o.label;
+        item.append(check, text);
+        item.addEventListener("pointerdown", (e) => e.preventDefault());
+        item.addEventListener("click", () => pick(o.value));
+        panel.append(item);
+      });
+      document.body.append(panel);
+      pop = panel;
+      btn.classList.add("open");
+      const r = btn.getBoundingClientRect();
+      panel.style.minWidth = `${Math.max(150, Math.round(r.width))}px`;
+      const pr = panel.getBoundingClientRect();
+      let left = r.left;
+      if (left + pr.width > window.innerWidth - 8) left = window.innerWidth - pr.width - 8;
+      let top = r.bottom + 6;
+      if (top + pr.height > window.innerHeight - 8) top = r.top - pr.height - 6;
+      panel.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
+      highlight();
+      document.addEventListener("pointerdown", onDocPointer, true);
+      document.addEventListener("keydown", onDocKey, true);
+      window.addEventListener("scroll", onViewport, true);
+      window.addEventListener("resize", onViewport);
+    }
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (pop) close();
+      else open();
+    });
+    paint();
+    return {
+      setValue(v) {
+        value = v;
+        paint();
+      },
+      getValue: () => value
+    };
+  }
   var UNDO_BYTES = 24 * 1024 * 1024;
   var undoStack = [];
   var redoStack = [];
@@ -6695,8 +6913,7 @@ body.dragging-sort {
       history.reset();
       renderer.paintAll();
     }
-    el("sel-size").value = String(rec.width);
-    el("sel-edge").value = rec.edge;
+    syncWorldMenus();
     view.setView(rec.view);
     uiDirty = true;
     flushUi();
@@ -7006,8 +7223,7 @@ body.dragging-sort {
       const [px, py] = (params.get("xy") ?? "0,0").split(",").map(Number);
       world.stamp(parsed.cells, parsed.width, parsed.height, px || 0, py || 0);
       world.gen = Number(params.get("g")) || 0;
-      el("sel-size").value = String(size);
-      el("sel-edge").value = world.edge;
+      syncWorldMenus();
       shareMode = true;
       return true;
     } catch {
@@ -7260,30 +7476,42 @@ body.dragging-sort {
       if (state.paletteMode === "edit") setPaletteMode("browse");
       setPaletteCollapsed(!el("palette").classList.contains("collapsed"));
     });
-    el("sel-size").addEventListener("change", (e) => {
-      const size = Number(e.target.value);
-      if (size === world.width) return;
-      if (state.playing) setPlaying(false);
-      rebuildWorld(size, size, world.edge, true);
-      toast(`世界已重建为 ${size}×${size}`);
-      flushUi();
+    sizeMenu = makeMenu(el("sel-size"), {
+      options: [
+        { value: "512", label: "512 × 512" },
+        { value: "1024", label: "1024 × 1024" },
+        { value: "2048", label: "2048 × 2048" }
+      ],
+      value: String(world.width),
+      onChange: (v) => {
+        const size = Number(v);
+        if (size === world.width) return;
+        if (state.playing) setPlaying(false);
+        rebuildWorld(size, size, world.edge, true);
+        toast(`世界已重建为 ${size}×${size}`);
+        flushUi();
+      }
     });
-    el("sel-edge").addEventListener("change", (e) => {
-      const mode = e.target.value;
-      world.edge = mode;
-      if (mode === "dead") centerWorld();
-      syncRecenterButton();
-      updateZoomBounds();
-      world.recompute();
-      history.reset();
-      renderer.paintAll();
-      uiDirty = true;
-      toast(mode === "wrap" ? "边界：环绕（左右上下相连）" : "边界：死亡（越界即消失）");
+    edgeMenu = makeMenu(el("sel-edge"), {
+      options: [
+        { value: "wrap", label: "环绕边界" },
+        { value: "dead", label: "死亡边界" }
+      ],
+      value: world.edge,
+      onChange: (v) => {
+        const mode = v;
+        world.edge = mode;
+        if (mode === "dead") centerWorld();
+        syncRecenterButton();
+        updateZoomBounds();
+        world.recompute();
+        history.reset();
+        renderer.paintAll();
+        uiDirty = true;
+        toast(mode === "wrap" ? "边界：环绕（左右上下相连）" : "边界：死亡（越界即消失）");
+      }
     });
-    window.addEventListener("resize", () => {
-      const r = stageEl.getBoundingClientRect();
-      renderer.resize(r.width, r.height);
-    });
+    syncWorldMenus();
   }
   async function boot() {
     store = new Store();
@@ -7312,8 +7540,7 @@ body.dragging-sort {
       world = new World(auto.width, auto.height);
       world.edge = auto.edge;
       world.loadPacked(auto.packed, auto.population, auto.gen);
-      el("sel-size").value = String(auto.width);
-      el("sel-edge").value = auto.edge;
+      syncWorldMenus();
     } else {
       world = new World(1024, 1024);
       seedShowcase(world);

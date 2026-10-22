@@ -26,15 +26,12 @@
         </div>
 
         <div class="top-actions">
-          <select id="sel-size" title="世界尺寸">
-            <option value="512">512 × 512</option>
-            <option value="1024" selected>1024 × 1024</option>
-            <option value="2048">2048 × 2048</option>
-          </select>
-          <select id="sel-edge" title="边界规则">
-            <option value="wrap">环绕边界</option>
-            <option value="dead">死亡边界</option>
-          </select>
+          <button class="menubtn" id="sel-size" data-tip="世界尺寸">
+            <span class="menubtn-label">1024 × 1024</span><i class="menubtn-caret"></i>
+          </button>
+          <button class="menubtn" id="sel-edge" data-tip="边界规则">
+            <span class="menubtn-label">环绕边界</span><i class="menubtn-caret"></i>
+          </button>
           <button class="iconbtn chip" id="tgl-grid" data-tip="网格 (G)" aria-label="网格">
             <svg viewBox="0 0 24 24"><path d="M4 9h16M4 15h16M9 4v16M15 4v16"/></svg>
           </button>

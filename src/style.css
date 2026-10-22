@@ -1659,6 +1659,106 @@ kbd {
   }
 }
 
+/* ---------- 自绘下拉（替代原生 select） ---------- */
+.menubtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 4px 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background-color: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 0.14s,
+    border-color 0.14s;
+}
+
+.menubtn:hover {
+  background-color: rgba(108, 245, 210, 0.1);
+  border-color: var(--line-strong);
+}
+
+.menubtn.open {
+  background-color: rgba(108, 245, 210, 0.12);
+  border-color: rgba(108, 245, 210, 0.55);
+}
+
+.menubtn:focus-visible {
+  outline: none;
+  border-color: rgba(108, 245, 210, 0.65);
+  box-shadow: 0 0 0 3px rgba(108, 245, 210, 0.14);
+}
+
+.menubtn-caret {
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid currentColor;
+  opacity: 0.65;
+  margin-right: 4px;
+}
+
+.menubtn.open .menubtn-caret {
+  opacity: 1;
+  color: var(--accent);
+}
+
+.menu-pop {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 250;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 5px;
+  border-radius: 10px;
+  background: #0c151c;
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.62);
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.menu-item .menu-check {
+  width: 12px;
+  color: var(--accent);
+  opacity: 0;
+}
+
+.menu-item.on {
+  color: var(--accent);
+}
+
+.menu-item.on .menu-check {
+  opacity: 1;
+}
+
+.menu-item:hover,
+.menu-item.active {
+  background-color: rgba(108, 245, 210, 0.12);
+}
+
 /* ---------- 顶栏图标按钮 ---------- */
 .iconbtn {
   width: 30px;

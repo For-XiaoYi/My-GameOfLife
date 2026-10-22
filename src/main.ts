@@ -364,6 +364,161 @@ function initTooltips(): void {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// 自绘下拉
+// 原生 select 的弹层在 Windows 上无法定制（纯白底、系统高亮色、字体也跟页面不一致），
+// 所以自带一个：深色面板、悬停/选中态、勾选标记、键盘上下 + 回车。
+// ──────────────────────────────────────────────────────────────────────────
+interface MenuOption {
+  value: string;
+  label: string;
+}
+
+interface Menu {
+  setValue(v: string): void;
+  getValue(): string;
+}
+
+let sizeMenu: Menu | null = null;
+let edgeMenu: Menu | null = null;
+
+/** 把顶栏两个下拉的显示同步到当前世界。 */
+function syncWorldMenus(): void {
+  sizeMenu?.setValue(String(world.width));
+  edgeMenu?.setValue(world.edge);
+}
+
+function makeMenu(
+  btn: HTMLElement,
+  cfg: { options: MenuOption[]; value: string; onChange: (v: string) => void },
+): Menu {
+  let value = cfg.value;
+  let pop: HTMLElement | null = null;
+  let activeIndex = 0;
+  const label = btn.querySelector<HTMLElement>('.menubtn-label');
+
+  const paint = (): void => {
+    const opt = cfg.options.find((o) => o.value === value);
+    if (label) label.textContent = opt ? opt.label : value;
+  };
+
+  const items = (): HTMLElement[] =>
+    pop ? [...pop.querySelectorAll<HTMLElement>('.menu-item')] : [];
+
+  const highlight = (): void => {
+    for (const [i, n] of items().entries()) n.classList.toggle('active', i === activeIndex);
+  };
+
+  const onDocPointer = (e: PointerEvent): void => {
+    if (!pop) return;
+    const t = e.target as Node;
+    if (!pop.contains(t) && !btn.contains(t)) close();
+  };
+
+  const onDocKey = (e: KeyboardEvent): void => {
+    if (!pop) return;
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      close();
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      activeIndex = Math.min(cfg.options.length - 1, activeIndex + 1);
+      highlight();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      activeIndex = Math.max(0, activeIndex - 1);
+      highlight();
+    } else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      const opt = cfg.options[activeIndex];
+      if (opt) pick(opt.value);
+    }
+  };
+
+  const onViewport = (): void => close();
+
+  function close(): void {
+    if (!pop) return;
+    pop.remove();
+    pop = null;
+    btn.classList.remove('open');
+    document.removeEventListener('pointerdown', onDocPointer, true);
+    document.removeEventListener('keydown', onDocKey, true);
+    window.removeEventListener('scroll', onViewport, true);
+    window.removeEventListener('resize', onViewport);
+  }
+
+  function pick(v: string): void {
+    if (v !== value) {
+      value = v;
+      paint();
+      cfg.onChange(v);
+    }
+    close();
+  }
+
+  function open(): void {
+    close();
+    const panel = document.createElement('div');
+    panel.className = 'menu-pop';
+    panel.setAttribute('role', 'listbox');
+    activeIndex = 0;
+    cfg.options.forEach((o, i) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'menu-item';
+      item.setAttribute('role', 'option');
+      item.dataset.value = o.value;
+      if (o.value === value) {
+        item.classList.add('on');
+        item.setAttribute('aria-selected', 'true');
+        activeIndex = i;
+      }
+      const check = document.createElement('span');
+      check.className = 'menu-check';
+      check.textContent = '✓';
+      const text = document.createElement('span');
+      text.className = 'menu-label';
+      text.textContent = o.label;
+      item.append(check, text);
+      // 用 pointerdown 阻止聚焦抢走键盘焦点，点击再提交
+      item.addEventListener('pointerdown', (e) => e.preventDefault());
+      item.addEventListener('click', () => pick(o.value));
+      panel.append(item);
+    });
+    document.body.append(panel);
+    pop = panel;
+    btn.classList.add('open');
+    const r = btn.getBoundingClientRect();
+    panel.style.minWidth = `${Math.max(150, Math.round(r.width))}px`;
+    const pr = panel.getBoundingClientRect();
+    let left = r.left;
+    if (left + pr.width > window.innerWidth - 8) left = window.innerWidth - pr.width - 8;
+    let top = r.bottom + 6;
+    if (top + pr.height > window.innerHeight - 8) top = r.top - pr.height - 6;
+    panel.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
+    highlight();
+    document.addEventListener('pointerdown', onDocPointer, true);
+    document.addEventListener('keydown', onDocKey, true);
+    window.addEventListener('scroll', onViewport, true);
+    window.addEventListener('resize', onViewport);
+  }
+
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (pop) close();
+    else open();
+  });
+  paint();
+  return {
+    setValue(v: string): void {
+      value = v;
+      paint();
+    },
+    getValue: () => value,
+  };
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // 编辑与撤销
 // ──────────────────────────────────────────────────────────────────────────
 interface EditSnapshot {
@@ -2694,8 +2849,7 @@ function loadSnapshot(rec: SnapshotRecord): void {
     history.reset();
     renderer.paintAll();
   }
-  el<HTMLSelectElement>('sel-size').value = String(rec.width);
-  el<HTMLSelectElement>('sel-edge').value = rec.edge;
+  syncWorldMenus();
   view.setView(rec.view);
   uiDirty = true;
   flushUi();
@@ -3042,8 +3196,7 @@ function applyShareFromHash(): boolean {
     const [px, py] = (params.get('xy') ?? '0,0').split(',').map(Number);
     world.stamp(parsed.cells, parsed.width, parsed.height, px || 0, py || 0);
     world.gen = Number(params.get('g')) || 0;
-    el<HTMLSelectElement>('sel-size').value = String(size);
-    el<HTMLSelectElement>('sel-edge').value = world.edge;
+    syncWorldMenus();
     shareMode = true;
     return true;
   } catch {
@@ -3339,33 +3492,46 @@ function bindUi(): void {
     setPaletteCollapsed(!el('palette').classList.contains('collapsed'));
   });
 
-  el<HTMLSelectElement>('sel-size').addEventListener('change', (e) => {
-    const size = Number((e.target as HTMLSelectElement).value);
-    if (size === world.width) return;
-    if (state.playing) setPlaying(false);
-    rebuildWorld(size, size, world.edge, true);
-    toast(`世界已重建为 ${size}×${size}`);
-    flushUi();
+  sizeMenu = makeMenu(el('sel-size'), {
+    options: [
+      { value: '512', label: '512 × 512' },
+      { value: '1024', label: '1024 × 1024' },
+      { value: '2048', label: '2048 × 2048' },
+    ],
+    value: String(world.width),
+    onChange: (v) => {
+      const size = Number(v);
+      if (size === world.width) return;
+      if (state.playing) setPlaying(false);
+      rebuildWorld(size, size, world.edge, true);
+      toast(`世界已重建为 ${size}×${size}`);
+      flushUi();
+    },
   });
 
-  el<HTMLSelectElement>('sel-edge').addEventListener('change', (e) => {
-    const mode = (e.target as HTMLSelectElement).value as 'wrap' | 'dead';
-    world.edge = mode;
-    // 死亡边界没有"世界之外"，切过去时把视角收回正位，否则会站在空白里
-    if (mode === 'dead') centerWorld();
-    syncRecenterButton();
-    updateZoomBounds();
-    world.recompute();
-    history.reset();
-    renderer.paintAll();
-    uiDirty = true;
-    toast(mode === 'wrap' ? '边界：环绕（左右上下相连）' : '边界：死亡（越界即消失）');
+  edgeMenu = makeMenu(el('sel-edge'), {
+    options: [
+      { value: 'wrap', label: '环绕边界' },
+      { value: 'dead', label: '死亡边界' },
+    ],
+    value: world.edge,
+    onChange: (v) => {
+      const mode = v as 'wrap' | 'dead';
+      world.edge = mode;
+      // 死亡边界没有"世界之外"，切过去时把视角收回正位，否则会站在空白里
+      if (mode === 'dead') centerWorld();
+      syncRecenterButton();
+      updateZoomBounds();
+      world.recompute();
+      history.reset();
+      renderer.paintAll();
+      uiDirty = true;
+      toast(mode === 'wrap' ? '边界：环绕（左右上下相连）' : '边界：死亡（越界即消失）');
+    },
   });
+  syncWorldMenus();
 
-  window.addEventListener('resize', () => {
-    const r = stageEl.getBoundingClientRect();
-    renderer.resize(r.width, r.height);
-  });
+  // 尺寸变化由 ResizeObserver 统一处理（它还会更新缩放下限），这里不再重复
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -3405,8 +3571,7 @@ async function boot(): Promise<void> {
     world = new World(auto.width, auto.height);
     world.edge = auto.edge;
     world.loadPacked(auto.packed, auto.population, auto.gen);
-    el<HTMLSelectElement>('sel-size').value = String(auto.width);
-    el<HTMLSelectElement>('sel-edge').value = auto.edge;
+    syncWorldMenus();
   } else {
     world = new World(1024, 1024);
     seedShowcase(world);
