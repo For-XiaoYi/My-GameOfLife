@@ -36,7 +36,7 @@
             <option value="dead">死亡边界</option>
           </select>
           <button class="chip" id="tgl-grid" title="网格 (G)">网格</button>
-          <button class="chip" id="tgl-glow" title="光晕 (L)">光晕</button>
+          <button class="btn" id="btn-share">分享</button>
           <button class="btn" id="btn-snapshots">存档</button>
           <button class="btn" id="btn-clips">片段</button>
           <button class="btn" id="btn-rle">RLE</button>
@@ -48,17 +48,34 @@
         <canvas id="board"></canvas>
 
         <div id="toolbar">
-          <button class="tool active" data-tool="brush" title="画笔 (B)">✎</button>
-          <button class="tool" data-tool="erase" title="橡皮 (E)">⌫</button>
-          <button class="tool" data-tool="line" title="直线 (L)">╱</button>
-          <button class="tool" data-tool="rect" title="矩形 (U)">▭</button>
-          <button class="tool" data-tool="stamp" title="贴图 (S)">▣</button>
-          <button class="tool" data-tool="pan" title="平移 (H / 右键)">✋</button>
+          <button class="tool" data-tool="brush" title="画笔 (B)">
+            <svg viewBox="0 0 24 24"><path d="M4.5 19.5l1-3.5 9.2-9.2a1.9 1.9 0 0 1 2.7 2.7l-9.2 9.2-3.7.8z"/><path d="M12.6 6.9l2.7 2.7"/></svg>
+          </button>
+          <button class="tool" data-tool="erase" title="橡皮 (E)">
+            <svg viewBox="0 0 24 24"><path d="M9.5 4.6l8.4 8.4a1.6 1.6 0 0 1 0 2.3l-3 3H9.2l-4-4a1.6 1.6 0 0 1 0-2.3l4.3-4.3z"/><path d="M7.2 11.8l5.6 5.6"/><path d="M4 20h16"/></svg>
+          </button>
+          <button class="tool" data-tool="line" title="直线 (I)">
+            <svg viewBox="0 0 24 24"><path d="M6.5 17.5L17.5 6.5"/><circle cx="5.4" cy="18.6" r="1.5"/><circle cx="18.6" cy="5.4" r="1.5"/></svg>
+          </button>
+          <button class="tool" data-tool="rect" title="矩形 (U)">
+            <svg viewBox="0 0 24 24"><rect x="4.5" y="6.5" width="15" height="11" rx="1.6"/></svg>
+          </button>
+          <button class="tool" data-tool="stamp" title="贴图 (S)">
+            <svg viewBox="0 0 24 24"><path d="M4.6 8.6V5.6a1 1 0 0 1 1-1h3"/><path d="M15.4 4.6h3a1 1 0 0 1 1 1v3"/><path d="M19.4 15.4v3a1 1 0 0 1-1 1h-3"/><path d="M8.6 19.4h-3a1 1 0 0 1-1-1v-3"/><path d="M9.6 9.6h4.8v4.8H9.6z"/></svg>
+          </button>
+          <button class="tool" data-tool="select" title="选择框 (K)">
+            <svg viewBox="0 0 24 24" stroke-dasharray="3 2.4"><rect x="4.5" y="4.5" width="15" height="15" rx="1.2"/></svg>
+          </button>
+          <button class="tool active" data-tool="pan" title="平移 (H / 右键拖拽)">
+            <svg viewBox="0 0 24 24"><path d="M12 3.4v17.2M3.4 12h17.2"/><path d="M9.6 5.8L12 3.4l2.4 2.4M9.6 18.2L12 20.6l2.4-2.4M5.8 9.6L3.4 12l2.4 2.4M18.2 9.6L20.6 12l-2.4 2.4"/></svg>
+          </button>
         </div>
 
         <aside id="palette">
+          <div id="palette-resize" title="拖动调整图案库宽度"></div>
           <header>
             <h3>图案库</h3>
+            <button id="btn-lib-manage" class="icon" title="管理分类与图案">⚙</button>
             <button id="btn-palette-collapse" class="icon" title="收起">›</button>
           </header>
           <div id="palette-list"></div>
@@ -68,8 +85,16 @@
           </footer>
         </aside>
 
+        <div id="sel-bar" class="hidden">
+          <span id="sel-info">0 × 0</span>
+          <button id="btn-del-selection" title="删除选区内容 (Del)">删除</button>
+          <button id="btn-save-preset" class="primary">存为图案</button>
+          <button id="btn-sel-cancel" title="退出选择框 (Esc)">取消</button>
+        </div>
+
         <div id="hint">
-          <span>拖拽绘制</span><i>·</i><span>右键 / 空格拖拽平移</span><i>·</i><span>滚轮缩放</span>
+          <span data-hint="draw">拖拽平移画布</span><i>·</i><span data-hint="mid">0 适应视图</span
+          ><i>·</i><span data-hint="wheel">滚轮缩放</span>
         </div>
 
         <div id="rec-badge" class="hidden">● 录制中 <b id="rec-count">0</b> 代</div>
@@ -82,6 +107,8 @@
           <button id="btn-next" title="下一代 (→)">▶|</button>
           <button id="btn-clear" title="清空世界">清空</button>
           <button id="btn-random" title="随机播种">随机</button>
+          <button id="btn-undo" title="撤销 (Ctrl+Z)">↶</button>
+          <button id="btn-redo" title="重做 (Ctrl+Shift+Z)">↷</button>
         </div>
 
         <div class="speed">
@@ -114,6 +141,18 @@
     </div>
 
     <div id="toast"></div>
+
+    <div id="confirm" class="hidden">
+      <div class="confirm-card" role="dialog" aria-modal="true">
+        <h4 id="confirm-title">确认</h4>
+        <p id="confirm-msg"></p>
+        <div class="confirm-actions">
+          <button class="btn" id="confirm-cancel">取消</button>
+          <button class="btn primary" id="confirm-ok">确定</button>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

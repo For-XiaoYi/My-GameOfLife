@@ -66,11 +66,11 @@ export interface RenderOverlay {
   ghost?: Ghost | null;
   brush?: { x: number; y: number; size: number } | null;
   shape?: ShapePreview | null;
+  selection?: { x0: number; y0: number; x1: number; y1: number }[] | null;
 }
 
 export interface RenderOptions {
   grid: boolean;
-  glow: boolean;
 }
 
 export class Renderer {
@@ -126,7 +126,8 @@ export class Renderer {
     const W = w.width;
     const S = w.stride;
     const cells = w.cells;
-    const age = w.age;
+    const birth = w.birth;
+    const gen = w.gen;
     const ax0 = Math.max(0, Math.floor(x0));
     const ay0 = Math.max(0, Math.floor(y0));
     const ax1 = Math.min(W, Math.ceil(x1));
@@ -136,7 +137,15 @@ export class Renderer {
       const base = (y + 1) * S + 1;
       let o = y * W + ax0;
       for (let x = ax0; x < ax1; x++) {
-        buf[o++] = cells[base + x] ? PALETTE[age[base + x] || 1] : PALETTE[0];
+        const idx = base + x;
+        if (cells[idx]) {
+          let a = (gen - birth[idx]) & 0xffff;
+          if (a < 1) a = 1;
+          else if (a > 255) a = 255;
+          buf[o++] = PALETTE[a];
+        } else {
+          buf[o++] = PALETTE[0];
+        }
       }
     }
     this.offCtx.putImageData(img, 0, 0, ax0, ay0, ax1 - ax0, ay1 - ay0);
@@ -169,13 +178,6 @@ export class Renderer {
     ctx.fillRect(dx, dy, dw, dh);
 
     ctx.imageSmoothingEnabled = scale < 1;
-    if (opts.glow && scale >= 0.1) {
-      ctx.save();
-      ctx.globalAlpha = 0.5;
-      ctx.filter = `blur(${Math.min(18, Math.max(2, scale * 1.6))}px)`;
-      ctx.drawImage(this.off, dx, dy, dw, dh);
-      ctx.restore();
-    }
     ctx.drawImage(this.off, dx, dy, dw, dh);
 
     if (opts.grid) this.drawGrid(ctx, view, w);
@@ -183,6 +185,58 @@ export class Renderer {
     if (overlay?.ghost) this.drawGhost(ctx, view, overlay.ghost);
     if (overlay?.brush) this.drawBrush(ctx, view, overlay.brush, w);
     if (overlay?.shape) this.drawShape(ctx, view, overlay.shape);
+    if (overlay?.selection) this.drawSelection(ctx, view, overlay.selection);
+  }
+
+  private drawSelection(
+    ctx: CanvasRenderingContext2D,
+    view: Viewport,
+    rects: { x0: number; y0: number; x1: number; y1: number }[],
+  ): void {
+    if (rects.length === 0) return;
+    const s = view.scale;
+    ctx.save();
+    ctx.setLineDash([6, 4]);
+    ctx.lineDashOffset = (performance.now() / 60) % 10;
+    ctx.lineWidth = 1.5;
+    for (const sel of rects) {
+      const x0 = Math.min(sel.x0, sel.x1);
+      const y0 = Math.min(sel.y0, sel.y1);
+      const wCells = Math.abs(sel.x1 - sel.x0) + 1;
+      const hCells = Math.abs(sel.y1 - sel.y0) + 1;
+      const px = view.ox + x0 * s;
+      const py = view.oy + y0 * s;
+      const pw = wCells * s;
+      const ph = hCells * s;
+      ctx.fillStyle = 'rgba(108,245,210,0.10)';
+      ctx.fillRect(px, py, pw, ph);
+      // 先描一层深色实线，再叠亮的虚线，任你背景多亮多暗都看得清
+      ctx.setLineDash([]);
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'rgba(4,10,14,0.75)';
+      ctx.strokeRect(px, py, pw, ph);
+      ctx.setLineDash([6, 4]);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = LIVE_COLOR;
+      ctx.strokeRect(px + 0.75, py + 0.75, Math.max(1, pw - 1.5), Math.max(1, ph - 1.5));
+
+      // 四角的小方块：提示这里可以拖着改大小
+      ctx.setLineDash([]);
+      const hs = 5;
+      for (const [cx, cy] of [
+        [px, py],
+        [px + pw, py],
+        [px, py + ph],
+        [px + pw, py + ph],
+      ] as const) {
+        ctx.fillStyle = LIVE_COLOR;
+        ctx.fillRect(cx - hs / 2, cy - hs / 2, hs, hs);
+        ctx.strokeStyle = 'rgba(4,10,14,0.9)';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(cx - hs / 2 + 0.5, cy - hs / 2 + 0.5, hs - 1, hs - 1);
+      }
+    }
+    ctx.restore();
   }
 
   private drawShape(ctx: CanvasRenderingContext2D, view: Viewport, shape: ShapePreview): void {
@@ -317,10 +371,27 @@ export class Renderer {
     if (s < 0.4) return;
     const x = ((brush.x % w.width) + w.width) % w.width;
     const y = ((brush.y % w.height) + w.height) % w.height;
+    const n = Math.max(1, brush.size | 0);
+    const r = (n - 1) >> 1;
     ctx.save();
     ctx.strokeStyle = 'rgba(255,255,255,0.55)';
     ctx.lineWidth = 1;
-    ctx.strokeRect(Math.round(view.ox + x * s) + 0.5, Math.round(view.oy + y * s) + 0.5, Math.max(s, 2), Math.max(s, 2));
+    ctx.strokeRect(
+      Math.round(view.ox + (x - r) * s) + 0.5,
+      Math.round(view.oy + (y - r) * s) + 0.5,
+      Math.max(s * n, 2),
+      Math.max(s * n, 2),
+    );
+    if (n > 2 && s > 2) {
+      // 大笔刷再画一个淡淡的内部描边，方便判断中心
+      ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+      ctx.strokeRect(
+        Math.round(view.ox + (x - r) * s) + 1.5,
+        Math.round(view.oy + (y - r) * s) + 1.5,
+        Math.max(s * n - 2, 2),
+        Math.max(s * n - 2, 2),
+      );
+    }
     ctx.restore();
   }
 }
@@ -355,7 +426,7 @@ export function makeThumb(world: World, size = 192): string {
       const wx = bx0 + Math.floor((x + 0.5) / k);
       if (wx < 0 || wx >= world.width) continue;
       const i = (wy + 1) * S + (wx + 1);
-      buf[y * dw + x] = world.cells[i] ? PALETTE[Math.max(1, world.age[i])] : pack([8, 13, 19]);
+      buf[y * dw + x] = world.cells[i] ? PALETTE[world.ageAt(i)] : pack([8, 13, 19]);
     }
   }
   ctx.putImageData(img, ox, oy);

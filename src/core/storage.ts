@@ -3,6 +3,7 @@
  * 在 file:// 或隐私模式下 IndexedDB 可能不可用，自动退回 localStorage。
  */
 import type { EdgeMode } from './world.ts';
+import type { CustomPatternRecord, LibraryConfig } from './library.ts';
 
 export interface ViewState {
   scale: number;
@@ -50,9 +51,10 @@ export interface AutoSaveRecord {
 }
 
 const DB_NAME = 'life-studio';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const STORE_SNAPSHOTS = 'snapshots';
 const STORE_CLIPS = 'clips';
+const STORE_PATTERNS = 'patterns';
 const STORE_META = 'meta';
 const LS_PREFIX = 'life-studio:';
 
@@ -100,6 +102,7 @@ export class Store {
               const db = req.result;
               if (!db.objectStoreNames.contains(STORE_SNAPSHOTS)) db.createObjectStore(STORE_SNAPSHOTS, { keyPath: 'id' });
               if (!db.objectStoreNames.contains(STORE_CLIPS)) db.createObjectStore(STORE_CLIPS, { keyPath: 'id' });
+              if (!db.objectStoreNames.contains(STORE_PATTERNS)) db.createObjectStore(STORE_PATTERNS, { keyPath: 'id' });
               if (!db.objectStoreNames.contains(STORE_META)) db.createObjectStore(STORE_META, { keyPath: 'key' });
             };
             req.onsuccess = () => resolve(req.result);
@@ -221,6 +224,54 @@ export class Store {
       return;
     }
     localStorage.removeItem(LS_PREFIX + 'meta:autosave');
+  }
+
+  // ---------------- 自定义图案 / 图案库配置 ----------------
+
+  async listCustomPatterns(): Promise<CustomPatternRecord[]> {
+    if (this.mode === 'idb' && this.db) {
+      const rows = await this.idbAll<CustomPatternRecord>(STORE_PATTERNS);
+      return rows.sort((a, b) => a.created - b.created);
+    }
+    return this.localAll<CustomPatternRecord>('pattern').sort((a, b) => a.created - b.created);
+  }
+
+  async saveCustomPattern(rec: CustomPatternRecord): Promise<void> {
+    if (this.mode === 'idb' && this.db) {
+      await this.idbPut(STORE_PATTERNS, rec);
+      return;
+    }
+    this.localPut('pattern', rec.id, rec);
+  }
+
+  async deleteCustomPattern(id: string): Promise<void> {
+    if (this.mode === 'idb' && this.db) {
+      await this.idbDelete(STORE_PATTERNS, id);
+      return;
+    }
+    localStorage.removeItem(LS_PREFIX + 'pattern:' + id);
+  }
+
+  async getLibraryConfig(): Promise<LibraryConfig | null> {
+    if (this.mode === 'idb' && this.db) {
+      const row = await this.idbGet<{ key: string; value: LibraryConfig }>(STORE_META, 'library');
+      return row?.value ?? null;
+    }
+    const raw = localStorage.getItem(LS_PREFIX + 'meta:library');
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as LibraryConfig;
+    } catch {
+      return null;
+    }
+  }
+
+  async setLibraryConfig(cfg: LibraryConfig): Promise<void> {
+    if (this.mode === 'idb' && this.db) {
+      await this.idbPut(STORE_META, { key: 'library', value: cfg });
+      return;
+    }
+    this.localSetRaw('meta:library', JSON.stringify(cfg));
   }
 
   // ---------------- 底层 ----------------

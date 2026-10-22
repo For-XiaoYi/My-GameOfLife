@@ -37,6 +37,17 @@ body {
 }
 
 button,
+/* ---------- 主题：让原生下拉列表 / 滚动条也走暗色 ---------- */
+:root {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  background-color: #0b1218;
+  color: var(--text);
+}
+
 select,
 input {
   font: inherit;
@@ -140,7 +151,15 @@ input {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.top-actions::-webkit-scrollbar {
+  display: none;
 }
 
 select,
@@ -245,6 +264,16 @@ button.icon {
   cursor: pointer;
 }
 
+.tool svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
 .tool:hover {
   color: var(--text);
   background: rgba(255, 255, 255, 0.05);
@@ -274,17 +303,341 @@ button.icon {
 }
 
 #palette.collapsed {
-  width: 42px;
+  width: 40px;
+  height: 40px;
+  bottom: auto;
+  padding: 0;
 }
 
 #palette.collapsed #palette-list,
 #palette.collapsed footer,
-#palette.collapsed header h3 {
+#palette.collapsed header h3,
+#palette.collapsed header .icon:not(#btn-palette-collapse) {
   display: none;
 }
 
 #palette.collapsed header {
   justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border-bottom: none;
+}
+
+/* ── 编辑模式 ─────────────────────────────────────────────────────────── */
+#palette.edit {
+  width: 336px;
+}
+
+#palette.edit footer {
+  display: none;
+}
+
+#palette.edit #btn-lib-manage {
+  color: var(--accent);
+  background: rgba(108, 245, 210, 0.14);
+}
+
+/* 拖动左边缘改宽度（浏览与编辑模式都可用） */
+#palette-resize {
+  position: absolute;
+  left: -3px;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  cursor: ew-resize;
+  display: block;
+  z-index: 6;
+}
+
+#palette.collapsed #palette-resize,
+#palette.collapsed ~ #palette-resize {
+  display: none;
+}
+
+#palette-resize::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 50%;
+  width: 2px;
+  height: 40px;
+  margin-top: -20px;
+  border-radius: 2px;
+  background: rgba(108, 245, 210, 0);
+  transition: background 0.15s ease;
+}
+
+#palette-resize:hover::after {
+  background: rgba(108, 245, 210, 0.55);
+}
+
+#palette-list.edit-list {
+  padding: 8px 8px 12px;
+}
+
+.edit-cat {
+  margin-bottom: 7px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: rgba(255, 255, 255, 0.02);
+  overflow: hidden;
+}
+
+.edit-cat-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 6px;
+  cursor: grab;
+}
+
+#palette header h3 {
+  margin-right: auto;
+}
+
+#palette:not(.collapsed) header {
+  justify-content: flex-start;
+}
+
+.edit-cat-head:active {
+  cursor: grabbing;
+}
+
+.edit-cat-head input {
+  min-width: 0;
+}
+
+/* 名称栏不占满整行，右边留出大块空白当拖拽区 */
+.edit-cat-head .text-input.grow {
+  flex: 0 1 104px;
+  min-width: 54px;
+}
+
+.edit-cat-head:hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.edit-cat-head .grip {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  align-self: stretch;
+  padding-right: 2px;
+  min-width: 56px;
+  min-height: 22px;
+}
+
+.edit-cat-head:hover .grip {
+  color: var(--text);
+}
+
+.edit-cat-head.drop-target,
+.edit-cat-head.drop-into {
+  background: rgba(108, 245, 210, 0.12);
+  outline: 1px solid var(--accent);
+}
+
+.edit-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(66px, 1fr));
+  gap: 6px;
+  padding: 2px 8px 9px;
+}
+
+.edit-tile {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  padding: 5px 3px 4px;
+  border: 1px solid rgba(120, 200, 220, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: grab;
+}
+
+.edit-tile:hover {
+  background: rgba(108, 245, 210, 0.08);
+  border-color: var(--line-strong);
+}
+
+.edit-tile canvas {
+  width: 52px;
+  height: 34px;
+  image-rendering: pixelated;
+}
+
+.edit-tile .tile-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10.5px;
+  color: var(--dim);
+}
+
+.edit-tile .tile-stash {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: #0d151d;
+  color: var(--dim);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.edit-tile:hover .tile-stash {
+  opacity: 1;
+}
+
+.edit-tile .tile-stash:hover {
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.edit-tile .tile-del {
+  position: absolute;
+  top: -6px;
+  left: -6px;
+  width: 19px;
+  height: 19px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 122, 122, 0.5);
+  background: #0d151d;
+  color: var(--danger);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+
+.edit-tile:hover .tile-del {
+  opacity: 1;
+}
+
+.edit-tile.drop-target {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* 拖动时被拿起来的那个方块 */
+/* 拖起来的那一项：内容不显示，只留一个很淡的空框当「缺口」。
+   不能真的 display:none / 移出布局——动了拖拽源节点浏览器会当场取消这次拖拽 */
+.edit-tile.dragging {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.edit-tile.dragging > * {
+  visibility: hidden;
+}
+
+.edit-cat.dragging > .edit-cat-head {
+  background: transparent;
+  outline: none;
+}
+
+.edit-cat.dragging .edit-cat-head > *,
+.edit-cat.dragging .edit-grid,
+.edit-cat.dragging .stash-empty {
+  visibility: hidden;
+}
+
+.edit-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 2px 8px;
+}
+
+.edit-tools .btn {
+  flex: 0 0 auto;
+}
+
+/* 松手后的落点占位：插进去以后其它方块会被挤开，位置一目了然 */
+.drop-slot {
+  border: 1px dashed rgba(108, 245, 210, 0.85);
+  border-radius: 8px;
+  background: rgba(108, 245, 210, 0.12);
+  box-shadow: 0 0 0 1px rgba(108, 245, 210, 0.25) inset;
+  animation: slot-pulse 1.1s ease-in-out infinite;
+}
+
+.edit-grid > .drop-slot {
+  height: 62px;
+}
+
+#palette-list > .drop-slot {
+  height: 44px;
+  margin-bottom: 7px;
+}
+
+@keyframes slot-pulse {
+  0%,
+  100% {
+    background: rgba(108, 245, 210, 0.07);
+  }
+  50% {
+    background: rgba(108, 245, 210, 0.2);
+  }
+}
+
+#palette-list .add-cat {
+  display: block;
+  width: 100%;
+  height: 28px;
+  margin-top: 4px;
+  border-style: dashed;
+  color: var(--dim);
+}
+
+#palette-list .add-cat:hover {
+  color: var(--text);
+  border-color: var(--line-strong);
+}
+
+.grip {
+  color: var(--dim);
+  font-size: 12px;
+  letter-spacing: -1.5px;
+  user-select: none;
+}
+
+.stash-sec {
+  margin-top: 12px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--line);
+  min-height: 46px;
+}
+
+.stash-sec .edit-grid {
+  padding: 4px 8px 9px;
+}
+
+.stash-sec.drop-target {
+  background: rgba(108, 245, 210, 0.08);
+  outline: 1px dashed var(--accent);
+}
+
+.stash-empty {
+  margin: 2px 2px 6px;
+  font-size: 11px;
+  color: var(--dim);
+  line-height: 1.5;
 }
 
 #palette header {
@@ -350,7 +703,7 @@ button.icon {
 
 .pat-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(64px, 1fr));
   gap: 5px;
   margin-bottom: 6px;
 }
@@ -657,6 +1010,67 @@ input[type="range"]::-moz-range-thumb {
   display: none !important;
 }
 
+/* ---------- 游戏风格的确认框 ---------- */
+#confirm {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  background: rgba(2, 5, 8, 0.66);
+  backdrop-filter: blur(3px);
+  animation: confirm-in 0.12s ease-out;
+}
+
+.confirm-card {
+  width: min(400px, calc(100vw - 44px));
+  padding: 18px 20px 16px;
+  border-radius: 14px;
+  background: var(--panel-solid);
+  border: 1px solid rgba(108, 245, 210, 0.28);
+  box-shadow: 0 26px 70px rgba(0, 0, 0, 0.6);
+  animation: confirm-pop 0.14s cubic-bezier(0.2, 0.9, 0.3, 1.2);
+}
+
+.confirm-card h4 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.confirm-card p {
+  margin: 0 0 18px;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--dim);
+  white-space: pre-line;
+}
+
+.confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+#confirm-ok {
+  background: rgba(108, 245, 210, 0.16);
+  border-color: rgba(108, 245, 210, 0.6);
+  color: var(--accent);
+}
+
+@keyframes confirm-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes confirm-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
@@ -850,21 +1264,315 @@ kbd {
   transform: translate(-50%, 0);
 }
 
-@media (max-width: 900px) {
+/* ---------- 框选工具条 ---------- */
+#sel-bar {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px 7px 14px;
+  border-radius: 999px;
+  background: rgba(11, 20, 26, 0.95);
+  border: 1px solid rgba(108, 245, 210, 0.34);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55);
+  font-size: 12px;
+  z-index: 30;
+}
+
+#sel-info {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+#sel-bar button {
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: transparent;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+#sel-bar button:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+#sel-bar button.primary {
+  color: #04120f;
+  background: var(--accent);
+  border-color: transparent;
+  font-weight: 600;
+}
+
+/* ---------- 存为图案 ---------- */
+.preset-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.preset-preview {
+  align-self: center;
+  max-width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  image-rendering: pixelated;
+}
+
+.preset-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.preset-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+.preset-row label:first-child {
+  flex: 1;
+  min-width: 180px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.modal-note {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--dim);
+}
+
+/* ---------- 图案库管理 ---------- */
+.lib-sec {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin-bottom: 18px;
+}
+
+.lib-sec h4 {
+  margin: 0 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  letter-spacing: 0.04em;
+}
+
+.lib-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lib-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 340px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.lib-name {
+  font-size: 12.5px;
+}
+
+.lib-count {
+  font-size: 11px;
+  color: var(--dim);
+  min-width: 38px;
+  text-align: right;
+}
+
+.lib-icon {
+  border-radius: 5px;
+  background: #070c11;
+  border: 1px solid var(--line);
+}
+
+.text-input,
+.select-input {
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: #070c11;
+  color: var(--text);
+  font: 12px/1 inherit;
+  outline: none;
+}
+
+.text-input:focus,
+.select-input:focus {
+  border-color: var(--line-strong);
+}
+
+.text-input.grow {
+  flex: 1;
+  min-width: 0;
+}
+
+.btn.tiny {
+  height: 26px;
+  min-width: 26px;
+  padding: 0 8px;
+  font-size: 11.5px;
+}
+
+.btn.tiny.danger {
+  color: var(--danger);
+  border-color: rgba(255, 122, 122, 0.35);
+}
+
+@media (max-width: 1100px) {
   .brand-text small {
     display: none;
   }
   .stats .stat:nth-child(4) {
     display: none;
   }
-  #bottombar {
-    grid-template-columns: auto 1fr auto;
+  #topbar {
+    gap: 12px;
+    padding: 0 10px;
   }
-  .timeline {
-    display: none;
+  .top-actions {
+    gap: 4px;
+  }
+  .top-actions .btn,
+  .top-actions .chip,
+  .top-actions select {
+    padding: 0 7px;
+    font-size: 12px;
+  }
+  #bottombar {
+    grid-template-columns: auto minmax(150px, 1fr) minmax(130px, 1fr) auto;
+    gap: 10px;
   }
   #palette {
     width: 190px;
+  }
+}
+
+/* 手机竖屏：工具栏与图案库浮在画布上，底栏折成三行 */
+@media (max-width: 700px) {
+  #app {
+    grid-template-rows: 46px minmax(0, 1fr) auto;
+  }
+  .brand-text {
+    display: none;
+  }
+  .stats {
+    gap: 10px;
+    flex: 0 0 auto;
+  }
+  .top-actions {
+    gap: 4px;
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding-left: 4px;
+    mask-image: linear-gradient(to right, #000 88%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to right, #000 88%, transparent 100%);
+  }
+  .top-actions::-webkit-scrollbar {
+    display: none;
+  }
+  .stats .stat:nth-child(3),
+  .stats .stat:nth-child(4) {
+    display: none;
+  }
+  .top-actions .btn,
+  .top-actions .chip,
+  .top-actions select {
+    height: 28px;
+    padding: 0 7px;
+    font-size: 12px;
+    flex: 0 0 auto;
+  }
+  #palette {
+    width: 200px;
+    right: 8px;
+    top: 8px;
+    bottom: auto;
+    max-height: 62%;
+  }
+  #toolbar {
+    left: 6px;
+    top: 8px;
+    padding: 5px;
+    gap: 4px;
+  }
+  #toolbar .tool {
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
+  }
+  #bottombar {
+    grid-template-columns: 1fr auto;
+    gap: 6px 10px;
+    padding: 6px 10px;
+  }
+  .play {
+    flex-wrap: nowrap;
+    gap: 4px;
+    min-width: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .play::-webkit-scrollbar {
+    display: none;
+  }
+  .play button {
+    height: 26px;
+    min-width: 26px;
+    padding: 0 5px;
+    font-size: 12px;
+    flex: 0 0 auto;
+  }
+  .rec .btn {
+    height: 26px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+  .speed,
+  .timeline {
+    grid-column: 1 / -1;
+  }
+  .speed {
+    order: 3;
+  }
+  .timeline {
+    order: 4;
+  }
+  .rec {
+    justify-self: end;
+  }
+  #speed-label,
+  #hint {
+    display: none;
+  }
+  .btn-row {
+    flex-wrap: wrap;
+  }
+  .modal-card {
+    width: calc(100vw - 20px);
   }
 }
 </style>
@@ -898,7 +1606,7 @@ kbd {
             <option value="dead">死亡边界</option>
           </select>
           <button class="chip" id="tgl-grid" title="网格 (G)">网格</button>
-          <button class="chip" id="tgl-glow" title="光晕 (L)">光晕</button>
+          <button class="btn" id="btn-share">分享</button>
           <button class="btn" id="btn-snapshots">存档</button>
           <button class="btn" id="btn-clips">片段</button>
           <button class="btn" id="btn-rle">RLE</button>
@@ -910,17 +1618,34 @@ kbd {
         <canvas id="board"></canvas>
 
         <div id="toolbar">
-          <button class="tool active" data-tool="brush" title="画笔 (B)">✎</button>
-          <button class="tool" data-tool="erase" title="橡皮 (E)">⌫</button>
-          <button class="tool" data-tool="line" title="直线 (L)">╱</button>
-          <button class="tool" data-tool="rect" title="矩形 (U)">▭</button>
-          <button class="tool" data-tool="stamp" title="贴图 (S)">▣</button>
-          <button class="tool" data-tool="pan" title="平移 (H / 右键)">✋</button>
+          <button class="tool" data-tool="brush" title="画笔 (B)">
+            <svg viewBox="0 0 24 24"><path d="M4.5 19.5l1-3.5 9.2-9.2a1.9 1.9 0 0 1 2.7 2.7l-9.2 9.2-3.7.8z"/><path d="M12.6 6.9l2.7 2.7"/></svg>
+          </button>
+          <button class="tool" data-tool="erase" title="橡皮 (E)">
+            <svg viewBox="0 0 24 24"><path d="M9.5 4.6l8.4 8.4a1.6 1.6 0 0 1 0 2.3l-3 3H9.2l-4-4a1.6 1.6 0 0 1 0-2.3l4.3-4.3z"/><path d="M7.2 11.8l5.6 5.6"/><path d="M4 20h16"/></svg>
+          </button>
+          <button class="tool" data-tool="line" title="直线 (I)">
+            <svg viewBox="0 0 24 24"><path d="M6.5 17.5L17.5 6.5"/><circle cx="5.4" cy="18.6" r="1.5"/><circle cx="18.6" cy="5.4" r="1.5"/></svg>
+          </button>
+          <button class="tool" data-tool="rect" title="矩形 (U)">
+            <svg viewBox="0 0 24 24"><rect x="4.5" y="6.5" width="15" height="11" rx="1.6"/></svg>
+          </button>
+          <button class="tool" data-tool="stamp" title="贴图 (S)">
+            <svg viewBox="0 0 24 24"><path d="M4.6 8.6V5.6a1 1 0 0 1 1-1h3"/><path d="M15.4 4.6h3a1 1 0 0 1 1 1v3"/><path d="M19.4 15.4v3a1 1 0 0 1-1 1h-3"/><path d="M8.6 19.4h-3a1 1 0 0 1-1-1v-3"/><path d="M9.6 9.6h4.8v4.8H9.6z"/></svg>
+          </button>
+          <button class="tool" data-tool="select" title="选择框 (K)">
+            <svg viewBox="0 0 24 24" stroke-dasharray="3 2.4"><rect x="4.5" y="4.5" width="15" height="15" rx="1.2"/></svg>
+          </button>
+          <button class="tool active" data-tool="pan" title="平移 (H / 右键拖拽)">
+            <svg viewBox="0 0 24 24"><path d="M12 3.4v17.2M3.4 12h17.2"/><path d="M9.6 5.8L12 3.4l2.4 2.4M9.6 18.2L12 20.6l2.4-2.4M5.8 9.6L3.4 12l2.4 2.4M18.2 9.6L20.6 12l-2.4 2.4"/></svg>
+          </button>
         </div>
 
         <aside id="palette">
+          <div id="palette-resize" title="拖动调整图案库宽度"></div>
           <header>
             <h3>图案库</h3>
+            <button id="btn-lib-manage" class="icon" title="管理分类与图案">⚙</button>
             <button id="btn-palette-collapse" class="icon" title="收起">›</button>
           </header>
           <div id="palette-list"></div>
@@ -930,8 +1655,16 @@ kbd {
           </footer>
         </aside>
 
+        <div id="sel-bar" class="hidden">
+          <span id="sel-info">0 × 0</span>
+          <button id="btn-del-selection" title="删除选区内容 (Del)">删除</button>
+          <button id="btn-save-preset" class="primary">存为图案</button>
+          <button id="btn-sel-cancel" title="退出选择框 (Esc)">取消</button>
+        </div>
+
         <div id="hint">
-          <span>拖拽绘制</span><i>·</i><span>右键 / 空格拖拽平移</span><i>·</i><span>滚轮缩放</span>
+          <span data-hint="draw">拖拽平移画布</span><i>·</i><span data-hint="mid">0 适应视图</span
+          ><i>·</i><span data-hint="wheel">滚轮缩放</span>
         </div>
 
         <div id="rec-badge" class="hidden">● 录制中 <b id="rec-count">0</b> 代</div>
@@ -944,6 +1677,8 @@ kbd {
           <button id="btn-next" title="下一代 (→)">▶|</button>
           <button id="btn-clear" title="清空世界">清空</button>
           <button id="btn-random" title="随机播种">随机</button>
+          <button id="btn-undo" title="撤销 (Ctrl+Z)">↶</button>
+          <button id="btn-redo" title="重做 (Ctrl+Shift+Z)">↷</button>
         </div>
 
         <div class="speed">
@@ -976,6 +1711,18 @@ kbd {
     </div>
 
     <div id="toast"></div>
+
+    <div id="confirm" class="hidden">
+      <div class="confirm-card" role="dialog" aria-modal="true">
+        <h4 id="confirm-title">确认</h4>
+        <p id="confirm-msg"></p>
+        <div class="confirm-actions">
+          <button class="btn" id="confirm-cancel">取消</button>
+          <button class="btn primary" id="confirm-ok">确定</button>
+        </div>
+      </div>
+    </div>
+
     <script>
 "use strict";
 (() => {
@@ -987,11 +1734,16 @@ kbd {
     /** 带 padding 的存储，步长 = width + 2。 */
     stride;
     cells;
-    age;
-    edge = "wrap";
+    /** 每格的出生代数（低 16 位）；渲染时用 gen - birth 算年龄。 */
+    birth;
+    /** cells 的位图镜像（1 bit/格，含 padding），演化走它。 */
+    bits;
+    /** 每行（含左右 padding）占多少个 32 位字。 */
+    bitsStride;
     gen = 0;
     population = 0;
-    nextBuf;
+    _edge = "wrap";
+    nextBits;
     changeBuf;
     /** 活细胞包围盒（右开区间）。population === 0 时视为空。 */
     bx0 = 0;
@@ -1009,9 +1761,75 @@ kbd {
       this.stride = width + 2;
       const size = (width + 2) * (height + 2);
       this.cells = new Uint8Array(size);
-      this.age = new Uint8Array(size);
-      this.nextBuf = new Uint8Array(size);
+      this.birth = new Uint16Array(size);
+      this.bitsStride = width + 2 + 31 >> 5;
+      const words = this.bitsStride * (height + 2);
+      this.bits = new Uint32Array(words);
+      this.nextBits = new Uint32Array(words);
       this.changeBuf = new Int32Array(width * height);
+    }
+    get edge() {
+      return this._edge;
+    }
+    /** 切换边界模式时把 padding 归零，避免上一模式的残留影响邻居统计。 */
+    set edge(v) {
+      if (v === this._edge) return;
+      this._edge = v;
+      this.clearPadding();
+    }
+    /** 每格已存活的代数（1 起，最大 255），供渲染取色。 */
+    ageAt(i) {
+      const a = this.gen - this.birth[i] & 65535;
+      return a < 1 ? 1 : a > 255 ? 255 : a;
+    }
+    // ── 位图镜像维护 ────────────────────────────────────────────
+    setBit(i, v) {
+      const row = i / this.stride | 0;
+      const col = i - row * this.stride;
+      const wi = row * this.bitsStride + (col >>> 5);
+      const mask = 1 << (col & 31);
+      if (v) this.bits[wi] |= mask;
+      else this.bits[wi] &= ~mask;
+    }
+    /** 用 cells 重建整张位图（批量载入后调用）。 */
+    rebuildBits() {
+      const W = this.width;
+      const S = this.stride;
+      const BW = this.bitsStride;
+      const cells = this.cells;
+      const bits = this.bits;
+      bits.fill(0);
+      for (let y = 0; y < this.height; y++) {
+        const src = (y + 1) * S + 1;
+        const dst = (y + 1) * BW;
+        for (let x = 0; x < W; x++) {
+          if (cells[src + x]) bits[dst + (x + 1 >>> 5)] |= 1 << (x + 1 & 31);
+        }
+      }
+    }
+    /** 把 padding 环整体清零（cells 与位图）。 */
+    clearPadding() {
+      const W = this.width;
+      const H = this.height;
+      const S = this.stride;
+      const p = this.cells;
+      for (let x = 0; x <= W + 1; x++) {
+        p[x] = 0;
+        p[(H + 1) * S + x] = 0;
+      }
+      for (let y = 0; y <= H + 1; y++) {
+        const row = y * S;
+        p[row] = 0;
+        p[row + W + 1] = 0;
+      }
+      this.bits.fill(0);
+      for (let y = 1; y <= H; y++) {
+        const r = y * S;
+        const d = y * this.bitsStride;
+        for (let x = 0; x < W; x++) {
+          if (p[r + x + 1]) this.bits[d + (x + 1 >>> 5)] |= 1 << (x + 1 & 31);
+        }
+      }
     }
     // ── 坐标与读写 ──────────────────────────────────────────────
     /** 未填充索引 -> padding 索引 */
@@ -1029,12 +1847,13 @@ kbd {
       const old = this.cells[i];
       if (old === (v ? 1 : 0)) return;
       this.cells[i] = v ? 1 : 0;
+      this.setBit(i, v ? 1 : 0);
       if (v) {
-        this.age[i] = 1;
+        this.birth[i] = this.gen & 65535;
         this.population++;
         this.expandBBox(x, y);
       } else {
-        this.age[i] = 0;
+        this.birth[i] = 0;
         this.population--;
         if (this.population <= 0) {
           this.population = 0;
@@ -1046,7 +1865,8 @@ kbd {
     /** 直接写入 padding 索引（历史回放用），不做脏矩形/包围盒维护。 */
     writePadded(i, v) {
       this.cells[i] = v;
-      this.age[i] = v ? 1 : 0;
+      this.birth[i] = v ? this.gen & 65535 : 0;
+      this.setBit(i, v);
     }
     // ── 包围盒 ──────────────────────────────────────────────────
     expandBBox(x, y) {
@@ -1129,8 +1949,9 @@ kbd {
     // ── 编辑操作 ────────────────────────────────────────────────
     clear() {
       this.cells.fill(0);
-      this.age.fill(0);
-      this.nextBuf.fill(0);
+      this.birth.fill(0);
+      this.bits.fill(0);
+      this.nextBits.fill(0);
       this.population = 0;
       this.gen = 0;
       this.clearBBox();
@@ -1139,7 +1960,8 @@ kbd {
     /** 以给定密度随机播种（限定在中心区域，方便观察）。 */
     randomize(density = 0.32, rng = Math.random) {
       this.cells.fill(0);
-      this.age.fill(0);
+      this.birth.fill(0);
+      this.bits.fill(0);
       const W = this.width;
       const H = this.height;
       const span = Math.min(W, H) * 0.62;
@@ -1149,13 +1971,18 @@ kbd {
       const y1 = Math.min(H, y0 + span);
       const S = this.stride;
       const cells = this.cells;
-      const age = this.age;
+      const birth = this.birth;
+      const bits = this.bits;
+      const BW = this.bitsStride;
       for (let y = y0; y < y1; y++) {
         const row = (y + 1) * S;
+        const brow = (y + 1) * BW;
         for (let x = x0; x < x1; x++) {
           if (rng() < density) {
-            cells[row + x + 1] = 1;
-            age[row + x + 1] = 1;
+            const i = row + x + 1;
+            cells[i] = 1;
+            birth[i] = 0;
+            bits[brow + (x + 1 >>> 5)] |= 1 << (x + 1 & 31);
           }
         }
       }
@@ -1191,7 +2018,8 @@ kbd {
           const i = rowM + wx + 1;
           if (!this.cells[i]) {
             this.cells[i] = 1;
-            this.age[i] = 1;
+            this.birth[i] = this.gen & 65535;
+            this.setBit(i, 1);
             this.population++;
             written++;
           }
@@ -1233,75 +2061,134 @@ kbd {
     step() {
       const W = this.width;
       const H = this.height;
-      const S = this.stride;
-      const cells = this.cells;
-      const next = this.nextBuf;
-      const age = this.age;
       if (this.population === 0) {
         this.gen++;
         return null;
       }
-      if (this.edge === "wrap") this.refreshBorder();
-      const xSpans = expandedSpans(this.bx0, this.bx1, W, this.edge === "wrap");
-      const ySpans = expandedSpans(this.by0, this.by1, H, this.edge === "wrap");
+      const wrap = this._edge === "wrap";
+      if (wrap) this.refreshBorderBits();
+      const S = this.stride;
+      const BW = this.bitsStride;
+      const wr = W + 1 >>> 5;
+      const br = W + 1 & 31;
+      const lastMask = (1 << br) - 1;
+      const bits = this.bits;
+      const nextB = this.nextBits;
+      const cells = this.cells;
+      const birth = this.birth;
       const buf = this.changeBuf;
-      let changeCount = 0;
-      let nx0 = W;
-      let ny0 = H;
-      let nx1 = 0;
-      let ny1 = 0;
-      let pop = this.population;
-      for (let sy = 0; sy < ySpans.length; sy += 2) {
-        const ya = ySpans[sy];
-        const yb = ySpans[sy + 1];
-        for (let sx = 0; sx < xSpans.length; sx += 2) {
-          const xa = xSpans[sx];
-          const xb = xSpans[sx + 1];
-          for (let y = ya; y < yb; y++) {
-            const rowM = y * S;
-            const row0 = (y + 1) * S;
-            const rowP = (y + 2) * S;
-            for (let x = xa; x < xb; x++) {
-              const c = x + 1;
-              const n = cells[rowM + c - 1] + cells[rowM + c] + cells[rowM + c + 1] + cells[row0 + c - 1] + cells[row0 + c + 1] + cells[rowP + c - 1] + cells[rowP + c] + cells[rowP + c + 1];
-              const alive = cells[row0 + c];
-              next[row0 + c] = alive ? n === 2 || n === 3 ? 1 : 0 : n === 3 ? 1 : 0;
+      const genNow = this.gen & 65535;
+      const xSpans = expandedSpans(this.bx0, this.bx1, W, wrap);
+      const ySpans = expandedSpans(this.by0, this.by1, H, wrap);
+      for (let si = 0; si < ySpans.length; si += 2) {
+        const ya = ySpans[si];
+        const yb = ySpans[si + 1];
+        for (let y = ya; y < yb; y++) {
+          const rM = y * BW;
+          const r0 = (y + 1) * BW;
+          const rP = (y + 2) * BW;
+          for (let sj = 0; sj < xSpans.length; sj += 2) {
+            const kw0 = xSpans[sj] + 1 >>> 5;
+            const kw1 = xSpans[sj + 1] >>> 5;
+            for (let k = kw0; k <= kw1; k++) {
+              const m = bits[rM + k];
+              const c = bits[r0 + k];
+              const p = bits[rP + k];
+              const mL = m << 1 | (k > 0 ? bits[rM + k - 1] >>> 31 : 0);
+              const mR = m >>> 1 | (k + 1 < BW ? bits[rM + k + 1] << 31 : 0);
+              const cL = c << 1 | (k > 0 ? bits[r0 + k - 1] >>> 31 : 0);
+              const cR = c >>> 1 | (k + 1 < BW ? bits[r0 + k + 1] << 31 : 0);
+              const pL = p << 1 | (k > 0 ? bits[rP + k - 1] >>> 31 : 0);
+              const pR = p >>> 1 | (k + 1 < BW ? bits[rP + k + 1] << 31 : 0);
+              const mX = mL ^ m;
+              const mS = mX ^ mR;
+              const mC = mL & m | mR & mX;
+              const cS = cL ^ cR;
+              const cC = cL & cR;
+              const pX = pL ^ p;
+              const pS = pX ^ pR;
+              const pC = pL & p | pR & pX;
+              const sX = mS ^ cS;
+              const p0 = sX ^ pS;
+              const s1 = mS & cS | pS & sX;
+              const tX = mC ^ cC;
+              const t0 = tX ^ pC;
+              const t1 = mC & cC | pC & tX;
+              const p1 = s1 ^ t0;
+              const carry1 = s1 & t0;
+              const p2 = t1 ^ carry1;
+              const p3 = t1 & carry1;
+              let nv = p1 & ~p2 & ~p3 & (p0 | c);
+              if (k === 0) nv &= ~1;
+              if (k === wr) nv &= lastMask;
+              nextB[r0 + k] = nv;
             }
           }
         }
       }
-      for (let sy = 0; sy < ySpans.length; sy += 2) {
-        const ya = ySpans[sy];
-        const yb = ySpans[sy + 1];
-        for (let sx = 0; sx < xSpans.length; sx += 2) {
-          const xa = xSpans[sx];
-          const xb = xSpans[sx + 1];
-          for (let y = ya; y < yb; y++) {
-            const row0 = (y + 1) * S;
-            for (let x = xa; x < xb; x++) {
-              const i = row0 + x + 1;
-              const nv = next[i];
-              const ov = cells[i];
-              if (nv !== ov) {
-                cells[i] = nv;
-                if (nv) {
-                  age[i] = 1;
+      let changeCount = 0;
+      let pop = this.population;
+      let nx0 = W;
+      let ny0 = H;
+      let nx1 = 0;
+      let ny1 = 0;
+      for (let si = 0; si < ySpans.length; si += 2) {
+        const ya = ySpans[si];
+        const yb = ySpans[si + 1];
+        for (let y = ya; y < yb; y++) {
+          const r0 = (y + 1) * BW;
+          const base = (y + 1) * S;
+          let kFirst = -1;
+          let kLast = -1;
+          for (let sj = 0; sj < xSpans.length; sj += 2) {
+            const kw0 = xSpans[sj] + 1 >>> 5;
+            const kw1 = xSpans[sj + 1] >>> 5;
+            for (let k = kw0; k <= kw1; k++) {
+              const old = bits[r0 + k];
+              const nv = nextB[r0 + k];
+              if (nv !== 0) {
+                if (kFirst < 0) kFirst = k;
+                kLast = k;
+              }
+              if (nv === old) continue;
+              bits[r0 + k] = nv;
+              let d = nv ^ old;
+              if (k === 0) d &= ~1;
+              if (k === wr) d &= lastMask;
+              while (d !== 0) {
+                const bit = 31 - Math.clz32(d & -d);
+                const i = base + (k << 5) + bit;
+                if (nv >>> bit & 1) {
+                  cells[i] = 1;
+                  birth[i] = genNow;
                   pop++;
                   buf[changeCount++] = i;
                 } else {
-                  age[i] = 0;
+                  cells[i] = 0;
+                  birth[i] = 0;
                   pop--;
                   buf[changeCount++] = -(i + 1);
                 }
-              } else if (nv && age[i] < 255) {
-                age[i]++;
+                d &= d - 1;
               }
-              if (nv) {
-                if (x < nx0) nx0 = x;
-                if (x + 1 > nx1) nx1 = x + 1;
-                if (y < ny0) ny0 = y;
-                if (y + 1 > ny1) ny1 = y + 1;
-              }
+            }
+          }
+          if (kFirst >= 0) {
+            const w0 = nextB[r0 + kFirst];
+            const w1 = nextB[r0 + kLast];
+            if (w0 !== 0) {
+              const col0 = (kFirst << 5) + (31 - Math.clz32(w0 & -w0));
+              const x = col0 - 1;
+              if (x < nx0) nx0 = x < 0 ? 0 : x;
+              if (y < ny0) ny0 = y;
+              if (y + 1 > ny1) ny1 = y + 1;
+            }
+            if (w1 !== 0) {
+              const col1 = (kLast << 5) + (31 - Math.clz32(w1));
+              const x = col1 - 1;
+              if (x + 1 > nx1) nx1 = x + 1 > W ? W : x + 1;
+              if (y < ny0) ny0 = y;
+              if (y + 1 > ny1) ny1 = y + 1;
             }
           }
         }
@@ -1315,9 +2202,9 @@ kbd {
         this.bx1 = nx1;
         this.by1 = ny1;
       }
-      for (let sy = 0; sy < ySpans.length; sy += 2) {
-        for (let sx = 0; sx < xSpans.length; sx += 2) {
-          this.markDirty(xSpans[sx], ySpans[sy], xSpans[sx + 1], ySpans[sy + 1]);
+      for (let si = 0; si < ySpans.length; si += 2) {
+        for (let sj = 0; sj < xSpans.length; sj += 2) {
+          this.markDirty(xSpans[sj], ySpans[si], xSpans[sj + 1], ySpans[si + 1]);
         }
       }
       this.gen++;
@@ -1326,25 +2213,30 @@ kbd {
       out.set(buf.subarray(0, changeCount));
       return out;
     }
-    /** 把世界四周的 padding 环填成对边内容（环形边界）。 */
-    refreshBorder() {
+    /** 把世界四周的位图 padding 环填成对边内容（环形边界）。 */
+    refreshBorderBits() {
       const W = this.width;
       const H = this.height;
-      const S = this.stride;
-      const p = this.cells;
-      for (let x = 0; x < W; x++) {
-        p[x + 1] = p[H * S + x + 1];
-        p[(H + 1) * S + x + 1] = p[S + x + 1];
+      const BW = this.bitsStride;
+      const b = this.bits;
+      const wl = W >>> 5;
+      const bl = W & 31;
+      const wr = W + 1 >>> 5;
+      const br = W + 1 & 31;
+      const maskR = ~(1 << br);
+      for (let y = 1; y <= H; y++) {
+        const base = y * BW;
+        const leftVal = b[base + wl] >>> bl & 1;
+        const rightVal = b[base] >>> 1 & 1;
+        if (leftVal) b[base] |= 1;
+        else b[base] &= ~1;
+        if (rightVal) b[base + wr] |= 1 << br;
+        else b[base + wr] &= maskR;
       }
-      for (let y = 0; y < H; y++) {
-        const row = (y + 1) * S;
-        p[row] = p[row + W];
-        p[row + W + 1] = p[row + 1];
+      for (let k = 0; k < BW; k++) {
+        b[k] = b[H * BW + k];
+        b[(H + 1) * BW + k] = b[BW + k];
       }
-      p[0] = p[H * S + W];
-      p[W + 1] = p[H * S + 1];
-      p[(H + 1) * S] = p[S + W];
-      p[(H + 1) * S + W + 1] = p[S + 1];
     }
     /** 用未填充位图覆盖整个世界（历史关键帧恢复用）。 */
     loadBits(bits, population, gen) {
@@ -1352,7 +2244,9 @@ kbd {
       const H = this.height;
       const S = this.stride;
       this.cells.fill(0);
-      this.age.fill(0);
+      this.birth.fill(0);
+      this.gen = gen;
+      const g = gen & 65535;
       for (let y = 0; y < H; y++) {
         const row = (y + 1) * S;
         const src = y * W;
@@ -1360,13 +2254,13 @@ kbd {
           if (bits[src + x]) {
             const i = row + x + 1;
             this.cells[i] = 1;
-            this.age[i] = 1;
+            this.birth[i] = g;
           }
         }
       }
       this.population = population;
-      this.gen = gen;
       this.recompute();
+      this.rebuildBits();
       this.markAllDirty();
     }
     /** 导出未填充位图（历史关键帧 / 存档用）。 */
@@ -1415,7 +2309,9 @@ kbd {
       const H = this.height;
       const S = this.stride;
       this.cells.fill(0);
-      this.age.fill(0);
+      this.birth.fill(0);
+      this.gen = gen;
+      const g = gen & 65535;
       let bit = 0;
       for (let y = 0; y < H; y++) {
         const row = (y + 1) * S;
@@ -1423,14 +2319,14 @@ kbd {
           if (packed[bit >> 3] >> (bit & 7) & 1) {
             const i = row + x + 1;
             this.cells[i] = 1;
-            this.age[i] = 1;
+            this.birth[i] = g;
           }
           bit++;
         }
       }
       this.population = population;
-      this.gen = gen;
       this.recompute();
+      this.rebuildBits();
       this.markAllDirty();
     }
     /** 与打包位图比较，返回把世界变成该位图所需的翻转清单。 */
@@ -1464,7 +2360,8 @@ kbd {
     applyDelta(codes) {
       const S = this.stride;
       const cells = this.cells;
-      const age = this.age;
+      const birth = this.birth;
+      const g = this.gen & 65535;
       let pop = this.population;
       let x0 = this.width;
       let y0 = this.height;
@@ -1475,11 +2372,13 @@ kbd {
         const i = code >= 0 ? code : -code - 1;
         if (code >= 0) {
           cells[i] = 1;
-          age[i] = 1;
+          birth[i] = g;
+          this.setBit(i, 1);
           pop++;
         } else {
           cells[i] = 0;
-          age[i] = 0;
+          birth[i] = 0;
+          this.setBit(i, 0);
           pop--;
         }
         const cx = i % S - 1;
@@ -1501,7 +2400,8 @@ kbd {
     revertDelta(codes) {
       const S = this.stride;
       const cells = this.cells;
-      const age = this.age;
+      const birth = this.birth;
+      const g = this.gen & 65535;
       let pop = this.population;
       let x0 = this.width;
       let y0 = this.height;
@@ -1512,11 +2412,13 @@ kbd {
         const i = code >= 0 ? code : -code - 1;
         if (code >= 0) {
           cells[i] = 0;
-          age[i] = 0;
+          birth[i] = 0;
+          this.setBit(i, 0);
           pop--;
         } else {
           cells[i] = 1;
-          age[i] = 1;
+          birth[i] = g;
+          this.setBit(i, 1);
           pop++;
         }
         const cx = i % S - 1;
@@ -2102,7 +3004,6 @@ kbd {
     };
   });
   var PATTERN_BY_ID = new Map(PATTERNS.map((p) => [p.id, p]));
-  var CATEGORY_ORDER = ["静物", "振荡子", "飞船", "枪", "长寿者"];
   function patternSize(pat, rotation) {
     const rot = (rotation % 4 + 4) % 4;
     const swap = rot === 1 || rot === 3;
@@ -2144,6 +3045,282 @@ kbd {
       }
     }
     return { w: ow, h: oh, cells: out };
+  }
+
+  // src/core/library.ts
+  var HIDDEN = "__hidden";
+  var BUILTIN_CATEGORIES = [
+    { id: "still", name: "静物" },
+    { id: "oscillator", name: "振荡子" },
+    { id: "ship", name: "飞船" },
+    { id: "gun", name: "枪" },
+    { id: "methuselah", name: "长寿者" }
+  ];
+  var CN_TO_CAT = {
+    静物: "still",
+    振荡子: "oscillator",
+    飞船: "ship",
+    枪: "gun",
+    长寿者: "methuselah"
+  };
+  function defaultConfig() {
+    return { categories: BUILTIN_CATEGORIES.map((c) => ({ ...c })), assignments: {}, order: [] };
+  }
+  function builtinCatId(p) {
+    return CN_TO_CAT[p.category] ?? "other";
+  }
+  var B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  function encodeCells(cells) {
+    let out = "";
+    for (let i = 0; i < cells.length; i += 3) {
+      const a = cells[i] ?? 0;
+      const b = cells[i + 1] ?? 0;
+      const c = cells[i + 2] ?? 0;
+      const n = a << 16 | b << 8 | c;
+      out += B64[n >>> 18 & 63] + B64[n >>> 12 & 63];
+      out += i + 1 < cells.length ? B64[n >>> 6 & 63] : "=";
+      out += i + 2 < cells.length ? B64[n & 63] : "=";
+    }
+    return out;
+  }
+  function decodeCells(s) {
+    const clean = s.replace(/[^A-Za-z0-9+/]/g, "");
+    const out = new Uint8Array(Math.floor(clean.length * 3 / 4));
+    let o = 0;
+    for (let i = 0; i < clean.length; i += 4) {
+      const n = B64.indexOf(clean[i]) << 18 | B64.indexOf(clean[i + 1]) << 12 | (B64.indexOf(clean[i + 2]) & 63) << 6 | B64.indexOf(clean[i + 3]) & 63;
+      out[o++] = n >>> 16 & 255;
+      if (o < out.length) out[o++] = n >>> 8 & 255;
+      if (o < out.length) out[o++] = n & 255;
+    }
+    return out;
+  }
+  function customToPattern(rec) {
+    const cells = decodeCells(rec.cells);
+    let population = 0;
+    for (let i = 0; i < cells.length; i++) if (cells[i]) population++;
+    return {
+      id: rec.id,
+      name: rec.name,
+      en: "自定义",
+      category: rec.catId,
+      cells,
+      w: rec.width,
+      h: rec.height,
+      population,
+      still: false,
+      period: -1,
+      move: [0, 0],
+      catId: rec.catId,
+      custom: true
+    };
+  }
+  var Library = class {
+    config;
+    /** 自定义图案的原始记录，按 id 索引 */
+    customs = /* @__PURE__ */ new Map();
+    cache = [];
+    index = /* @__PURE__ */ new Map();
+    constructor(customPatterns = [], config) {
+      this.config = normalizeConfig(config);
+      for (const rec of customPatterns) this.customs.set(rec.id, rec);
+      this.rebuild();
+    }
+    rebuild() {
+      const list = [];
+      for (const p of PATTERNS) {
+        const catId = this.assignOf(p.id) ?? builtinCatId(p);
+        list.push({ ...p, catId, custom: false });
+      }
+      for (const rec of this.customs.values()) {
+        const pat = customToPattern(rec);
+        pat.catId = this.assignOf(rec.id) ?? rec.catId;
+        list.push(pat);
+      }
+      const order = this.config.order;
+      const pos = /* @__PURE__ */ new Map();
+      for (let i = 0; i < order.length; i++) if (!pos.has(order[i])) pos.set(order[i], i);
+      const BIG = Number.MAX_SAFE_INTEGER;
+      list.sort((a, b) => (pos.get(a.id) ?? BIG) - (pos.get(b.id) ?? BIG));
+      for (const p of list) {
+        if (!pos.has(p.id)) {
+          pos.set(p.id, order.length);
+          order.push(p.id);
+        }
+      }
+      this.cache = list;
+      this.index = new Map(list.map((p) => [p.id, p]));
+    }
+    assignOf(id) {
+      const v = this.config.assignments[id];
+      return v === void 0 ? void 0 : v;
+    }
+    /** 分类列表（含空分类，顺序即显示顺序）。 */
+    get categories() {
+      return this.config.categories;
+    }
+    categoryName(id) {
+      return this.config.categories.find((c) => c.id === id)?.name ?? "未分类";
+    }
+    /** 该分类下可见的图案（隐藏的不返回）。 */
+    patternsIn(catId) {
+      return this.cache.filter((p) => p.catId === catId && p.catId !== HIDDEN);
+    }
+    /** 所有可见图案，按分类顺序展开。 */
+    get visible() {
+      const out = [];
+      for (const cat of this.config.categories) out.push(...this.patternsIn(cat.id));
+      return out;
+    }
+    /** 被隐藏的图案，管理面板里可以恢复。 */
+    get hidden() {
+      return this.cache.filter((p) => p.catId === HIDDEN);
+    }
+    byId(id) {
+      return this.index.get(id);
+    }
+    // ---------------- 图案 ----------------
+    addCustom(rec) {
+      this.customs.set(rec.id, rec);
+      this.rebuild();
+    }
+    removeCustom(id) {
+      this.customs.delete(id);
+      delete this.config.assignments[id];
+      this.config.order = this.config.order.filter((x) => x !== id);
+      this.rebuild();
+    }
+    /** 修改图案归属；catId 传 null 表示从库里隐藏。 */
+    assign(patternId, catId) {
+      const pat = this.index.get(patternId);
+      const fallback = pat ? pat.custom ? pat.catId : builtinCatId(pat) : void 0;
+      if (catId === null) this.config.assignments[patternId] = HIDDEN;
+      else if (fallback === void 0 || catId === fallback) delete this.config.assignments[patternId];
+      else this.config.assignments[patternId] = catId;
+      this.rebuild();
+    }
+    /** 把图案挪到某个分类，并插到 beforeId 之前（null = 放到该分类末尾）。 */
+    movePattern(patternId, catId, beforeId) {
+      this.assign(patternId, catId);
+      const order = this.config.order.filter((x) => x !== patternId);
+      if (beforeId && beforeId !== patternId) {
+        const i = order.indexOf(beforeId);
+        if (i >= 0) order.splice(i, 0, patternId);
+        else order.push(patternId);
+      } else {
+        const mates = this.cache.filter((p) => p.id !== patternId && p.catId === catId);
+        const last = mates[mates.length - 1];
+        const at = last ? order.indexOf(last.id) + 1 : order.length;
+        order.splice(at, 0, patternId);
+      }
+      this.config.order = order;
+      this.rebuild();
+    }
+    /** 收进仓库（等同隐藏），并保留原分类信息以便随时取回。 */
+    stash(patternId) {
+      this.assign(patternId, null);
+    }
+    /** 从仓库取出，放回指定分类（默认放回它本来属于的分类）。 */
+    unstash(patternId, catId) {
+      const pat = this.index.get(patternId);
+      if (!pat) return;
+      const fallback = pat.custom ? pat.catId : builtinCatId(pat);
+      this.movePattern(patternId, catId ?? fallback);
+    }
+    // ---------------- 分类 ----------------
+    renameCategory(id, name) {
+      const cat = this.config.categories.find((c) => c.id === id);
+      if (cat) cat.name = name.trim() || cat.name;
+    }
+    addCategory(name) {
+      const base = "cat-" + Date.now().toString(36);
+      let id = base;
+      let n = 2;
+      while (this.config.categories.some((c) => c.id === id)) id = base + "-" + n++;
+      const cat = { id, name: name.trim() || "新分类" };
+      this.config.categories.push(cat);
+      return cat;
+    }
+    /** 删除分类：其中的图案改归第一个分类，不让它们凭空消失。 */
+    removeCategory(id) {
+      if (this.config.categories.length <= 1) return;
+      const idx = this.config.categories.findIndex((c) => c.id === id);
+      if (idx < 0) return;
+      this.config.categories.splice(idx, 1);
+      const first = this.config.categories[0].id;
+      for (const p of this.cache) {
+        if (p.catId !== id) continue;
+        if (p.custom) {
+          const rec = this.customs.get(p.id);
+          if (rec) rec.catId = first;
+          delete this.config.assignments[p.id];
+        } else {
+          const def = builtinCatId(p);
+          if (def === first) delete this.config.assignments[p.id];
+          else this.config.assignments[p.id] = first;
+        }
+      }
+      this.rebuild();
+    }
+    /** 上移/下移分类（delta = -1 / +1）。 */
+    moveCategory(id, delta) {
+      const cats = this.config.categories;
+      const i = cats.findIndex((c2) => c2.id === id);
+      const j = i + delta;
+      if (i < 0 || j < 0 || j >= cats.length) return;
+      const [c] = cats.splice(i, 1);
+      cats.splice(j, 0, c);
+    }
+    /** 拖拽排序：把分类放到 beforeId 之前（null = 移到最后）。 */
+    moveCategoryBefore(id, beforeId) {
+      const cats = this.config.categories;
+      const i = cats.findIndex((c2) => c2.id === id);
+      if (i < 0) return;
+      const [c] = cats.splice(i, 1);
+      if (!beforeId) {
+        cats.push(c);
+        return;
+      }
+      const j = cats.findIndex((x) => x.id === beforeId);
+      cats.splice(j < 0 ? cats.length : j, 0, c);
+    }
+  };
+  function normalizeConfig(raw) {
+    const base = defaultConfig();
+    const keepOrder = (src) => {
+      const out = [];
+      const seen2 = /* @__PURE__ */ new Set();
+      for (const id of Array.isArray(src) ? src : []) {
+        if (typeof id === "string" && !seen2.has(id)) {
+          seen2.add(id);
+          out.push(id);
+        }
+      }
+      return out;
+    };
+    if (!raw || !Array.isArray(raw.categories) || raw.categories.length === 0) {
+      if (!raw) return base;
+      return {
+        ...base,
+        assignments: { ...raw.assignments ?? {} },
+        order: keepOrder(raw.order)
+      };
+    }
+    const cats = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const c of raw.categories) {
+      if (!c || typeof c.id !== "string" || seen.has(c.id)) continue;
+      seen.add(c.id);
+      cats.push({ id: c.id, name: typeof c.name === "string" && c.name ? c.name : c.id });
+    }
+    if (!cats.length) return base;
+    const assignments = {};
+    const valid = new Set(cats.map((c) => c.id));
+    for (const [k, v] of Object.entries(raw.assignments ?? {})) {
+      if (v === HIDDEN || valid.has(v)) assignments[k] = v;
+    }
+    const order = keepOrder(raw.order);
+    return { categories: cats, assignments, order };
   }
 
   // src/core/rle.ts
@@ -2268,8 +3445,10 @@ kbd {
     for (let y = 0; y < H; y++) {
       const row = encodeRow(cells, y * W, W);
       if (!row) continue;
-      const gap = y - prevRow - 1;
-      if (gap > 0) tokens.push(gap > 1 ? `${gap}$` : "$");
+      if (prevRow >= 0) {
+        const step = y - prevRow;
+        tokens.push(step > 1 ? `${step}$` : "$");
+      }
       tokens.push(row);
       prevRow = y;
     }
@@ -2286,31 +3465,29 @@ kbd {
     return lines.join("\n") + "\n";
   }
   function encodeRow(cells, offset, w) {
-    let out = "";
-    let run = 0;
-    let cur = 0;
     let lastAlive = -1;
-    for (let x = 0; x < w; x++) if (cells[offset + x]) lastAlive = x;
+    for (let x2 = 0; x2 < w; x2++) if (cells[offset + x2]) lastAlive = x2;
     if (lastAlive < 0) return "";
-    for (let x = 0; x <= lastAlive; x++) {
+    let out = "";
+    let x = 0;
+    while (x <= lastAlive) {
       const v = cells[offset + x] ? 1 : 0;
-      if (v === cur) {
-        run++;
-      } else {
-        out += (run > 1 ? String(run) : "") + (cur ? "o" : "b");
-        cur = v;
-        run = 1;
+      let n = 0;
+      while (x <= lastAlive && (cells[offset + x] ? 1 : 0) === v) {
+        n++;
+        x++;
       }
+      out += (n > 1 ? String(n) : "") + (v ? "o" : "b");
     }
-    out += (run > 1 ? String(run) : "") + (cur ? "o" : "b");
     return out;
   }
 
   // src/core/storage.ts
   var DB_NAME = "life-studio";
-  var DB_VERSION = 1;
+  var DB_VERSION = 2;
   var STORE_SNAPSHOTS = "snapshots";
   var STORE_CLIPS = "clips";
+  var STORE_PATTERNS = "patterns";
   var STORE_META = "meta";
   var LS_PREFIX = "life-studio:";
   function uid() {
@@ -2351,6 +3528,7 @@ kbd {
                 const db = req.result;
                 if (!db.objectStoreNames.contains(STORE_SNAPSHOTS)) db.createObjectStore(STORE_SNAPSHOTS, { keyPath: "id" });
                 if (!db.objectStoreNames.contains(STORE_CLIPS)) db.createObjectStore(STORE_CLIPS, { keyPath: "id" });
+                if (!db.objectStoreNames.contains(STORE_PATTERNS)) db.createObjectStore(STORE_PATTERNS, { keyPath: "id" });
                 if (!db.objectStoreNames.contains(STORE_META)) db.createObjectStore(STORE_META, { keyPath: "key" });
               };
               req.onsuccess = () => resolve(req.result);
@@ -2458,6 +3636,48 @@ kbd {
         return;
       }
       localStorage.removeItem(LS_PREFIX + "meta:autosave");
+    }
+    // ---------------- 自定义图案 / 图案库配置 ----------------
+    async listCustomPatterns() {
+      if (this.mode === "idb" && this.db) {
+        const rows = await this.idbAll(STORE_PATTERNS);
+        return rows.sort((a, b) => a.created - b.created);
+      }
+      return this.localAll("pattern").sort((a, b) => a.created - b.created);
+    }
+    async saveCustomPattern(rec) {
+      if (this.mode === "idb" && this.db) {
+        await this.idbPut(STORE_PATTERNS, rec);
+        return;
+      }
+      this.localPut("pattern", rec.id, rec);
+    }
+    async deleteCustomPattern(id) {
+      if (this.mode === "idb" && this.db) {
+        await this.idbDelete(STORE_PATTERNS, id);
+        return;
+      }
+      localStorage.removeItem(LS_PREFIX + "pattern:" + id);
+    }
+    async getLibraryConfig() {
+      if (this.mode === "idb" && this.db) {
+        const row = await this.idbGet(STORE_META, "library");
+        return row?.value ?? null;
+      }
+      const raw = localStorage.getItem(LS_PREFIX + "meta:library");
+      if (!raw) return null;
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+    async setLibraryConfig(cfg) {
+      if (this.mode === "idb" && this.db) {
+        await this.idbPut(STORE_META, { key: "library", value: cfg });
+        return;
+      }
+      this.localSetRaw("meta:library", JSON.stringify(cfg));
     }
     // ---------------- 底层 ----------------
     idbAll(store2) {
@@ -2684,7 +3904,8 @@ kbd {
       const W = w.width;
       const S = w.stride;
       const cells = w.cells;
-      const age = w.age;
+      const birth = w.birth;
+      const gen = w.gen;
       const ax0 = Math.max(0, Math.floor(x0));
       const ay0 = Math.max(0, Math.floor(y0));
       const ax1 = Math.min(W, Math.ceil(x1));
@@ -2694,7 +3915,15 @@ kbd {
         const base = (y + 1) * S + 1;
         let o = y * W + ax0;
         for (let x = ax0; x < ax1; x++) {
-          buf[o++] = cells[base + x] ? PALETTE[age[base + x] || 1] : PALETTE[0];
+          const idx = base + x;
+          if (cells[idx]) {
+            let a = gen - birth[idx] & 65535;
+            if (a < 1) a = 1;
+            else if (a > 255) a = 255;
+            buf[o++] = PALETTE[a];
+          } else {
+            buf[o++] = PALETTE[0];
+          }
         }
       }
       this.offCtx.putImageData(img, 0, 0, ax0, ay0, ax1 - ax0, ay1 - ay0);
@@ -2722,19 +3951,56 @@ kbd {
       ctx.fillStyle = WORLD_BG;
       ctx.fillRect(dx, dy, dw, dh);
       ctx.imageSmoothingEnabled = scale < 1;
-      if (opts.glow && scale >= 0.1) {
-        ctx.save();
-        ctx.globalAlpha = 0.5;
-        ctx.filter = `blur(${Math.min(18, Math.max(2, scale * 1.6))}px)`;
-        ctx.drawImage(this.off, dx, dy, dw, dh);
-        ctx.restore();
-      }
       ctx.drawImage(this.off, dx, dy, dw, dh);
       if (opts.grid) this.drawGrid(ctx, view2, w);
       this.drawBorder(ctx, view2, w);
       if (overlay?.ghost) this.drawGhost(ctx, view2, overlay.ghost);
       if (overlay?.brush) this.drawBrush(ctx, view2, overlay.brush, w);
       if (overlay?.shape) this.drawShape(ctx, view2, overlay.shape);
+      if (overlay?.selection) this.drawSelection(ctx, view2, overlay.selection);
+    }
+    drawSelection(ctx, view2, rects) {
+      if (rects.length === 0) return;
+      const s = view2.scale;
+      ctx.save();
+      ctx.setLineDash([6, 4]);
+      ctx.lineDashOffset = performance.now() / 60 % 10;
+      ctx.lineWidth = 1.5;
+      for (const sel of rects) {
+        const x0 = Math.min(sel.x0, sel.x1);
+        const y0 = Math.min(sel.y0, sel.y1);
+        const wCells = Math.abs(sel.x1 - sel.x0) + 1;
+        const hCells = Math.abs(sel.y1 - sel.y0) + 1;
+        const px = view2.ox + x0 * s;
+        const py = view2.oy + y0 * s;
+        const pw = wCells * s;
+        const ph = hCells * s;
+        ctx.fillStyle = "rgba(108,245,210,0.10)";
+        ctx.fillRect(px, py, pw, ph);
+        ctx.setLineDash([]);
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "rgba(4,10,14,0.75)";
+        ctx.strokeRect(px, py, pw, ph);
+        ctx.setLineDash([6, 4]);
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = LIVE_COLOR;
+        ctx.strokeRect(px + 0.75, py + 0.75, Math.max(1, pw - 1.5), Math.max(1, ph - 1.5));
+        ctx.setLineDash([]);
+        const hs = 5;
+        for (const [cx, cy] of [
+          [px, py],
+          [px + pw, py],
+          [px, py + ph],
+          [px + pw, py + ph]
+        ]) {
+          ctx.fillStyle = LIVE_COLOR;
+          ctx.fillRect(cx - hs / 2, cy - hs / 2, hs, hs);
+          ctx.strokeStyle = "rgba(4,10,14,0.9)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(cx - hs / 2 + 0.5, cy - hs / 2 + 0.5, hs - 1, hs - 1);
+        }
+      }
+      ctx.restore();
     }
     drawShape(ctx, view2, shape) {
       const s = view2.scale;
@@ -2858,10 +4124,26 @@ kbd {
       if (s < 0.4) return;
       const x = (brush.x % w.width + w.width) % w.width;
       const y = (brush.y % w.height + w.height) % w.height;
+      const n = Math.max(1, brush.size | 0);
+      const r = n - 1 >> 1;
       ctx.save();
       ctx.strokeStyle = "rgba(255,255,255,0.55)";
       ctx.lineWidth = 1;
-      ctx.strokeRect(Math.round(view2.ox + x * s) + 0.5, Math.round(view2.oy + y * s) + 0.5, Math.max(s, 2), Math.max(s, 2));
+      ctx.strokeRect(
+        Math.round(view2.ox + (x - r) * s) + 0.5,
+        Math.round(view2.oy + (y - r) * s) + 0.5,
+        Math.max(s * n, 2),
+        Math.max(s * n, 2)
+      );
+      if (n > 2 && s > 2) {
+        ctx.strokeStyle = "rgba(255,255,255,0.14)";
+        ctx.strokeRect(
+          Math.round(view2.ox + (x - r) * s) + 1.5,
+          Math.round(view2.oy + (y - r) * s) + 1.5,
+          Math.max(s * n - 2, 2),
+          Math.max(s * n - 2, 2)
+        );
+      }
       ctx.restore();
     }
   };
@@ -2894,7 +4176,7 @@ kbd {
         const wx = bx0 + Math.floor((x + 0.5) / k);
         if (wx < 0 || wx >= world2.width) continue;
         const i = (wy + 1) * S + (wx + 1);
-        buf[y * dw + x] = world2.cells[i] ? PALETTE[Math.max(1, world2.age[i])] : pack([8, 13, 19]);
+        buf[y * dw + x] = world2.cells[i] ? PALETTE[world2.ageAt(i)] : pack([8, 13, 19]);
       }
     }
     ctx.putImageData(img, ox, oy);
@@ -2910,27 +4192,31 @@ kbd {
   var history;
   var renderer;
   var store;
+  var library;
+  var shareMode = false;
   var view = new Viewport();
   var state = {
-    tool: "brush",
-    patternId: "gosperglidergun",
+    tool: "pan",
+    lastTool: "pan",
+    patternId: "",
     rotation: 0,
     mirror: false,
     grid: true,
-    glow: true,
     playing: false,
     unlimited: false,
     speed: 10,
     acc: 0,
+    brushSize: 1,
     drag: null,
     hover: null,
+    selection: [],
     editPending: false,
     recordStart: -1,
     pointers: /* @__PURE__ */ new Map(),
     pinch: null,
-    modalOpen: false
+    modalOpen: false,
+    paletteMode: "browse"
   };
-  var keys = { space: false };
   var lastTs = 0;
   var uiDirty = true;
   var lastUi = 0;
@@ -2950,10 +4236,10 @@ kbd {
   function seedShowcase(w) {
     const cx = Math.floor(w.width / 2);
     const cy = Math.floor(w.height / 2);
-    const gun = PATTERN_BY_ID.get("gosperglidergun");
-    const pulsar = PATTERN_BY_ID.get("pulsar");
-    const penta = PATTERN_BY_ID.get("pentadecathlon");
-    const rp = PATTERN_BY_ID.get("rpentomino");
+    const gun = library.byId("gosperglidergun");
+    const pulsar = library.byId("pulsar");
+    const penta = library.byId("pentadecathlon");
+    const rp = library.byId("rpentomino");
     if (gun) stampPattern(w, gun, cx - 52, cy - 22, 0, false);
     if (pulsar) stampPattern(w, pulsar, cx + 20, cy - 30, 0, false);
     if (penta) stampPattern(w, penta, cx - 26, cy + 18, 0, false);
@@ -2965,6 +4251,8 @@ kbd {
     if (seed) seedShowcase(world);
     history = new History(world);
     renderer.attach(world);
+    state.selection = [];
+    updateSelBar();
     if (renderer.cssW > 0) fitWorld();
     uiDirty = true;
   }
@@ -3001,7 +4289,7 @@ kbd {
     }
     renderer.sync();
     const overlay = buildOverlay();
-    renderer.render(view, { grid: state.grid, glow: state.glow }, overlay);
+    renderer.render(view, { grid: state.grid }, overlay);
     if (uiDirty && ts - lastUi > 80) {
       lastUi = ts;
       uiDirty = false;
@@ -3012,9 +4300,10 @@ kbd {
   function buildOverlay() {
     let ghost = null;
     let brush = null;
-    if (state.hover && !state.drag) {
+    const painting = state.drag?.kind === "paint";
+    if (state.hover && (!state.drag || painting)) {
       if (state.tool === "stamp") {
-        const pat = PATTERN_BY_ID.get(state.patternId);
+        const pat = library.byId(state.patternId);
         if (pat) {
           const r = renderPattern(pat, state.rotation, state.mirror);
           const x = state.hover.x - Math.floor(r.w / 2);
@@ -3023,11 +4312,31 @@ kbd {
           ghost = { cells: r.cells, w: r.w, h: r.h, x, y, ok };
         }
       } else if (state.tool === "brush" || state.tool === "erase") {
-        brush = { x: state.hover.x, y: state.hover.y, size: 1 };
+        brush = { x: state.hover.x, y: state.hover.y, size: state.brushSize };
       }
     }
     const d = state.drag;
-    return { ghost, brush, shape: d && d.kind === "shape" ? d.shape : null };
+    let selection = state.selection;
+    if (d && d.kind === "select" && state.hover) {
+      const live = normalizeSelection(d.lx, d.ly, state.hover.x, state.hover.y);
+      selection = live ? [...state.selection, live] : state.selection;
+    }
+    if (moveState) {
+      const m = moveState;
+      ghost = { cells: m.cells, w: m.w, h: m.h, x: m.x0 + m.dx, y: m.y0 + m.dy, ok: true };
+      selection = m.rects.map((r) => ({
+        x0: r.x0 + m.dx,
+        y0: r.y0 + m.dy,
+        x1: r.x1 + m.dx,
+        y1: r.y1 + m.dy
+      }));
+    }
+    return {
+      ghost,
+      brush,
+      shape: d && d.kind === "shape" ? d.shape : null,
+      selection: selection.length > 0 ? selection : null
+    };
   }
   function flushUi() {
     el("stat-gen").textContent = nf.format(world.gen);
@@ -3068,15 +4377,105 @@ kbd {
     clearTimeout(toastTimer);
     toastTimer = window.setTimeout(() => toastEl.classList.remove("show"), 1900);
   }
-  function commitEdit() {
+  var UNDO_BYTES = 24 * 1024 * 1024;
+  var undoStack = [];
+  var redoStack = [];
+  var editBase = null;
+  function snapshot(label) {
+    return { kind: "world", packed: world.toPacked(), population: world.population, label };
+  }
+  function beginEdit(label) {
+    editBase = snapshot(label);
+  }
+  function pushSelUndo(rects, label) {
+    undoStack.push({ kind: "sel", rects: rects.map((r) => ({ ...r })), label });
+    redoStack = [];
+    trimUndo();
+  }
+  function trimUndo() {
+    let bytes = 0;
+    for (const s of undoStack) if (s.kind === "world") bytes += s.packed.byteLength;
+    while (undoStack.length > 1 && bytes > UNDO_BYTES) {
+      const dropped = undoStack.shift();
+      if (dropped && dropped.kind === "world") bytes -= dropped.packed.byteLength;
+    }
+    const maxEntries = 200;
+    if (undoStack.length > maxEntries) undoStack = undoStack.slice(-maxEntries);
+  }
+  function commitEdit(label) {
+    if (editBase) {
+      undoStack.push({ ...editBase, label: label ?? editBase.label });
+      editBase = null;
+      redoStack = [];
+      trimUndo();
+    }
     history.markEdited(world.gen, world.toPacked(), world.population);
     uiDirty = true;
   }
+  function applySnapshot(s) {
+    world.loadPacked(s.packed, s.population, world.gen);
+    history.markEdited(world.gen, s.packed, s.population);
+    uiDirty = true;
+  }
+  function restoreRects(rects) {
+    state.selection = rects.map((r) => ({ ...r }));
+    updateSelBar();
+  }
+  function undoEdit() {
+    const entry = undoStack.pop();
+    if (!entry) {
+      toast("没有可以撤销的操作了");
+      return;
+    }
+    if (entry.kind === "sel") {
+      redoStack.push({ kind: "sel", rects: state.selection.map((r) => ({ ...r })), label: entry.label });
+      restoreRects(entry.rects);
+      toast(`已撤销：${entry.label}`);
+      return;
+    }
+    redoStack.push(snapshot(entry.label));
+    applySnapshot(entry);
+    toast(`已撤销：${entry.label}`);
+  }
+  function redoEdit() {
+    const entry = redoStack.pop();
+    if (!entry) {
+      toast("没有可以重做的操作了");
+      return;
+    }
+    if (entry.kind === "sel") {
+      undoStack.push({ kind: "sel", rects: state.selection.map((r) => ({ ...r })), label: entry.label });
+      restoreRects(entry.rects);
+      toast(`已重做：${entry.label}`);
+      return;
+    }
+    undoStack.push(snapshot(entry.label));
+    applySnapshot(entry);
+    toast(`已重做：${entry.label}`);
+  }
   function paintCell(x, y, value) {
-    if (x < 0 || y < 0 || x >= world.width || y >= world.height) return;
-    if (world.get(x, y) === value) return;
-    world.set(x, y, value);
-    state.editPending = true;
+    const n = state.brushSize;
+    if (n <= 1) {
+      if (x < 0 || y < 0 || x >= world.width || y >= world.height) return;
+      if (world.get(x, y) === value) return;
+      world.set(x, y, value);
+      state.editPending = true;
+      return;
+    }
+    const r = n - 1 >> 1;
+    let touched = false;
+    for (let dy = -r; dy <= r; dy++) {
+      const wy = y + dy;
+      if (wy < 0 || wy >= world.height) continue;
+      for (let dx = -r; dx <= r; dx++) {
+        const wx = x + dx;
+        if (wx < 0 || wx >= world.width) continue;
+        if (world.get(wx, wy) === value) continue;
+        world.set(wx, wy, value);
+        touched = true;
+      }
+    }
+    if (touched) state.editPending = true;
   }
   function paintLine(x0, y0, x1, y1, value) {
     let x = x0;
@@ -3115,11 +4514,15 @@ kbd {
     }
   }
   function placePattern(p) {
-    const pat = PATTERN_BY_ID.get(state.patternId);
-    if (!pat) return;
+    const pat = library.byId(state.patternId);
+    if (!pat) {
+      toast("先在右边图案库里点一个图案");
+      return;
+    }
     const size = patternSize(pat, state.rotation);
     const x = p.x - Math.floor(size.w / 2);
     const y = p.y - Math.floor(size.h / 2);
+    beginEdit(`放置 ${pat.name}`);
     stampPattern(world, pat, x, y, state.rotation, state.mirror);
     state.editPending = false;
     commitEdit();
@@ -3134,9 +4537,48 @@ kbd {
     return { x: Math.floor(w.x), y: Math.floor(w.y) };
   }
   function setTool(tool) {
+    if (tool !== state.tool && state.tool !== "select") state.lastTool = state.tool;
     state.tool = tool;
+    canvas.style.cursor = "";
     for (const btn of document.querySelectorAll("#toolbar .tool")) {
       btn.classList.toggle("active", btn.dataset.tool === tool);
+    }
+    updateHint();
+  }
+  var BRUSH_MAX = 31;
+  function adjustBrushSize(delta) {
+    const next = Math.max(1, Math.min(BRUSH_MAX, state.brushSize + delta));
+    if (next === state.brushSize) return;
+    state.brushSize = next;
+    updateHint();
+  }
+  function updateHint() {
+    const draw = el("hint").querySelector('[data-hint="draw"]');
+    const mid = el("hint").querySelector('[data-hint="mid"]');
+    const wheel = el("hint").querySelector('[data-hint="wheel"]');
+    if (!draw || !mid || !wheel) return;
+    mid.textContent = "右键拖拽平移";
+    if (state.tool === "brush" || state.tool === "erase") {
+      const name = state.tool === "erase" ? "橡皮" : "画笔";
+      draw.textContent = `${name} ${state.brushSize}×${state.brushSize}`;
+      mid.textContent = "Ctrl+滚轮调大小";
+      wheel.textContent = "滚轮缩放 · [ ] 也可调";
+    } else if (state.tool === "select") {
+      draw.textContent = "拖拽框选";
+      mid.textContent = "Ctrl 加选 · Shift 重框";
+      wheel.textContent = "Alt 移框 · Esc 退出";
+    } else if (state.tool === "pan") {
+      draw.textContent = "拖拽平移画布";
+      mid.textContent = "0 适应视图";
+      wheel.textContent = "滚轮缩放";
+    } else if (state.tool === "stamp") {
+      const pat = library.byId(state.patternId);
+      draw.textContent = pat ? `点击摆放「${pat.name}」` : "先在右边挑一个图案";
+      mid.textContent = pat ? "R 旋转 · M 镜像" : "点空白处可取消选中";
+      wheel.textContent = "滚轮缩放";
+    } else {
+      draw.textContent = "拖拽绘制";
+      wheel.textContent = "滚轮缩放";
     }
   }
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
@@ -3153,9 +4595,12 @@ kbd {
       return;
     }
     if (state.pointers.size > 2) return;
-    canvas.setPointerCapture(e.pointerId);
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {
+    }
     const wp = worldAt(p);
-    const wantPan = state.tool === "pan" || e.button === 2 || e.button === 1 || keys.space;
+    const wantPan = state.tool === "pan" || e.button === 2 || e.button === 1;
     if (wantPan) {
       stageEl.classList.add("panning");
       state.drag = {
@@ -3176,6 +4621,76 @@ kbd {
     if (state.playing) setPlaying(false);
     if (state.tool === "stamp") {
       placePattern(wp);
+      return;
+    }
+    if (state.tool === "select") {
+      const additive = e.ctrlKey || e.metaKey;
+      const handle = selectionHandleAt(wp.x, wp.y);
+      if (handle && !additive && !e.shiftKey) {
+        pushSelUndo(state.selection, "调整选择框");
+        state.drag = {
+          kind: "resize",
+          tool: "select",
+          erase: false,
+          sx: p.x,
+          sy: p.y,
+          lx: wp.x,
+          ly: wp.y,
+          viewOx: view.ox,
+          viewOy: view.oy,
+          shape: null,
+          moved: false,
+          selIndex: handle.index,
+          selEdge: handle.edge,
+          selOrig: { ...state.selection[handle.index] }
+        };
+        return;
+      }
+      if (state.selection.length > 0 && !e.shiftKey && !additive && insideSelection(wp.x, wp.y)) {
+        if (e.altKey) {
+          const idx = selectionIndexAt(wp.x, wp.y);
+          pushSelUndo(state.selection, "移动选择框");
+          state.drag = {
+            kind: "movebox",
+            tool: "select",
+            erase: false,
+            sx: p.x,
+            sy: p.y,
+            lx: wp.x,
+            ly: wp.y,
+            viewOx: view.ox,
+            viewOy: view.oy,
+            shape: null,
+            moved: false,
+            selIndex: idx,
+            selOrig: { ...state.selection[idx] },
+            startWx: wp.x,
+            startWy: wp.y
+          };
+          return;
+        }
+        startMoveSelection(wp.x, wp.y);
+        return;
+      }
+      state.drag = {
+        kind: "select",
+        tool: state.tool,
+        erase: false,
+        sx: p.x,
+        sy: p.y,
+        lx: wp.x,
+        ly: wp.y,
+        viewOx: view.ox,
+        viewOy: view.oy,
+        shape: null,
+        moved: false,
+        additive
+      };
+      if (!additive) {
+        if (state.selection.length > 0) pushSelUndo(state.selection, "重新框选");
+        state.selection = [];
+      }
+      updateSelBar();
       return;
     }
     const erase = state.tool === "erase" || e.altKey;
@@ -3215,6 +4730,7 @@ kbd {
       shape: null,
       moved: false
     };
+    beginEdit(erase ? "擦除" : "绘制");
     paintCell(wp.x, wp.y, erase ? 0 : 1);
   });
   window.addEventListener("pointermove", (e) => {
@@ -3230,7 +4746,10 @@ kbd {
       state.hover = null;
     }
     const d = state.drag;
-    if (!d) return;
+    if (!d) {
+      updateSelectCursor(p);
+      return;
+    }
     if (d.kind === "pan") {
       const dx = p.x - d.sx;
       const dy = p.y - d.sy;
@@ -3248,6 +4767,22 @@ kbd {
     } else if (d.kind === "shape" && d.shape) {
       d.shape.x1 = wp.x;
       d.shape.y1 = wp.y;
+    } else if (d.kind === "resize" && d.selOrig && d.selIndex !== void 0 && d.selEdge) {
+      state.selection[d.selIndex] = resizeRect(d.selOrig, d.selEdge, wp.x, wp.y);
+      updateSelBar();
+    } else if (d.kind === "movebox" && d.selOrig && d.selIndex !== void 0) {
+      const dx = wp.x - (d.startWx ?? wp.x);
+      const dy = wp.y - (d.startWy ?? wp.y);
+      const w = d.selOrig.x1 - d.selOrig.x0;
+      const h = d.selOrig.y1 - d.selOrig.y0;
+      const x0 = Math.max(0, Math.min(world.width - 1 - w, d.selOrig.x0 + dx));
+      const y0 = Math.max(0, Math.min(world.height - 1 - h, d.selOrig.y0 + dy));
+      state.selection[d.selIndex] = { x0, y0, x1: x0 + w, y1: y0 + h };
+      updateSelBar();
+    } else if (d.kind === "move" && moveState) {
+      moveState.dx = wp.x - moveState.startWx;
+      moveState.dy = wp.y - moveState.startWy;
+      uiDirty = true;
     }
   });
   function endPointer(e) {
@@ -3261,13 +4796,30 @@ kbd {
       if (state.editPending) {
         commitEdit();
         state.editPending = false;
+      } else {
+        editBase = null;
       }
     } else if (d.kind === "shape" && d.shape) {
+      beginEdit(d.erase ? "矩形擦除" : d.shape.kind === "line" ? "直线" : "矩形");
       applyShape(d.shape);
       if (state.editPending) {
         commitEdit();
         state.editPending = false;
+      } else {
+        editBase = null;
       }
+    } else if (d.kind === "select") {
+      const wp = worldAt(localPoint(e));
+      const rect = normalizeSelection(d.lx, d.ly, wp.x, wp.y);
+      if (rect && d.moved) {
+        state.selection = d.additive ? [...state.selection, rect] : [rect];
+      }
+      updateSelBar();
+    } else if (d.kind === "move") {
+      finishMoveSelection();
+    } else if (d.kind === "resize" || d.kind === "movebox") {
+      updateSelBar();
+      uiDirty = true;
     }
   }
   window.addEventListener("pointerup", endPointer);
@@ -3297,6 +4849,12 @@ kbd {
     (e) => {
       e.preventDefault();
       const p = localPoint(e);
+      const sizeTool = state.tool === "brush" || state.tool === "erase";
+      if (sizeTool && (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey)) {
+        state.hover = worldAt(p);
+        adjustBrushSize(e.deltaY > 0 ? -2 : 2);
+        return;
+      }
       const factor = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.06 : 16e-4));
       view.zoomAt(p.x, p.y, factor);
       state.hover = worldAt(p);
@@ -3305,18 +4863,52 @@ kbd {
   );
   window.addEventListener("keydown", (e) => {
     const t = e.target;
+    if (confirmOpen()) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeConfirm(false);
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        closeConfirm(true);
+      }
+      return;
+    }
     if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
     if (e.key === "Escape" && state.modalOpen) {
       closeModal();
       return;
     }
+    if (e.key === "Escape" && moveState) {
+      cancelMoveSelection();
+      state.drag = null;
+      toast("已放回原处");
+      return;
+    }
+    if (e.key === "Escape" && state.tool === "select") {
+      clearSelection();
+      setTool(state.lastTool ?? "pan");
+      toast("已退出选择框");
+      return;
+    }
     if (state.modalOpen) return;
-    if (e.code === "Space") {
-      if (!keys.space) {
-        keys.space = true;
-        stageEl.classList.add("panning");
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      const k2 = e.key.toLowerCase();
+      if (k2 === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redoEdit();
+        else undoEdit();
+        return;
       }
+      if (k2 === "y") {
+        e.preventDefault();
+        redoEdit();
+        return;
+      }
+    }
+    if (e.code === "Space") {
       e.preventDefault();
+      if (e.repeat) return;
+      setPlaying(!state.playing);
       return;
     }
     const k = e.key.toLowerCase();
@@ -3336,14 +4928,14 @@ kbd {
       case "s":
         setTool("stamp");
         break;
+      case "k":
+        setTool("select");
+        break;
       case "h":
         setTool("pan");
         break;
       case "g":
         toggleGrid();
-        break;
-      case "o":
-        toggleGlow();
         break;
       case "p":
         setPlaying(!state.playing);
@@ -3375,16 +4967,17 @@ kbd {
         break;
       case "delete":
       case "backspace":
-        clearWorld();
+        if (state.selection.length > 0) deleteSelection();
+        else clearWorld();
+        break;
+      case "[":
+        adjustBrushSize(-2);
+        break;
+      case "]":
+        adjustBrushSize(2);
         break;
       default:
         break;
-    }
-  });
-  window.addEventListener("keyup", (e) => {
-    if (e.code === "Space") {
-      keys.space = false;
-      stageEl.classList.remove("panning");
     }
   });
   function stepOnce(dir) {
@@ -3401,7 +4994,8 @@ kbd {
   function freeArea() {
     const box = stageEl.getBoundingClientRect();
     const palEl = el("palette");
-    const palW = palEl.offsetWidth > 0 ? palEl.offsetWidth + 24 : 16;
+    const collapsed = palEl.classList.contains("collapsed");
+    const palW = collapsed || palEl.offsetWidth === 0 ? 56 : palEl.offsetWidth + 24;
     const left = 72;
     const right = palW + 12;
     return {
@@ -3436,12 +5030,14 @@ kbd {
   }
   function clearWorld() {
     if (state.playing) setPlaying(false);
+    beginEdit("清空世界");
     world.clear();
     commitEdit();
     toast("世界已清空");
   }
   function randomWorld() {
     if (state.playing) setPlaying(false);
+    beginEdit("随机播种");
     world.clear();
     world.randomize(0.28);
     commitEdit();
@@ -3450,10 +5046,6 @@ kbd {
   function toggleGrid() {
     state.grid = !state.grid;
     el("tgl-grid").classList.toggle("on", state.grid);
-  }
-  function toggleGlow() {
-    state.glow = !state.glow;
-    el("tgl-glow").classList.toggle("on", state.glow);
   }
   function rotatePattern() {
     state.rotation = (state.rotation + 1) % 4;
@@ -3480,15 +5072,19 @@ kbd {
       }
     }
   }
+  function refreshPalette() {
+    if (state.paletteMode === "edit") buildEditPanel();
+    else buildPalette();
+  }
   function buildPalette() {
     const list = el("palette-list");
     list.innerHTML = "";
-    for (const cat of CATEGORY_ORDER) {
-      const items = PATTERNS.filter((p) => p.category === cat);
+    for (const cat of library.categories) {
+      const items = library.patternsIn(cat.id);
       if (!items.length) continue;
       const title = document.createElement("div");
       title.className = "cat-title";
-      title.textContent = cat;
+      title.textContent = cat.name;
       list.append(title);
       const grid = document.createElement("div");
       grid.className = "pat-grid";
@@ -3496,7 +5092,7 @@ kbd {
         const btn = document.createElement("button");
         btn.className = "pat";
         btn.dataset.id = pat.id;
-        btn.title = `${pat.name} · ${pat.en}${pat.period > 1 ? ` · 周期 ${pat.period}` : ""}`;
+        btn.title = `${pat.name}${pat.custom ? "（自定义）" : " · " + pat.en}${pat.period > 1 ? ` · 周期 ${pat.period}` : ""}`;
         const c = document.createElement("canvas");
         c.width = 56;
         c.height = 38;
@@ -3504,21 +5100,983 @@ kbd {
         const label = document.createElement("span");
         label.textContent = pat.name;
         btn.append(c, label);
-        btn.addEventListener("click", () => selectPattern(pat.id));
+        btn.addEventListener("click", () => {
+          selectPattern(pat.id);
+          clearSelection();
+        });
         grid.append(btn);
       }
       list.append(grid);
     }
-    selectPattern(state.patternId);
+    if (!library.visible.length) {
+      const tip = document.createElement("div");
+      tip.className = "cat-title";
+      tip.textContent = "库里没有图案，点右上角 ⚙ 恢复";
+      list.append(tip);
+    }
+    for (const btn of document.querySelectorAll("#palette .pat")) {
+      btn.classList.toggle("active", btn.dataset.id === state.patternId);
+    }
   }
   function selectPattern(id) {
-    const pat = PATTERN_BY_ID.get(id);
+    const pat = library.byId(id);
     if (!pat) return;
     state.patternId = id;
     for (const btn of document.querySelectorAll("#palette .pat")) {
       btn.classList.toggle("active", btn.dataset.id === id);
     }
     setTool("stamp");
+  }
+  function deselectPattern() {
+    state.patternId = "";
+    for (const btn of document.querySelectorAll("#palette .pat")) {
+      btn.classList.remove("active");
+    }
+    uiDirty = true;
+  }
+  function normalizeSelection(x0, y0, x1, y1) {
+    const cx0 = Math.max(0, Math.min(x0, x1));
+    const cx1 = Math.min(world.width - 1, Math.max(x0, x1));
+    const cy0 = Math.max(0, Math.min(y0, y1));
+    const cy1 = Math.min(world.height - 1, Math.max(y0, y1));
+    if (cx1 < cx0 || cy1 < cy0) return null;
+    return { x0: cx0, y0: cy0, x1: cx1, y1: cy1 };
+  }
+  function selectionBBox(rects) {
+    if (rects.length === 0) return null;
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const r of rects) {
+      if (r.x0 < x0) x0 = r.x0;
+      if (r.y0 < y0) y0 = r.y0;
+      if (r.x1 > x1) x1 = r.x1;
+      if (r.y1 > y1) y1 = r.y1;
+    }
+    return { x0, y0, x1, y1 };
+  }
+  function selectionMask(rects) {
+    const box = selectionBBox(rects);
+    if (!box) return null;
+    const w = box.x1 - box.x0 + 1;
+    const h = box.y1 - box.y0 + 1;
+    const cells = new Uint8Array(w * h);
+    for (const r of rects) {
+      for (let y = r.y0; y <= r.y1; y++) {
+        for (let x = r.x0; x <= r.x1; x++) {
+          if (!world.get(x, y)) continue;
+          cells[(y - box.y0) * w + (x - box.x0)] = 1;
+        }
+      }
+    }
+    return { box, cells, w, h };
+  }
+  function insideSelection(wx, wy) {
+    return state.selection.some((s) => wx >= s.x0 && wx <= s.x1 && wy >= s.y0 && wy <= s.y1);
+  }
+  var HANDLE_PX = 7;
+  function selectionHandleAt(wx, wy) {
+    if (state.tool !== "select" || state.selection.length === 0) return null;
+    const tol = HANDLE_PX / Math.max(view.scale, 1e-3);
+    for (let i = state.selection.length - 1; i >= 0; i--) {
+      const r = state.selection[i];
+      const left = r.x0;
+      const right = r.x1 + 1;
+      const top = r.y0;
+      const bottom = r.y1 + 1;
+      const onL = Math.abs(wx - left) <= tol;
+      const onR = Math.abs(wx - right) <= tol;
+      const onT = Math.abs(wy - top) <= tol;
+      const onB = Math.abs(wy - bottom) <= tol;
+      const inX = wx >= left - tol && wx <= right + tol;
+      const inY = wy >= top - tol && wy <= bottom + tol;
+      if (!inX || !inY) continue;
+      const hSide = onL ? "l" : onR ? "r" : "";
+      const vSide = onT ? "t" : onB ? "b" : "";
+      if (hSide && vSide) return { index: i, edge: `${vSide}${hSide}` };
+      if (hSide) return { index: i, edge: hSide };
+      if (vSide) return { index: i, edge: vSide };
+    }
+    return null;
+  }
+  function handleCursor(edge) {
+    switch (edge) {
+      case "l":
+      case "r":
+        return "ew-resize";
+      case "t":
+      case "b":
+        return "ns-resize";
+      case "tl":
+      case "br":
+        return "nwse-resize";
+      default:
+        return "nesw-resize";
+    }
+  }
+  function selectionIndexAt(wx, wy) {
+    for (let i = state.selection.length - 1; i >= 0; i--) {
+      const r = state.selection[i];
+      if (wx >= r.x0 && wx <= r.x1 && wy >= r.y0 && wy <= r.y1) return i;
+    }
+    return -1;
+  }
+  function resizeRect(orig, edge, wx, wy) {
+    let { x0, y0, x1, y1 } = orig;
+    if (edge.includes("l")) x0 = Math.max(0, Math.min(wx, x1));
+    if (edge.includes("r")) x1 = Math.min(world.width - 1, Math.max(wx, x0));
+    if (edge.includes("t")) y0 = Math.max(0, Math.min(wy, y1));
+    if (edge.includes("b")) y1 = Math.min(world.height - 1, Math.max(wy, y0));
+    return { x0, y0, x1, y1 };
+  }
+  function updateSelectCursor(p) {
+    if (state.tool !== "select") {
+      if (canvas.style.cursor) canvas.style.cursor = "";
+      return;
+    }
+    if (state.drag) return;
+    const wp = worldAt(p);
+    const h = selectionHandleAt(wp.x, wp.y);
+    let c = "crosshair";
+    if (h) c = handleCursor(h.edge);
+    else if (selectionIndexAt(wp.x, wp.y) >= 0) c = "move";
+    if (canvas.style.cursor !== c) canvas.style.cursor = c;
+  }
+  var moveState = null;
+  function startMoveSelection(wx, wy) {
+    const mask = selectionMask(state.selection);
+    if (!mask) return;
+    let pop = 0;
+    for (let i = 0; i < mask.cells.length; i++) pop += mask.cells[i];
+    if (pop === 0) {
+      toast("选区里没有活细胞");
+      return;
+    }
+    beginEdit("移动选区");
+    for (const r of state.selection) {
+      for (let y = r.y0; y <= r.y1; y++) {
+        for (let x = r.x0; x <= r.x1; x++) {
+          if (world.get(x, y)) world.set(x, y, 0);
+        }
+      }
+    }
+    moveState = {
+      cells: mask.cells,
+      w: mask.w,
+      h: mask.h,
+      x0: mask.box.x0,
+      y0: mask.box.y0,
+      rects: state.selection.map((r) => ({ ...r })),
+      dx: 0,
+      dy: 0,
+      startWx: wx,
+      startWy: wy
+    };
+    state.drag = {
+      kind: "move",
+      tool: "select",
+      erase: false,
+      sx: wx,
+      sy: wy,
+      lx: wx,
+      ly: wy,
+      viewOx: view.ox,
+      viewOy: view.oy,
+      shape: null,
+      moved: false
+    };
+    toast("拖动中：松手放下，Esc 放回原处");
+  }
+  function finishMoveSelection() {
+    const m = moveState;
+    moveState = null;
+    if (!m) return;
+    world.stamp(m.cells, m.w, m.h, m.x0 + m.dx, m.y0 + m.dy);
+    state.selection = m.rects.map(
+      (r) => normalizeSelection(r.x0 + m.dx, r.y0 + m.dy, r.x1 + m.dx, r.y1 + m.dy)
+    ).filter((r) => !!r);
+    updateSelBar();
+    commitEdit();
+  }
+  function cancelMoveSelection() {
+    const m = moveState;
+    moveState = null;
+    if (!m) return;
+    world.stamp(m.cells, m.w, m.h, m.x0, m.y0);
+    editBase = null;
+    state.selection = m.rects;
+    updateSelBar();
+  }
+  function selectionBitmap(rects, trim = true) {
+    const mask = selectionMask(rects);
+    if (!mask) return { cells: new Uint8Array(0), w: 0, h: 0, population: 0, trimmed: false };
+    const { cells, w, h } = mask;
+    let population = 0;
+    for (let i = 0; i < cells.length; i++) population += cells[i];
+    if (!trim || population === 0) return { cells, w, h, population, trimmed: false };
+    let minX = w;
+    let minY = h;
+    let maxX = -1;
+    let maxY = -1;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (!cells[y * w + x]) continue;
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+    const tw = maxX - minX + 1;
+    const th = maxY - minY + 1;
+    if (tw === w && th === h) return { cells, w, h, population, trimmed: false };
+    const out = new Uint8Array(tw * th);
+    for (let y = 0; y < th; y++) {
+      out.set(cells.subarray((y + minY) * w + minX, (y + minY) * w + minX + tw), y * tw);
+    }
+    return { cells: out, w: tw, h: th, population, trimmed: true };
+  }
+  function updateSelBar() {
+    const bar = el("sel-bar");
+    const box = selectionBBox(state.selection);
+    if (!box) {
+      bar.classList.add("hidden");
+      uiDirty = true;
+      return;
+    }
+    const bmp = selectionBitmap(state.selection, false);
+    const blocks = state.selection.length > 1 ? ` · ${state.selection.length} 块` : "";
+    el("sel-info").textContent = `${bmp.w} × ${bmp.h} · ${bmp.population} 个活细胞${blocks}`;
+    bar.classList.remove("hidden");
+    uiDirty = true;
+  }
+  function clearSelection(withUndo = true) {
+    if (state.selection.length === 0) return;
+    if (withUndo) pushSelUndo(state.selection, "取消选择");
+    state.selection = [];
+    updateSelBar();
+  }
+  function deleteSelection() {
+    if (state.selection.length === 0) {
+      toast("还没有选区：按 K 或点左侧虚线框工具框一块");
+      return;
+    }
+    const bmp = selectionBitmap(state.selection, false);
+    if (bmp.population === 0) {
+      toast("选区里没有活细胞");
+      return;
+    }
+    beginEdit("删除选区内容");
+    for (const r of state.selection) {
+      for (let y = r.y0; y <= r.y1; y++) {
+        for (let x = r.x0; x <= r.x1; x++) {
+          if (world.get(x, y)) world.set(x, y, 0);
+        }
+      }
+    }
+    commitEdit();
+    toast(`已删除 ${bmp.population} 个细胞`);
+  }
+  function openSavePreset() {
+    if (state.selection.length === 0) {
+      toast("先用选择框工具（K）框一块区域");
+      return;
+    }
+    const bmp = selectionBitmap(state.selection);
+    if (!bmp.population) {
+      toast("这块区域里没有活细胞");
+      return;
+    }
+    openModal("存为图案", (body) => {
+      const wrap = document.createElement("div");
+      wrap.className = "preset-form";
+      const pv = document.createElement("canvas");
+      pv.className = "preset-preview";
+      const k = Math.max(1, Math.min(14, Math.floor(240 / Math.max(bmp.w, bmp.h))));
+      pv.width = Math.max(1, bmp.w * k);
+      pv.height = Math.max(1, bmp.h * k);
+      const pctx = pv.getContext("2d");
+      pctx.fillStyle = "#0a1017";
+      pctx.fillRect(0, 0, pv.width, pv.height);
+      pctx.fillStyle = "#6cf5d2";
+      for (let y = 0; y < bmp.h; y++) {
+        for (let x = 0; x < bmp.w; x++) {
+          if (bmp.cells[y * bmp.w + x]) pctx.fillRect(x * k, y * k, k, k);
+        }
+      }
+      const nameInput = document.createElement("input");
+      nameInput.type = "text";
+      nameInput.className = "text-input";
+      nameInput.value = `自定义 ${bmp.w}×${bmp.h}`;
+      nameInput.maxLength = 24;
+      const catSel = document.createElement("select");
+      catSel.className = "select-input";
+      const CUSTOM_CAT = "自定义";
+      const NEW_CAT = "";
+      const customCat = library.categories.find((c) => c.name === CUSTOM_CAT);
+      for (const cat of library.categories) {
+        const o = document.createElement("option");
+        o.value = cat.id;
+        o.textContent = cat.name;
+        catSel.append(o);
+      }
+      if (customCat) {
+        catSel.value = customCat.id;
+      } else {
+        const o = document.createElement("option");
+        o.value = NEW_CAT;
+        o.textContent = `${CUSTOM_CAT}（自动新建分组）`;
+        catSel.append(o);
+        catSel.value = NEW_CAT;
+      }
+      const row = document.createElement("div");
+      row.className = "preset-row";
+      const label1 = document.createElement("label");
+      label1.textContent = "名称";
+      label1.append(nameInput);
+      const label2 = document.createElement("label");
+      label2.textContent = "分类";
+      label2.append(catSel);
+      row.append(label1, label2);
+      const actions = document.createElement("div");
+      actions.className = "modal-actions";
+      const cancel = mkButton("取消", "", () => closeModal());
+      const ok = mkButton("保存到图案库", "primary", () => {
+        let catId = catSel.value;
+        if (!catId) {
+          catId = library.addCategory(CUSTOM_CAT).id;
+          saveLibraryConfig();
+        }
+        const rec = {
+          id: "c-" + uid(),
+          name: nameInput.value.trim() || `自定义 ${bmp.w}×${bmp.h}`,
+          catId,
+          width: bmp.w,
+          height: bmp.h,
+          cells: encodeCells(bmp.cells),
+          created: Date.now()
+        };
+        void store.saveCustomPattern(rec);
+        library.addCustom(rec);
+        clearSelection(false);
+        refreshPalette();
+        selectPattern(rec.id);
+        requestAnimationFrame(() => {
+          el("palette-list").querySelector(`[data-id="${rec.id}"]`)?.scrollIntoView({ block: "nearest" });
+        });
+        closeModal();
+        const where = library.categoryName(catId);
+        toast(`已存进「${where}」：${rec.name}，点击画布即可摆放`);
+      });
+      actions.append(cancel, ok);
+      const meta = document.createElement("p");
+      meta.className = "modal-note";
+      meta.textContent = `图案 ${bmp.w}×${bmp.h}，${bmp.population} 个活细胞${bmp.trimmed ? "（已裁掉四周空白）" : ""}。存下来之后就能像内置图案一样摆放、旋转、镜像。`;
+      wrap.append(pv, row, meta, actions);
+      body.append(wrap);
+      nameInput.focus();
+      nameInput.select();
+    });
+  }
+  function mkButton(label, cls, onClick) {
+    const b = document.createElement("button");
+    b.className = "btn" + (cls ? " " + cls : "");
+    b.type = "button";
+    b.textContent = label;
+    b.addEventListener("click", onClick);
+    return b;
+  }
+  function saveLibraryConfig() {
+    void store.setLibraryConfig(library.config);
+  }
+  function openLibraryManager() {
+    openModal("图案库管理", (body) => {
+      let query = "";
+      const refresh = () => {
+        body.innerHTML = "";
+        body.append(catSection(), patSection(), hiddenSection());
+      };
+      const afterChange = () => {
+        saveLibraryConfig();
+        buildPalette();
+        refresh();
+      };
+      function catSection() {
+        const sec = document.createElement("section");
+        sec.className = "lib-sec";
+        const h = document.createElement("h4");
+        h.textContent = "分类（名字可以直接改，顺序按上下移）";
+        sec.append(h);
+        for (const cat of library.categories) {
+          const row = document.createElement("div");
+          row.className = "lib-row";
+          const input = document.createElement("input");
+          input.type = "text";
+          input.className = "text-input grow";
+          input.value = cat.name;
+          input.maxLength = 16;
+          input.addEventListener("change", () => {
+            library.renameCategory(cat.id, input.value);
+            afterChange();
+          });
+          const count = document.createElement("span");
+          count.className = "lib-count";
+          count.textContent = `${library.patternsIn(cat.id).length} 个`;
+          row.append(
+            input,
+            count,
+            mkButton("↑", "tiny", () => {
+              library.moveCategory(cat.id, -1);
+              afterChange();
+            }),
+            mkButton("↓", "tiny", () => {
+              library.moveCategory(cat.id, 1);
+              afterChange();
+            }),
+            mkButton("✕", "tiny danger", () => {
+              if (library.categories.length <= 1) {
+                toast("至少保留一个分类");
+                return;
+              }
+              library.removeCategory(cat.id);
+              afterChange();
+            })
+          );
+          sec.append(row);
+        }
+        const addRow = document.createElement("div");
+        addRow.className = "lib-row";
+        addRow.append(
+          mkButton("+ 新建分类", "", () => {
+            const cat = library.addCategory("新分类");
+            saveLibraryConfig();
+            refresh();
+            const inputs = body.querySelectorAll(".lib-sec .text-input");
+            const target = inputs[library.categories.length - 1];
+            if (target && target.value === cat.name) {
+              target.focus();
+              target.select();
+            }
+          })
+        );
+        sec.append(addRow);
+        return sec;
+      }
+      function patSection() {
+        const sec = document.createElement("section");
+        sec.className = "lib-sec";
+        const h = document.createElement("h4");
+        h.textContent = "图案归属（换分类、或从库里隐藏）";
+        const search = document.createElement("input");
+        search.type = "text";
+        search.className = "text-input";
+        search.placeholder = "搜索图案…";
+        search.value = query;
+        search.addEventListener("input", () => {
+          query = search.value;
+          const box = sec.querySelector(".lib-list");
+          if (box) fillList(box);
+        });
+        const list = document.createElement("div");
+        list.className = "lib-list";
+        sec.append(h, search, list);
+        fillList(list);
+        return sec;
+      }
+      function fillList(list) {
+        list.innerHTML = "";
+        const q = query.trim().toLowerCase();
+        const rows = library.visible.filter(
+          (p) => !q || p.name.toLowerCase().includes(q) || p.en.toLowerCase().includes(q)
+        );
+        if (!rows.length) {
+          const p = document.createElement("p");
+          p.className = "modal-note";
+          p.textContent = q ? "没有匹配的图案。" : "库里还没有图案。";
+          list.append(p);
+          return;
+        }
+        for (const pat of rows) list.append(patternRow(pat));
+      }
+      function patternRow(pat) {
+        const row = document.createElement("div");
+        row.className = "lib-row";
+        const c = document.createElement("canvas");
+        c.width = 40;
+        c.height = 28;
+        c.className = "lib-icon";
+        drawPatternIcon(c, pat);
+        const name = document.createElement("span");
+        name.className = "lib-name grow";
+        name.textContent = pat.name;
+        const sel = document.createElement("select");
+        sel.className = "select-input";
+        for (const cat of library.categories) {
+          const o = document.createElement("option");
+          o.value = cat.id;
+          o.textContent = cat.name;
+          sel.append(o);
+        }
+        sel.value = pat.catId;
+        sel.addEventListener("change", () => {
+          library.assign(pat.id, sel.value);
+          afterChange();
+        });
+        row.append(
+          c,
+          name,
+          sel,
+          mkButton("隐藏", "tiny", () => {
+            library.assign(pat.id, null);
+            afterChange();
+          })
+        );
+        if (pat.custom) {
+          row.append(
+            mkButton("删除", "tiny danger", () => {
+              const rec = library.customs.get(pat.id);
+              if (!rec) return;
+              void askConfirm("删除图案", `删除自定义图案「${rec.name}」？删掉之后就找不回来了。`, "删除").then(
+                (ok) => {
+                  if (!ok) return;
+                  library.removeCustom(pat.id);
+                  void store.deleteCustomPattern(pat.id);
+                  afterChange();
+                }
+              );
+            })
+          );
+        }
+        return row;
+      }
+      function hiddenSection() {
+        const sec = document.createElement("section");
+        sec.className = "lib-sec";
+        const hidden = library.hidden;
+        if (!hidden.length) return sec;
+        const h = document.createElement("h4");
+        h.textContent = `已隐藏（${hidden.length}）`;
+        sec.append(h);
+        for (const pat of hidden) {
+          const row = document.createElement("div");
+          row.className = "lib-row";
+          const name = document.createElement("span");
+          name.className = "lib-name grow";
+          name.textContent = pat.name;
+          row.append(
+            name,
+            mkButton("恢复", "tiny", () => {
+              library.assign(pat.id, null);
+              library.assign(pat.id, library.categories[0].id);
+              afterChange();
+            })
+          );
+          sec.append(row);
+        }
+        return sec;
+      }
+      refresh();
+    });
+  }
+  var expandedCats = /* @__PURE__ */ new Set();
+  var dragPayload = null;
+  var dropSlot = null;
+  var dragSourceEl = null;
+  function afterEdit() {
+    saveLibraryConfig();
+    buildPalette();
+    buildEditPanel();
+    uiDirty = true;
+  }
+  var PALETTE_W_KEY = "life-studio:palette-width";
+  var PALETTE_W_KEY_BROWSE = "life-studio:palette-width-browse";
+  var PALETTE_W_DEFAULT = { browse: 236, edit: 336 };
+  var paletteWidth = {
+    browse: PALETTE_W_DEFAULT.browse,
+    edit: PALETTE_W_DEFAULT.edit
+  };
+  function currentWidthKey() {
+    return state.paletteMode === "edit" ? PALETTE_W_KEY : PALETTE_W_KEY_BROWSE;
+  }
+  function applyPaletteWidth() {
+    const pal = el("palette");
+    if (pal.classList.contains("collapsed") || window.innerWidth <= 700) {
+      pal.style.width = "";
+      return;
+    }
+    pal.style.width = `${Math.round(paletteWidth[state.paletteMode])}px`;
+  }
+  function bindPaletteResizer() {
+    try {
+      const edit = Number(localStorage.getItem(PALETTE_W_KEY));
+      if (Number.isFinite(edit) && edit >= 200) paletteWidth.edit = edit;
+      const browse = Number(localStorage.getItem(PALETTE_W_KEY_BROWSE));
+      if (Number.isFinite(browse) && browse >= 200) paletteWidth.browse = browse;
+    } catch {
+    }
+    const handle = el("palette-resize");
+    handle.addEventListener("pointerdown", (e) => {
+      e.preventDefault();
+      const mode = state.paletteMode;
+      const startX = e.clientX;
+      const startW = el("palette").offsetWidth;
+      const maxW = Math.max(300, Math.min(760, window.innerWidth - 120));
+      const minW = mode === "edit" ? 260 : 180;
+      try {
+        handle.setPointerCapture(e.pointerId);
+      } catch {
+      }
+      const move = (ev) => {
+        paletteWidth[mode] = Math.max(minW, Math.min(maxW, startW + (startX - ev.clientX)));
+        applyPaletteWidth();
+        uiDirty = true;
+      };
+      const up = () => {
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", up);
+        handle.removeEventListener("pointercancel", up);
+        try {
+          handle.releasePointerCapture(e.pointerId);
+          localStorage.setItem(currentWidthKey(), String(Math.round(paletteWidth[mode])));
+        } catch {
+        }
+        uiDirty = true;
+      };
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", up);
+      handle.addEventListener("pointercancel", up);
+    });
+  }
+  function setPaletteCollapsed(collapsed) {
+    el("palette").classList.toggle("collapsed", collapsed);
+    const btn = el("btn-palette-collapse");
+    btn.textContent = collapsed ? "▦" : "›";
+    btn.title = collapsed ? "展开图案库" : "收起";
+    applyPaletteWidth();
+    uiDirty = true;
+  }
+  function setPaletteMode(mode) {
+    state.paletteMode = mode;
+    const pal = el("palette");
+    if (mode === "edit") pal.classList.remove("collapsed");
+    pal.classList.toggle("edit", mode === "edit");
+    el("btn-lib-manage").textContent = mode === "edit" ? "✓" : "⚙";
+    el("btn-lib-manage").title = mode === "edit" ? "完成编辑" : "编辑图案库";
+    const h3 = pal.querySelector("header h3");
+    if (h3) h3.textContent = mode === "edit" ? "编辑图案库" : "图案库";
+    applyPaletteWidth();
+    if (mode === "edit") {
+      for (const c of library.categories) expandedCats.add(c.id);
+      buildEditPanel();
+    } else {
+      el("palette-list").classList.remove("edit-list");
+      buildPalette();
+    }
+    uiDirty = true;
+  }
+  function clearDropMarks() {
+    for (const n of document.querySelectorAll(".drop-target, .drop-into")) {
+      n.classList.remove("drop-target", "drop-into");
+    }
+  }
+  function dragSlot() {
+    if (!dropSlot) {
+      const s = document.createElement("div");
+      s.className = "drop-slot";
+      dropSlot = s;
+    }
+    return dropSlot;
+  }
+  function putSlot(container, before) {
+    const slot = dragSlot();
+    if (slot.parentElement === container && slot.nextElementSibling === before) return;
+    container.insertBefore(slot, before);
+  }
+  function endDrag() {
+    dropSlot?.remove();
+    dropSlot = null;
+    dragPayload = null;
+    dragSourceEl = null;
+    for (const n of document.querySelectorAll(".dragging, .drop-into, .drop-target")) {
+      n.classList.remove("dragging", "drop-into", "drop-target");
+    }
+  }
+  function gridOf(block, catId) {
+    const found = block.querySelector(".edit-grid");
+    if (found) return found;
+    const g = document.createElement("div");
+    g.className = "edit-grid";
+    g.dataset.catId = catId;
+    block.append(g);
+    return g;
+  }
+  function onPaletteDragOver(e) {
+    const p = dragPayload;
+    const list = el("palette-list");
+    const t = e.target;
+    if (!p || !t || !list.contains(t)) return;
+    if (dragSourceEl && !dragSourceEl.classList.contains("dragging")) {
+      dragSourceEl.classList.add("dragging");
+    }
+    clearDropMarks();
+    if (p.kind === "cat") {
+      const block = t.closest(".edit-cat");
+      if (!block) return;
+      e.preventDefault();
+      const r = block.getBoundingClientRect();
+      putSlot(list, e.clientY > r.top + r.height / 2 ? block.nextElementSibling : block);
+      block.classList.add("drop-into");
+      return;
+    }
+    const stash = t.closest(".stash-sec");
+    if (stash) {
+      e.preventDefault();
+      const g = gridOf(stash, "");
+      g.dataset.stash = "1";
+      putSlot(g, null);
+      stash.classList.add("drop-into");
+      return;
+    }
+    const tile = t.closest(".edit-tile");
+    const grid = tile?.parentElement;
+    if (tile && grid && grid.classList.contains("edit-grid")) {
+      e.preventDefault();
+      const r = tile.getBoundingClientRect();
+      putSlot(grid, e.clientX > r.left + r.width / 2 ? tile.nextElementSibling : tile);
+      return;
+    }
+    const head = t.closest(".edit-cat-head");
+    if (head) {
+      e.preventDefault();
+      const block = head.parentElement;
+      putSlot(gridOf(block, block.dataset.catId ?? ""), null);
+      block.classList.add("drop-into");
+      return;
+    }
+    e.preventDefault();
+    if (p.kind === "pat") {
+      const grids = [
+        ...list.querySelectorAll(".edit-cat .edit-grid")
+      ];
+      const last = grids[grids.length - 1];
+      if (!last) return;
+      putSlot(last, null);
+      last.closest(".edit-cat")?.classList.add("drop-into");
+    } else {
+      const blocks = [...list.querySelectorAll(".edit-cat")];
+      const last = blocks[blocks.length - 1];
+      putSlot(list, last ? last.nextElementSibling : null);
+      last?.classList.add("drop-into");
+    }
+  }
+  function onPaletteDrop(e) {
+    const p = dragPayload;
+    if (!p) return;
+    e.preventDefault();
+    const slot = dropSlot;
+    if (!slot) return;
+    const parent = slot.parentElement;
+    const before = slot.nextElementSibling ?? null;
+    endDrag();
+    if (!parent) return;
+    if (parent.classList.contains("edit-grid")) {
+      if (p.kind !== "pat") return;
+      if (parent.dataset.stash) library.stash(p.id);
+      else library.movePattern(p.id, parent.dataset.catId ?? "", before?.dataset.patId ?? null);
+    } else if (p.kind === "cat") {
+      library.moveCategoryBefore(p.id, before?.dataset.catId ?? null);
+    } else {
+      return;
+    }
+    afterEdit();
+  }
+  function patternTile(pat, catId) {
+    const tile = document.createElement("div");
+    tile.className = "edit-tile";
+    tile.draggable = true;
+    tile.dataset.patId = pat.id;
+    tile.title = catId === null ? `${pat.name} · 双击或点「取出」放回图案库` : `${pat.name}${pat.custom ? "（自定义）" : ""} · 拖到别的分类或仓库`;
+    tile.addEventListener("dragstart", (e) => {
+      dragPayload = { kind: "pat", id: pat.id };
+      dragSourceEl = tile;
+      e.dataTransfer?.setData("text/plain", pat.id);
+    });
+    tile.addEventListener("dragend", endDrag);
+    const c = document.createElement("canvas");
+    c.width = 52;
+    c.height = 34;
+    drawPatternIcon(c, pat);
+    const nm = document.createElement("span");
+    nm.className = "tile-name";
+    nm.textContent = pat.name;
+    tile.append(c, nm);
+    if (catId === null) {
+      const take = document.createElement("button");
+      take.type = "button";
+      take.className = "tile-stash";
+      take.textContent = "↑";
+      take.title = "取出，放回图案库";
+      take.addEventListener("click", (e) => {
+        e.stopPropagation();
+        library.unstash(pat.id);
+        afterEdit();
+      });
+      tile.append(take);
+      tile.addEventListener("dblclick", () => {
+        library.unstash(pat.id);
+        afterEdit();
+      });
+      return tile;
+    }
+    const stash = document.createElement("button");
+    stash.type = "button";
+    stash.className = "tile-stash";
+    stash.textContent = "↓";
+    stash.title = "收进仓库";
+    stash.addEventListener("click", (e) => {
+      e.stopPropagation();
+      library.stash(pat.id);
+      afterEdit();
+    });
+    tile.append(stash);
+    if (pat.custom) {
+      const del = document.createElement("button");
+      del.type = "button";
+      del.className = "tile-del";
+      del.textContent = "✕";
+      del.title = "删除这个自定义图案";
+      del.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const rec = library.customs.get(pat.id);
+        if (!rec) return;
+        void askConfirm("删除图案", `删除自定义图案「${rec.name}」？删掉之后就找不回来了。`, "删除").then(
+          (ok) => {
+            if (!ok) return;
+            library.removeCustom(pat.id);
+            void store.deleteCustomPattern(pat.id);
+            afterEdit();
+          }
+        );
+      });
+      tile.append(del);
+    }
+    return tile;
+  }
+  function buildEditPanel() {
+    const list = el("palette-list");
+    list.innerHTML = "";
+    list.classList.add("edit-list");
+    const tools = document.createElement("div");
+    tools.className = "edit-tools";
+    const allOpen = library.categories.every((c) => expandedCats.has(c.id));
+    const toggleAll = mkButton(allOpen ? "⇱ 全部收起" : "⇲ 全部展开", "btn tiny", () => {
+      const open = library.categories.every((c) => expandedCats.has(c.id));
+      if (open) expandedCats.clear();
+      else for (const c of library.categories) expandedCats.add(c.id);
+      buildEditPanel();
+    });
+    toggleAll.title = "展开或收起所有分类";
+    tools.append(toggleAll);
+    list.append(tools);
+    for (const cat of library.categories) {
+      const wrap = document.createElement("div");
+      wrap.className = "edit-cat";
+      wrap.dataset.catId = cat.id;
+      const head = document.createElement("div");
+      head.className = "edit-cat-head";
+      head.draggable = true;
+      head.addEventListener("dragstart", (e) => {
+        dragPayload = { kind: "cat", id: cat.id };
+        dragSourceEl = wrap;
+        e.dataTransfer?.setData("text/plain", cat.id);
+      });
+      head.addEventListener("dragend", endDrag);
+      const toggle = mkButton(expandedCats.has(cat.id) ? "▾" : "▸", "tiny", () => {
+        if (expandedCats.has(cat.id)) expandedCats.delete(cat.id);
+        else expandedCats.add(cat.id);
+        buildEditPanel();
+      });
+      toggle.title = expandedCats.has(cat.id) ? "收起这个分类" : "展开这个分类";
+      const name = document.createElement("input");
+      name.type = "text";
+      name.className = "text-input grow";
+      name.value = cat.name;
+      name.maxLength = 16;
+      name.addEventListener("change", () => {
+        library.renameCategory(cat.id, name.value);
+        afterEdit();
+      });
+      const grip = document.createElement("span");
+      grip.className = "grip";
+      grip.textContent = "⠿";
+      grip.title = "按住拖动可以调整分类顺序";
+      const count = document.createElement("span");
+      count.className = "lib-count";
+      count.textContent = `${library.patternsIn(cat.id).length}`;
+      const del = mkButton("✕", "tiny danger", () => {
+        if (library.categories.length <= 1) {
+          toast("至少保留一个分类");
+          return;
+        }
+        const n = library.patternsIn(cat.id).length;
+        const msg = n ? `删除分类「${cat.name}」？
+里面的 ${n} 个图案会移到第一个分类，不会丢失。` : `删除分类「${cat.name}」？`;
+        void askConfirm("删除分类", msg, "删除").then((ok) => {
+          if (!ok) return;
+          library.removeCategory(cat.id);
+          afterEdit();
+          toast(`已删除分类「${cat.name}」`);
+        });
+      });
+      del.title = "删除这个分类";
+      head.append(toggle, name, grip, count, del);
+      wrap.append(head);
+      if (expandedCats.has(cat.id)) {
+        const items = library.patternsIn(cat.id);
+        if (!items.length) {
+          const p = document.createElement("div");
+          p.className = "stash-empty";
+          p.style.padding = "2px 8px 8px";
+          p.textContent = "这个分类还是空的，可以把图案拖进来。";
+          wrap.append(p);
+        } else {
+          const grid = document.createElement("div");
+          grid.className = "edit-grid";
+          grid.dataset.catId = cat.id;
+          for (const pat of items) grid.append(patternTile(pat, cat.id));
+          wrap.append(grid);
+        }
+      }
+      list.append(wrap);
+    }
+    list.append(
+      mkButton("+ 新建分类", "tiny add-cat", () => {
+        const cat = library.addCategory("新分类");
+        expandedCats.add(cat.id);
+        afterEdit();
+      })
+    );
+    const stashSec = document.createElement("div");
+    stashSec.className = "stash-sec";
+    const sh = document.createElement("div");
+    sh.className = "cat-title";
+    const hidden = library.hidden;
+    sh.textContent = `仓库（${hidden.length}）`;
+    stashSec.append(sh);
+    if (!hidden.length) {
+      const p = document.createElement("div");
+      p.className = "stash-empty";
+      p.textContent = "把图案拖到这里（或点方块右上角的 ↓）就先存起来，不占图案库的位置，随时能取回去。";
+      stashSec.append(p);
+    } else {
+      const grid = document.createElement("div");
+      grid.className = "edit-grid";
+      grid.dataset.stash = "1";
+      for (const pat of hidden) grid.append(patternTile(pat, null));
+      stashSec.append(grid);
+    }
+    list.append(stashSec);
   }
   var modalCleanup = null;
   function openModal(title, build) {
@@ -3540,6 +6098,33 @@ kbd {
   }
   el("modal-close").addEventListener("click", closeModal);
   document.querySelector(".modal-mask").addEventListener("click", closeModal);
+  var confirmResolve = null;
+  function askConfirm(title, message, okLabel = "确定") {
+    return new Promise((resolve) => {
+      confirmResolve?.(false);
+      confirmResolve = resolve;
+      el("confirm-title").textContent = title;
+      el("confirm-msg").textContent = message;
+      el("confirm-ok").textContent = okLabel;
+      el("confirm").classList.remove("hidden");
+      el("confirm-cancel").focus();
+    });
+  }
+  function closeConfirm(ok) {
+    if (el("confirm").classList.contains("hidden")) return;
+    el("confirm").classList.add("hidden");
+    const r = confirmResolve;
+    confirmResolve = null;
+    r?.(ok);
+  }
+  function confirmOpen() {
+    return !el("confirm").classList.contains("hidden");
+  }
+  el("confirm-ok").addEventListener("click", () => closeConfirm(true));
+  el("confirm-cancel").addEventListener("click", () => closeConfirm(false));
+  el("confirm").addEventListener("click", (e) => {
+    if (e.target === el("confirm")) closeConfirm(false);
+  });
   function fmtTime(ts) {
     const d = new Date(ts);
     const p = (n) => String(n).padStart(2, "0");
@@ -3799,7 +6384,7 @@ kbd {
       let acc = 0;
       const paint = () => {
         r.sync();
-        r.render(v, { grid: false, glow: true });
+        r.render(v, { grid: false });
         labelEl.textContent = `第 ${nf.format(rec.startGen + idx)} 代`;
       };
       const goTo = (target) => {
@@ -3874,6 +6459,7 @@ kbd {
           return;
         }
         if (state.playing) setPlaying(false);
+        beginEdit("导入 RLE");
         const cx = Math.floor((view.visibleWorld(renderer.cssW, renderer.cssH).x0 + view.visibleWorld(renderer.cssW, renderer.cssH).x1) / 2);
         const cy = Math.floor((view.visibleWorld(renderer.cssW, renderer.cssH).y0 + view.visibleWorld(renderer.cssW, renderer.cssH).y1) / 2);
         world.stamp(parsed.cells, parsed.width, parsed.height, cx - Math.floor(parsed.width / 2), cy - Math.floor(parsed.height / 2));
@@ -3905,22 +6491,146 @@ kbd {
       });
     });
   }
+  function downloadBlob(blob, filename) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4e3);
+  }
+  function shareLink() {
+    const bb = world.liveBBox();
+    const empty = bb.x1 <= bb.x0 || bb.y1 <= bb.y0;
+    const x0 = empty ? 0 : bb.x0;
+    const y0 = empty ? 0 : bb.y0;
+    const w = empty ? 1 : bb.x1 - bb.x0;
+    const h = empty ? 1 : bb.y1 - bb.y0;
+    const cells = world.extract(x0, y0, w, h);
+    const rle = toRle({ width: w, height: h, cells }, { name: `gen-${world.gen}` });
+    if (rle.length > 6e4) return null;
+    const bytes = new TextEncoder().encode(rle);
+    let bin = "";
+    for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+    const payload = btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+    const base = location.href.split("#")[0];
+    return `${base}#w=${world.width}&e=${world.edge}&g=${world.gen}&xy=${x0},${y0}&s=${payload}`;
+  }
+  function applyShareFromHash() {
+    const hash = location.hash.replace(/^#/, "");
+    if (!hash) return false;
+    const params = /* @__PURE__ */ new Map();
+    for (const part of hash.split("&")) {
+      const i = part.indexOf("=");
+      if (i > 0) params.set(part.slice(0, i), part.slice(i + 1));
+    }
+    const payload = params.get("s");
+    if (!payload) return false;
+    try {
+      const b64 = payload.replace(/-/g, "+").replace(/_/g, "/");
+      const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - b64.length % 4);
+      const bin = atob(b64 + pad);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const text = new TextDecoder().decode(bytes);
+      const parsed = parsePatternText(text);
+      if (!parsed) return false;
+      const size = Number(params.get("w")) || 1024;
+      world = new World(size, size);
+      world.edge = params.get("e") === "dead" ? "dead" : "wrap";
+      const [px, py] = (params.get("xy") ?? "0,0").split(",").map(Number);
+      world.stamp(parsed.cells, parsed.width, parsed.height, px || 0, py || 0);
+      world.gen = Number(params.get("g")) || 0;
+      el("sel-size").value = String(size);
+      el("sel-edge").value = world.edge;
+      shareMode = true;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  function openShare() {
+    openModal("分享这个画面", (body) => {
+      body.innerHTML = `
+      <p class="small muted" style="margin:0 0 14px">
+        把当前画面存成图片，或者生成一个带着这个图案的链接发给别人。
+      </p>
+      <div class="btn-row">
+        <button class="btn primary" id="share-png">存成 PNG 图片</button>
+        <button class="btn" id="share-link">复制分享链接</button>
+        <button class="btn" id="share-full">全屏</button>
+      </div>
+      <p class="modal-note" id="share-note"></p>`;
+      const note = body.querySelector("#share-note");
+      body.querySelector("#share-png").addEventListener("click", () => {
+        canvas.toBlob((blob) => {
+          if (!blob) {
+            note.textContent = "导出失败，浏览器没给出图片数据。";
+            return;
+          }
+          downloadBlob(blob, `生命游戏-第${world.gen}代.png`);
+          note.textContent = `已保存当前视野的 PNG（${canvas.width}×${canvas.height}）。`;
+        }, "image/png");
+      });
+      body.querySelector("#share-link").addEventListener("click", () => {
+        const link = shareLink();
+        if (!link) {
+          note.textContent = "这个世界太满了，链接会超长。可以先用「清空」或缩小面积再试。";
+          return;
+        }
+        const done = () => {
+          note.textContent = `链接已复制（${link.length} 个字符），粘贴到浏览器就能打开这个画面。`;
+        };
+        if (navigator.clipboard?.writeText) {
+          navigator.clipboard.writeText(link).then(done, () => {
+            window.prompt("复制这个链接：", link);
+          });
+        } else {
+          window.prompt("复制这个链接：", link);
+        }
+      });
+      body.querySelector("#share-full").addEventListener("click", () => {
+        if (document.fullscreenElement) {
+          void document.exitFullscreen();
+        } else {
+          void document.documentElement.requestFullscreen?.().catch(() => {
+            note.textContent = "这个浏览器不让进全屏（可能是 iframe 限制），按 F11 也一样。";
+          });
+        }
+      });
+    });
+  }
   function openHelp() {
     openModal("操作说明", (body) => {
       body.innerHTML = `
       <dl class="help-list">
-        <dt>拖拽</dt><dd>用当前工具绘制（画笔 / 橡皮 / 直线 / 矩形）</dd>
-        <dt>右键 / 空格 + 拖拽</dt><dd>平移画布</dd>
-        <dt>滚轮 / 双指</dt><dd>以光标为中心缩放（0.03× – 64×）</dd>
-        <dt><kbd>B</kbd> <kbd>E</kbd> <kbd>I</kbd> <kbd>U</kbd> <kbd>S</kbd> <kbd>H</kbd></dt>
-        <dd>画笔 / 橡皮 / 直线 / 矩形 / 贴图 / 平移</dd>
+        <dt>拖拽</dt><dd>默认是平移：拖哪看哪。左侧工具条可以换成画笔 / 橡皮 / 直线 / 矩形 / 贴图 / 选择框</dd>
+        <dt>右键拖拽</dt><dd>任何工具下都能临时平移画布</dd>
+        <dt>滚轮 / 双指</dt><dd>以光标为中心缩放（0.03× – 64×）；画笔和橡皮下 <kbd>Ctrl</kbd> + 滚轮改成调笔刷大小</dd>
+        <dt><kbd>B</kbd> <kbd>E</kbd> <kbd>I</kbd> <kbd>U</kbd> <kbd>S</kbd> <kbd>K</kbd> <kbd>H</kbd></dt>
+        <dd>画笔 / 橡皮 / 直线 / 矩形 / 贴图 / 选择框 / 平移</dd>
+        <dt>橡皮大小</dt><dd><kbd>Ctrl</kbd> + 滚轮或 <kbd>[</kbd> <kbd>]</kbd> 调，最大 31×31，一次能擦一大片；涂抹时也会显示范围框</dd>
+        <dt>选择框后</dt><dd>把框住的内容存成自定义图案，之后就能反复摆放（默认存进「自定义」分组，没有这个分组会自动建一个）；
+          按住框内拖动可以整块搬走（<kbd>Shift</kbd> 拖动才是重新框选，<kbd>Esc</kbd> 放回原处）；
+          拖框的边或角可以改大小；<kbd>Alt</kbd> + 拖框内只挪这个框、不动里面的细胞；
+          按住 <kbd>Ctrl</kbd> 再拖可以加框，几块一起存成一张复杂图案；<kbd>Del</kbd> 删掉框里的细胞，<kbd>Esc</kbd> 退出选择框</dd>
+        <dt>贴图 <kbd>S</kbd></dt><dd>先在图案库点一个图案，光标下才会出现预览；没选图案时点画布会提醒你挑一个。
+          点图案库的空白处可以取消选中</dd>
+        <dt>图案库 <kbd>⚙</kbd></dt><dd>点 ⚙ 侧栏原地变成编辑模式（再点 ✓ 退出）：图案变成方块网格，拖左边缘可以调宽；
+          拖动分类标题可以排序，拖动图案方块时会出现一个闪烁的虚线占位框，它插在哪里、松手后就落在哪里；
+          顶部的「全部收起 / 全部展开」可以一键折叠所有分组；
+          <kbd>↓</kbd> 把图案收进下面的「仓库」，仓库里的点「↑」（或双击）就放回来；分类名直接改，删分类会先确认</dd>
+        <dt>侧栏 <kbd>›</kbd></dt><dd>点右上角的小箭头可以收起图案库，只留一个 <kbd>▦</kbd> 小图标，画布更大；
+          展开时拖侧栏左边缘可以调宽（浏览和编辑模式都行，宽度会记住）</dd>
         <dt><kbd>R</kbd> <kbd>M</kbd></dt><dd>旋转 90°、左右镜像（贴图前）</dd>
-        <dt><kbd>P</kbd></dt><dd>播放 / 暂停</dd>
-        <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>时间轴上退一代 / 前进一代</dd>
-        <dt><kbd>G</kbd> <kbd>O</kbd></dt><dd>网格、光晕开关</dd>
+        <dt><kbd>Ctrl</kbd> + <kbd>Z</kbd></dt><dd>撤销上一步编辑（<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> 重做）；框选、改框大小、挪框也能撤销</dd>
+        <dt><kbd>Space</kbd></dt><dd>播放 / 暂停（同 <kbd>P</kbd>）</dd>
+        <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>上一代 / 下一代（可以按住连发）</dd>
+        <dt><kbd>G</kbd></dt><dd>网格开关</dd>
         <dt><kbd>0</kbd></dt><dd>缩放到整幅世界</dd>
         <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>放大 / 缩小</dd>
-        <dt><kbd>Del</kbd></dt><dd>清空世界</dd>
+        <dt><kbd>Del</kbd></dt><dd>有选区时删掉选区里的细胞，没有选区时清空世界（都能撤销）</dd>
+        <dt>分享</dt><dd>存成 PNG 图片、复制一条能还原当前画面的链接，或全屏观看</dd>
+        <dt>手机上</dt><dd>单指绘制、双指捏合缩放、双指拖动平移；顶栏向右滑可以看到更多按钮</dd>
       </dl>
       <p class="small muted" style="margin-top:14px">
         回溯原理：程序记录每一代被翻转的格子（增量），并按固定间隔保存关键帧，
@@ -3929,6 +6639,7 @@ kbd {
     });
   }
   async function autoSaveNow() {
+    if (shareMode) return;
     try {
       await store.setAutoSave({
         width: world.width,
@@ -3952,6 +6663,8 @@ kbd {
     el("btn-prev").addEventListener("click", () => stepOnce(-1));
     el("btn-clear").addEventListener("click", clearWorld);
     el("btn-random").addEventListener("click", randomWorld);
+    el("btn-undo").addEventListener("click", undoEdit);
+    el("btn-redo").addEventListener("click", redoEdit);
     const speedEl = el("speed");
     speedEl.value = String(Math.round(speedToSlider(state.speed)));
     speedEl.addEventListener("input", () => {
@@ -3973,16 +6686,58 @@ kbd {
       flushUi();
     });
     el("btn-record").addEventListener("click", () => void toggleRecord());
+    el("btn-share").addEventListener("click", openShare);
     el("btn-snapshots").addEventListener("click", () => void openSnapshots());
     el("btn-clips").addEventListener("click", () => void openClips());
     el("btn-rle").addEventListener("click", openRle);
     el("btn-help").addEventListener("click", openHelp);
     el("tgl-grid").addEventListener("click", toggleGrid);
-    el("tgl-glow").addEventListener("click", toggleGlow);
     el("btn-rotate").addEventListener("click", rotatePattern);
     el("btn-mirror").addEventListener("click", mirrorPattern);
+    el("btn-lib-manage").addEventListener("click", () => {
+      if (window.innerWidth < 900) {
+        openLibraryManager();
+        return;
+      }
+      setPaletteMode(state.paletteMode === "edit" ? "browse" : "edit");
+    });
+    bindPaletteResizer();
+    applyPaletteWidth();
+    window.addEventListener("resize", () => applyPaletteWidth());
+    el("palette-list").addEventListener("click", (e) => {
+      const t = e.target;
+      if (state.paletteMode === "edit") return;
+      if (t.closest(".pat")) return;
+      if (state.patternId) deselectPattern();
+    });
+    const plist = el("palette-list");
+    plist.addEventListener("dragenter", (e) => {
+      if (!dragPayload) return;
+      e.preventDefault();
+    });
+    plist.addEventListener("dragover", (e) => {
+      if (!dragPayload) return;
+      e.preventDefault();
+      if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+      onPaletteDragOver(e);
+    });
+    plist.addEventListener("drop", onPaletteDrop);
+    plist.addEventListener("dragleave", (e) => {
+      if (!plist.contains(e.relatedTarget)) {
+        clearDropMarks();
+        dropSlot?.remove();
+        dropSlot = null;
+      }
+    });
+    el("btn-save-preset").addEventListener("click", openSavePreset);
+    el("btn-sel-cancel").addEventListener("click", () => {
+      clearSelection();
+      setTool(state.lastTool);
+    });
+    el("btn-del-selection").addEventListener("click", deleteSelection);
     el("btn-palette-collapse").addEventListener("click", () => {
-      el("palette").classList.toggle("collapsed");
+      if (state.paletteMode === "edit") setPaletteMode("browse");
+      setPaletteCollapsed(!el("palette").classList.contains("collapsed"));
     });
     el("sel-size").addEventListener("change", (e) => {
       const size = Number(e.target.value);
@@ -4013,13 +6768,23 @@ kbd {
     } catch {
     }
     renderer = new Renderer(canvas);
+    let customs = [];
+    let libConfig = null;
+    try {
+      customs = await store.listCustomPatterns();
+      libConfig = await store.getLibraryConfig();
+    } catch {
+    }
+    library = new Library(customs, libConfig);
     let auto = null;
     try {
       auto = await store.getAutoSave();
     } catch {
       auto = null;
     }
-    if (auto && auto.width > 0) {
+    const fromLink = applyShareFromHash();
+    if (fromLink) {
+    } else if (auto && auto.width > 0) {
       world = new World(auto.width, auto.height);
       world.edge = auto.edge;
       world.loadPacked(auto.packed, auto.population, auto.gen);
@@ -4034,12 +6799,13 @@ kbd {
     buildPalette();
     const r = stageEl.getBoundingClientRect();
     renderer.resize(r.width, r.height);
-    if (auto && auto.view) view.setView(auto.view);
+    if (window.innerWidth <= 700) setPaletteCollapsed(true);
+    if (auto && auto.view && !fromLink) view.setView(auto.view);
     else fitContent();
     bindUi();
+    setTool("pan");
     setPlaying(false);
     el("tgl-grid").classList.toggle("on", state.grid);
-    el("tgl-glow").classList.toggle("on", state.glow);
     flushUi();
     Object.defineProperty(window, "__life", {
       configurable: true,
@@ -4056,6 +6822,9 @@ kbd {
         get store() {
           return store;
         },
+        get library() {
+          return library;
+        },
         step(n = 1) {
           for (let i = 0; i < n; i++) advanceOne();
         },
@@ -4063,9 +6832,94 @@ kbd {
         set(x, y, v) {
           world.set(x, y, v);
         },
+        setSelection(x0, y0, x1, y1) {
+          const rect = normalizeSelection(x0, y0, x1, y1);
+          state.selection = rect ? [rect] : [];
+          updateSelBar();
+          return state.selection;
+        },
+        addSelection(x0, y0, x1, y1) {
+          const rect = normalizeSelection(x0, y0, x1, y1);
+          if (rect) state.selection.push(rect);
+          updateSelBar();
+          return state.selection;
+        },
+        clearSelection: () => clearSelection(),
+        deleteSelection: () => deleteSelection(),
+        setTool: (t) => setTool(t),
+        get tool() {
+          return state.tool;
+        },
+        get brushSize() {
+          return state.brushSize;
+        },
+        setBrushSize(n) {
+          state.brushSize = n;
+          updateHint();
+        },
+        savePreset: () => openSavePreset(),
+        manageLibrary: () => openLibraryManager(),
+        undo: () => undoEdit(),
+        redo: () => redoEdit(),
+        get playing() {
+          return state.playing;
+        },
+        get overlay() {
+          return buildOverlay();
+        },
+        shareLink: () => shareLink(),
+        openShare: () => openShare(),
+        get undoDepth() {
+          return undoStack.length;
+        },
+        get redoDepth() {
+          return redoStack.length;
+        },
+        get selection() {
+          return state.selection;
+        },
+        get selectionBBox() {
+          return selectionBBox(state.selection);
+        },
+        get paletteMode() {
+          return state.paletteMode;
+        },
+        get patternId() {
+          return state.patternId;
+        },
+        get paletteWidth() {
+          return el("palette").offsetWidth;
+        },
+        setPaletteMode: (m) => setPaletteMode(m),
+        editList: () => [
+          ...document.querySelectorAll(
+            "#palette-list .edit-cat-head, #palette-list .edit-tile, #palette-list .stash-sec"
+          )
+        ].map((n) => ({
+          kind: n.classList.contains("edit-cat-head") ? "cat" : n.classList.contains("stash-sec") ? "stash" : "tile",
+          name: n.textContent?.trim() ?? ""
+        })),
+        movePattern: (id, catId, beforeId) => {
+          library.movePattern(id, catId, beforeId);
+          afterEdit();
+        },
+        stashPattern: (id) => {
+          library.stash(id);
+          afterEdit();
+        },
+        unstashPattern: (id, catId) => {
+          library.unstash(id, catId);
+          afterEdit();
+        },
+        moveCategoryBefore: (id, beforeId) => {
+          library.moveCategoryBefore(id, beforeId);
+          afterEdit();
+        },
+        beginEdit: (label) => beginEdit(label),
         place(id, x, y) {
-          const p = PATTERN_BY_ID.get(id);
+          const p = library.byId(id);
           if (!p) return null;
+          beginEdit(`放置 ${p.name}`);
           stampPattern(world, p, x, y, 0, false);
           commitEdit();
           return patternSize(p, 0);

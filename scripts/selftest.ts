@@ -5,6 +5,8 @@
 import { World, type EdgeMode } from '../src/core/world.ts';
 import { History } from '../src/core/history.ts';
 import { PATTERNS, stampPattern } from '../src/core/patterns.ts';
+import { Library, encodeCells, decodeCells, normalizeConfig } from '../src/core/library.ts';
+import { toRle, parsePatternText } from '../src/core/rle.ts';
 
 let pass = 0;
 let fail = 0;
@@ -339,6 +341,135 @@ function testEdgeAndScale(): void {
   check('wrap 角落邻居正确计数', bits.reduce((a, b) => a + b, 0) === 4, `人口 ${c.population}`);
 }
 
+// ------------------------------------------------------------ 7. 图案库模型
+function testLibrary(): void {
+  console.log('\n[7] 图案库模型');
+  const rand = rng(99);
+
+  // base64 往返（长度 1..8 都要覆盖，验证 padding 分支）
+  let okB64 = true;
+  for (let len = 1; len <= 8; len++) {
+    const src = new Uint8Array(len);
+    for (let i = 0; i < len; i++) src[i] = Math.floor(rand() * 256);
+    const back = decodeCells(encodeCells(src));
+    if (!eqBytes(src, back)) okB64 = false;
+  }
+  check('图案 base64 编解码往返一致', okB64);
+
+  const lib = new Library();
+  check('默认图案库包含全部内置图案', lib.visible.length === PATTERNS.length, `${lib.visible.length}`);
+  check('默认分类有 5 个', lib.categories.length === 5);
+  check('内置图案落在正确分类', lib.byId('glider')!.catId === 'ship' && lib.byId('pulsar')!.catId === 'oscillator');
+  check('按分类取图案不串味', lib.patternsIn('gun').every((p) => p.catId === 'gun'));
+
+  // 自定义图案
+  const cells = new Uint8Array(3 * 2);
+  cells[0] = 1;
+  cells[4] = 1;
+  cells[5] = 1;
+  const rec = {
+    id: 'c-test',
+    name: '测试图',
+    catId: 'still',
+    width: 3,
+    height: 2,
+    cells: encodeCells(cells),
+    created: 1,
+  };
+  lib.addCustom(rec);
+  const custom = lib.byId('c-test');
+  check('自定义图案能加进库', !!custom && custom.custom);
+  check('自定义图案细胞数正确', custom!.population === 3, `${custom!.population}`);
+  check('自定义图案细胞位图正确', eqBytes(custom!.cells, cells));
+  check('自定义图案出现在所属分类', lib.patternsIn('still').some((p) => p.id === 'c-test'));
+
+  // 改归属 / 隐藏
+  lib.assign('c-test', 'gun');
+  check('自定义图案可换分类', lib.byId('c-test')!.catId === 'gun' && lib.patternsIn('still').every((p) => p.id !== 'c-test'));
+  lib.assign('glider', 'still');
+  check('内置图案可换分类', lib.byId('glider')!.catId === 'still');
+  lib.assign('glider', null);
+  check('图案可以隐藏', lib.patternsIn('still').every((p) => p.id !== 'glider') && lib.hidden.some((p) => p.id === 'glider'));
+  lib.assign('glider', null);
+  lib.assign('glider', 'ship');
+  check('隐藏的图案可以恢复', lib.byId('glider')!.catId === 'ship');
+
+  // 分类改名 / 增删 / 排序
+  lib.renameCategory('still', '静止不动');
+  check('分类可改名', lib.categoryName('still') === '静止不动');
+  const newCat = lib.addCategory('我的收藏');
+  check('可以新建分类', lib.categories.some((c) => c.id === newCat.id));
+  lib.assign('c-test', newCat.id);
+  check('图案能放进新分类', lib.patternsIn(newCat.id).some((p) => p.id === 'c-test'));
+  const before = lib.categories.map((c) => c.id).join(',');
+  lib.moveCategory(newCat.id, -1);
+  const after = lib.categories.map((c) => c.id).join(',');
+  check('分类可以调顺序', before !== after && after !== '');
+  lib.removeCategory(newCat.id);
+  check('分类删除后图案不丢', lib.byId('c-test') !== undefined && lib.byId('c-test')!.catId !== newCat.id);
+  check('至少保留一个分类', (() => {
+    const one = new Library();
+    while (one.categories.length > 1) one.removeCategory(one.categories[1].id);
+    one.removeCategory(one.categories[0].id);
+    return one.categories.length === 1;
+  })());
+
+  // 删除自定义图案
+  lib.removeCustom('c-test');
+  check('自定义图案可删除', lib.byId('c-test') === undefined);
+
+  // 配置容错
+  const fixed = normalizeConfig({
+    categories: [{ id: 'a', name: 'A' }, { id: 'a', name: '重复' }],
+    assignments: { glider: '不存在的分类', pulsar: 'a' },
+  } as never);
+  check('坏配置会被清理', fixed.categories.length === 1 && fixed.assignments.pulsar === 'a' && !('glider' in fixed.assignments));
+  check('空配置退回默认', normalizeConfig(null).categories.length === 5);
+
+  // 自定义图案与内置图案互不干扰
+  const lib2 = new Library([rec]);
+  check('自定义图案不污染内置数量', lib2.visible.length === PATTERNS.length + 1);
+}
+
+function testRle(): void {
+  console.log('\n[8] RLE 导出与解析');
+
+  // 单行
+  const row = new Uint8Array([1, 1, 0, 1]);
+  const rowBack = parsePatternText(toRle({ width: 4, height: 1, cells: row }));
+  check('单行 RLE 往返', !!rowBack && rowBack.width === 4 && rowBack.height === 1, JSON.stringify(rowBack && [rowBack.width, rowBack.height]));
+  check('单行 RLE 细胞一致', !!rowBack && eqBytes(rowBack.cells, row), rowBack ? String(rowBack.cells) : '');
+
+  // 多行（关键：相邻行之间必须有 $）
+  const grid = new Uint8Array([
+    1, 0, 0,
+    1, 1, 0,
+    0, 0, 1,
+  ]);
+  const gridBack = parsePatternText(toRle({ width: 3, height: 3, cells: grid }));
+  check('多行 RLE 往返尺寸', !!gridBack && gridBack.width === 3 && gridBack.height === 3, JSON.stringify(gridBack && [gridBack.width, gridBack.height]));
+  check('多行 RLE 细胞一致', !!gridBack && eqBytes(gridBack.cells, grid), gridBack ? String(gridBack.cells) : '');
+  check('相邻行用 $ 分隔', (toRle({ width: 3, height: 3, cells: grid }).match(/\$/g) ?? []).length === 2, toRle({ width: 3, height: 3, cells: grid }).split('\n').pop() ?? '');
+
+  // 中间有空行
+  const gap = new Uint8Array([1, 0, 0, 0, 1]);
+  const gapBack = parsePatternText(toRle({ width: 1, height: 5, cells: gap }));
+  check('空行用 n$ 压缩', !!gapBack && gapBack.height === 5 && eqBytes(gapBack.cells, gap), gapBack ? `${gapBack.width}×${gapBack.height}` : '解析失败');
+
+  // 真实图案：高斯帕机枪
+  const gun = PATTERNS.find((p) => p.id === 'gosperglidergun')!;
+  const gunRle = toRle({ width: gun.w, height: gun.h, cells: gun.cells }, { name: 'gun' });
+  const gunBack = parsePatternText(gunRle);
+  check('机枪 RLE 往返', !!gunBack && eqBytes(gunBack.cells, gun.cells), gunBack ? `${gunBack.width}×${gunBack.height}` : '解析失败');
+
+  // 解析器原有能力：LifeWiki 风格带头部
+  const wiki = parsePatternText('#N glider\nx = 3, y = 3, rule = B3/S23\nbo$2bo$3o!');
+  check('带 #N 与规则头的 RLE', !!wiki && wiki.width === 3 && wiki.height === 3 && wiki.name === 'glider', wiki?.name ?? '解析失败');
+  // 纯文本点阵
+  const plain = parsePatternText('.O.\n..O\nOOO');
+  check('纯文本点阵能与 RLE 一致', !!plain && plain.width === 3 && plain.height === 3 && eqBytes(plain.cells, wiki!.cells), plain ? `${plain.width}×${plain.height}` : '解析失败');
+}
+
 console.log('生命游戏核心自检');
 testStepAgainstReference();
 testDeltaReversible();
@@ -346,6 +477,8 @@ testPatterns();
 testGun();
 testHistory();
 testEdgeAndScale();
+testLibrary();
+testRle();
 
 console.log(`\n结果：${pass} 通过，${fail} 失败`);
 if (fail) {

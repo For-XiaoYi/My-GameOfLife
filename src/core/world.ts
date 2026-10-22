@@ -46,13 +46,18 @@ export class World {
   /** 带 padding 的存储，步长 = width + 2。 */
   readonly stride: number;
   readonly cells: Uint8Array;
-  readonly age: Uint8Array;
+  /** 每格的出生代数（低 16 位）；渲染时用 gen - birth 算年龄。 */
+  readonly birth: Uint16Array;
+  /** cells 的位图镜像（1 bit/格，含 padding），演化走它。 */
+  readonly bits: Uint32Array;
+  /** 每行（含左右 padding）占多少个 32 位字。 */
+  readonly bitsStride: number;
 
-  edge: EdgeMode = 'wrap';
   gen = 0;
   population = 0;
 
-  private nextBuf: Uint8Array;
+  private _edge: EdgeMode = 'wrap';
+  private nextBits: Uint32Array;
   private changeBuf: Int32Array;
 
   /** 活细胞包围盒（右开区间）。population === 0 时视为空。 */
@@ -73,10 +78,83 @@ export class World {
     this.stride = width + 2;
     const size = (width + 2) * (height + 2);
     this.cells = new Uint8Array(size);
-    this.age = new Uint8Array(size);
-    this.nextBuf = new Uint8Array(size);
+    this.birth = new Uint16Array(size);
+    this.bitsStride = (width + 2 + 31) >> 5;
+    const words = this.bitsStride * (height + 2);
+    this.bits = new Uint32Array(words);
+    this.nextBits = new Uint32Array(words);
     // 单代最大翻转数不会超过世界格数，一次性分配避免热路径上的扩容判断。
     this.changeBuf = new Int32Array(width * height);
+  }
+
+  get edge(): EdgeMode {
+    return this._edge;
+  }
+
+  /** 切换边界模式时把 padding 归零，避免上一模式的残留影响邻居统计。 */
+  set edge(v: EdgeMode) {
+    if (v === this._edge) return;
+    this._edge = v;
+    this.clearPadding();
+  }
+
+  /** 每格已存活的代数（1 起，最大 255），供渲染取色。 */
+  ageAt(i: number): number {
+    const a = (this.gen - this.birth[i]) & 0xffff;
+    return a < 1 ? 1 : a > 255 ? 255 : a;
+  }
+
+  // ── 位图镜像维护 ────────────────────────────────────────────
+
+  private setBit(i: number, v: number): void {
+    const row = (i / this.stride) | 0;
+    const col = i - row * this.stride;
+    const wi = row * this.bitsStride + (col >>> 5);
+    const mask = 1 << (col & 31);
+    if (v) this.bits[wi] |= mask;
+    else this.bits[wi] &= ~mask;
+  }
+
+  /** 用 cells 重建整张位图（批量载入后调用）。 */
+  private rebuildBits(): void {
+    const W = this.width;
+    const S = this.stride;
+    const BW = this.bitsStride;
+    const cells = this.cells;
+    const bits = this.bits;
+    bits.fill(0);
+    for (let y = 0; y < this.height; y++) {
+      const src = (y + 1) * S + 1;
+      const dst = (y + 1) * BW;
+      for (let x = 0; x < W; x++) {
+        if (cells[src + x]) bits[dst + ((x + 1) >>> 5)] |= 1 << ((x + 1) & 31);
+      }
+    }
+  }
+
+  /** 把 padding 环整体清零（cells 与位图）。 */
+  private clearPadding(): void {
+    const W = this.width;
+    const H = this.height;
+    const S = this.stride;
+    const p = this.cells;
+    for (let x = 0; x <= W + 1; x++) {
+      p[x] = 0;
+      p[(H + 1) * S + x] = 0;
+    }
+    for (let y = 0; y <= H + 1; y++) {
+      const row = y * S;
+      p[row] = 0;
+      p[row + W + 1] = 0;
+    }
+    this.bits.fill(0);
+    for (let y = 1; y <= H; y++) {
+      const r = y * S;
+      const d = y * this.bitsStride;
+      for (let x = 0; x < W; x++) {
+        if (p[r + x + 1]) this.bits[d + ((x + 1) >>> 5)] |= 1 << ((x + 1) & 31);
+      }
+    }
   }
 
   // ── 坐标与读写 ──────────────────────────────────────────────
@@ -98,12 +176,13 @@ export class World {
     const old = this.cells[i];
     if (old === (v ? 1 : 0)) return;
     this.cells[i] = v ? 1 : 0;
+    this.setBit(i, v ? 1 : 0);
     if (v) {
-      this.age[i] = 1;
+      this.birth[i] = this.gen & 0xffff;
       this.population++;
       this.expandBBox(x, y);
     } else {
-      this.age[i] = 0;
+      this.birth[i] = 0;
       this.population--;
       if (this.population <= 0) {
         this.population = 0;
@@ -116,7 +195,8 @@ export class World {
   /** 直接写入 padding 索引（历史回放用），不做脏矩形/包围盒维护。 */
   writePadded(i: number, v: number): void {
     this.cells[i] = v;
-    this.age[i] = v ? 1 : 0;
+    this.birth[i] = v ? this.gen & 0xffff : 0;
+    this.setBit(i, v);
   }
 
   // ── 包围盒 ──────────────────────────────────────────────────
@@ -210,8 +290,9 @@ export class World {
 
   clear(): void {
     this.cells.fill(0);
-    this.age.fill(0);
-    this.nextBuf.fill(0);
+    this.birth.fill(0);
+    this.bits.fill(0);
+    this.nextBits.fill(0);
     this.population = 0;
     this.gen = 0;
     this.clearBBox();
@@ -221,7 +302,8 @@ export class World {
   /** 以给定密度随机播种（限定在中心区域，方便观察）。 */
   randomize(density = 0.32, rng: () => number = Math.random): void {
     this.cells.fill(0);
-    this.age.fill(0);
+    this.birth.fill(0);
+    this.bits.fill(0);
     const W = this.width;
     const H = this.height;
     const span = Math.min(W, H) * 0.62;
@@ -231,13 +313,18 @@ export class World {
     const y1 = Math.min(H, y0 + span);
     const S = this.stride;
     const cells = this.cells;
-    const age = this.age;
+    const birth = this.birth;
+    const bits = this.bits;
+    const BW = this.bitsStride;
     for (let y = y0; y < y1; y++) {
       const row = (y + 1) * S;
+      const brow = (y + 1) * BW;
       for (let x = x0; x < x1; x++) {
         if (rng() < density) {
-          cells[row + x + 1] = 1;
-          age[row + x + 1] = 1;
+          const i = row + x + 1;
+          cells[i] = 1;
+          birth[i] = 0;
+          bits[brow + ((x + 1) >>> 5)] |= 1 << ((x + 1) & 31);
         }
       }
     }
@@ -274,7 +361,8 @@ export class World {
         const i = rowM + wx + 1;
         if (!this.cells[i]) {
           this.cells[i] = 1;
-          this.age[i] = 1;
+          this.birth[i] = this.gen & 0xffff;
+          this.setBit(i, 1);
           this.population++;
           written++;
         }
@@ -320,88 +408,154 @@ export class World {
   step(): Int32Array | null {
     const W = this.width;
     const H = this.height;
-    const S = this.stride;
-    const cells = this.cells;
-    const next = this.nextBuf;
-    const age = this.age;
-
     if (this.population === 0) {
       this.gen++;
       return null;
     }
 
-    if (this.edge === 'wrap') this.refreshBorder();
+    const wrap = this._edge === 'wrap';
+    if (wrap) this.refreshBorderBits();
 
-    const xSpans = expandedSpans(this.bx0, this.bx1, W, this.edge === 'wrap');
-    const ySpans = expandedSpans(this.by0, this.by1, H, this.edge === 'wrap');
+    const S = this.stride;
+    const BW = this.bitsStride;
+    const wr = (W + 1) >>> 5;
+    const br = (W + 1) & 31;
+    // 最后一个字里列 W+1（右侧 padding）及以上的位都不是世界的一部分
+    const lastMask = (1 << br) - 1;
+    const bits = this.bits;
+    const nextB = this.nextBits;
+    const cells = this.cells;
+    const birth = this.birth;
     const buf = this.changeBuf;
-    let changeCount = 0;
-    let nx0 = W;
-    let ny0 = H;
-    let nx1 = 0;
-    let ny1 = 0;
-    let pop = this.population;
+    const genNow = this.gen & 0xffff;
 
-    for (let sy = 0; sy < ySpans.length; sy += 2) {
-      const ya = ySpans[sy];
-      const yb = ySpans[sy + 1];
-      for (let sx = 0; sx < xSpans.length; sx += 2) {
-        const xa = xSpans[sx];
-        const xb = xSpans[sx + 1];
-        for (let y = ya; y < yb; y++) {
-          const rowM = y * S;
-          const row0 = (y + 1) * S;
-          const rowP = (y + 2) * S;
-          for (let x = xa; x < xb; x++) {
-            const c = x + 1;
-            const n =
-              cells[rowM + c - 1] +
-              cells[rowM + c] +
-              cells[rowM + c + 1] +
-              cells[row0 + c - 1] +
-              cells[row0 + c + 1] +
-              cells[rowP + c - 1] +
-              cells[rowP + c] +
-              cells[rowP + c + 1];
-            const alive = cells[row0 + c];
-            next[row0 + c] = alive ? (n === 2 || n === 3 ? 1 : 0) : n === 3 ? 1 : 0;
+    const xSpans = expandedSpans(this.bx0, this.bx1, W, wrap);
+    const ySpans = expandedSpans(this.by0, this.by1, H, wrap);
+
+    // 第一遍：纯计算，把下一状态写进 nextBits（此时 bits 保持上一代，三行都能读到原值）。
+    for (let si = 0; si < ySpans.length; si += 2) {
+      const ya = ySpans[si];
+      const yb = ySpans[si + 1];
+      for (let y = ya; y < yb; y++) {
+        const rM = y * BW;
+        const r0 = (y + 1) * BW;
+        const rP = (y + 2) * BW;
+        for (let sj = 0; sj < xSpans.length; sj += 2) {
+          const kw0 = (xSpans[sj] + 1) >>> 5;
+          const kw1 = xSpans[sj + 1] >>> 5;
+          for (let k = kw0; k <= kw1; k++) {
+            const m = bits[rM + k];
+            const c = bits[r0 + k];
+            const p = bits[rP + k];
+            const mL = (m << 1) | (k > 0 ? bits[rM + k - 1] >>> 31 : 0);
+            const mR = (m >>> 1) | (k + 1 < BW ? bits[rM + k + 1] << 31 : 0);
+            const cL = (c << 1) | (k > 0 ? bits[r0 + k - 1] >>> 31 : 0);
+            const cR = (c >>> 1) | (k + 1 < BW ? bits[r0 + k + 1] << 31 : 0);
+            const pL = (p << 1) | (k > 0 ? bits[rP + k - 1] >>> 31 : 0);
+            const pR = (p >>> 1) | (k + 1 < BW ? bits[rP + k + 1] << 31 : 0);
+
+            // 每行的邻居数：上下行各 3 个（左中右），中心行只有 2 个（左右）。
+            const mX = mL ^ m;
+            const mS = mX ^ mR;
+            const mC = (mL & m) | (mR & mX);
+            const cS = cL ^ cR;
+            const cC = cL & cR;
+            const pX = pL ^ p;
+            const pS = pX ^ pR;
+            const pC = (pL & p) | (pR & pX);
+
+            // 三行合并成 4 个位平面：总数 = p0 + 2*p1 + 4*p2 + 8*p3
+            const sX = mS ^ cS;
+            const p0 = sX ^ pS;
+            const s1 = (mS & cS) | (pS & sX);
+            const tX = mC ^ cC;
+            const t0 = tX ^ pC;
+            const t1 = (mC & cC) | (pC & tX);
+            const p1 = s1 ^ t0;
+            const carry1 = s1 & t0;
+            const p2 = t1 ^ carry1;
+            const p3 = t1 & carry1;
+
+            // 规则：邻居数 == 3 出生；邻居数 == 2 且自身存活则续命。
+            let nv = p1 & ~p2 & ~p3 & (p0 | c);
+            // 只保留有效列（padding 列 0 与 W+1 之间）：最后一个字里超出的位被
+            // 邻居窗口污染后可能算出 1，写回 cells 时会越界到下一行。
+            if (k === 0) nv &= ~1;
+            if (k === wr) nv &= lastMask;
+            nextB[r0 + k] = nv;
           }
         }
       }
     }
 
-    for (let sy = 0; sy < ySpans.length; sy += 2) {
-      const ya = ySpans[sy];
-      const yb = ySpans[sy + 1];
-      for (let sx = 0; sx < xSpans.length; sx += 2) {
-        const xa = xSpans[sx];
-        const xb = xSpans[sx + 1];
-        for (let y = ya; y < yb; y++) {
-          const row0 = (y + 1) * S;
-          for (let x = xa; x < xb; x++) {
-            const i = row0 + x + 1;
-            const nv = next[i];
-            const ov = cells[i];
-            if (nv !== ov) {
-              cells[i] = nv;
-              if (nv) {
-                age[i] = 1;
+    // 第二遍：写回 bits、收集翻转清单、统计人口与包围盒。
+    let changeCount = 0;
+    let pop = this.population;
+    let nx0 = W;
+    let ny0 = H;
+    let nx1 = 0;
+    let ny1 = 0;
+
+    for (let si = 0; si < ySpans.length; si += 2) {
+      const ya = ySpans[si];
+      const yb = ySpans[si + 1];
+      for (let y = ya; y < yb; y++) {
+        const r0 = (y + 1) * BW;
+        const base = (y + 1) * S;
+        let kFirst = -1;
+        let kLast = -1;
+        for (let sj = 0; sj < xSpans.length; sj += 2) {
+          const kw0 = (xSpans[sj] + 1) >>> 5;
+          const kw1 = xSpans[sj + 1] >>> 5;
+          for (let k = kw0; k <= kw1; k++) {
+            const old = bits[r0 + k];
+            const nv = nextB[r0 + k];
+            // 记录本行第一个/最后一个还有活细胞的字（可能不等于区间首尾字）
+            if (nv !== 0) {
+              if (kFirst < 0) kFirst = k;
+              kLast = k;
+            }
+            if (nv === old) continue;
+            bits[r0 + k] = nv;
+            let d = nv ^ old;
+            // padding 列的那两位只用于邻居计算，不属于世界，不能算进人口与变化清单
+            if (k === 0) d &= ~1;
+            if (k === wr) d &= lastMask;
+            while (d !== 0) {
+              const bit = 31 - Math.clz32(d & -d);
+              const i = base + (k << 5) + bit;
+              if ((nv >>> bit) & 1) {
+                cells[i] = 1;
+                birth[i] = genNow;
                 pop++;
                 buf[changeCount++] = i;
               } else {
-                age[i] = 0;
+                cells[i] = 0;
+                birth[i] = 0;
                 pop--;
                 buf[changeCount++] = -(i + 1);
               }
-            } else if (nv && age[i] < 255) {
-              age[i]++;
+              d &= d - 1;
             }
-            if (nv) {
-              if (x < nx0) nx0 = x;
-              if (x + 1 > nx1) nx1 = x + 1;
-              if (y < ny0) ny0 = y;
-              if (y + 1 > ny1) ny1 = y + 1;
-            }
+          }
+        }
+        // 本行还有活细胞吗？有就把包围盒扩到它们（按位图定位首末非零字）。
+        if (kFirst >= 0) {
+          const w0 = nextB[r0 + kFirst];
+          const w1 = nextB[r0 + kLast];
+          if (w0 !== 0) {
+            const col0 = (kFirst << 5) + (31 - Math.clz32(w0 & -w0));
+            const x = col0 - 1;
+            if (x < nx0) nx0 = x < 0 ? 0 : x;
+            if (y < ny0) ny0 = y;
+            if (y + 1 > ny1) ny1 = y + 1;
+          }
+          if (w1 !== 0) {
+            const col1 = (kLast << 5) + (31 - Math.clz32(w1));
+            const x = col1 - 1;
+            if (x + 1 > nx1) nx1 = x + 1 > W ? W : x + 1;
+            if (y < ny0) ny0 = y;
+            if (y + 1 > ny1) ny1 = y + 1;
           }
         }
       }
@@ -418,9 +572,9 @@ export class World {
     }
 
     // 渲染脏区 = 本次演化的整个区域（含仅年龄变化的活细胞）
-    for (let sy = 0; sy < ySpans.length; sy += 2) {
-      for (let sx = 0; sx < xSpans.length; sx += 2) {
-        this.markDirty(xSpans[sx], ySpans[sy], xSpans[sx + 1], ySpans[sy + 1]);
+    for (let si = 0; si < ySpans.length; si += 2) {
+      for (let sj = 0; sj < xSpans.length; sj += 2) {
+        this.markDirty(xSpans[sj], ySpans[si], xSpans[sj + 1], ySpans[si + 1]);
       }
     }
 
@@ -431,25 +585,33 @@ export class World {
     return out;
   }
 
-  /** 把世界四周的 padding 环填成对边内容（环形边界）。 */
-  private refreshBorder(): void {
+  /** 把世界四周的位图 padding 环填成对边内容（环形边界）。 */
+  private refreshBorderBits(): void {
     const W = this.width;
     const H = this.height;
-    const S = this.stride;
-    const p = this.cells;
-    for (let x = 0; x < W; x++) {
-      p[x + 1] = p[H * S + x + 1]; // 上 padding = 世界最后一行
-      p[(H + 1) * S + x + 1] = p[S + x + 1]; // 下 padding = 世界第一行
+    const BW = this.bitsStride;
+    const b = this.bits;
+    const wl = W >>> 5;
+    const bl = W & 31;
+    const wr = (W + 1) >>> 5;
+    const br = (W + 1) & 31;
+    const maskR = ~(1 << br);
+    // 左右 padding 列：padded 列 0 取列 W，列 W+1 取列 1。
+    // 必须先填内部行的列 padding，再整行拷贝上下 padding 行，否则四个角落会缺一位。
+    for (let y = 1; y <= H; y++) {
+      const base = y * BW;
+      const leftVal = (b[base + wl] >>> bl) & 1;
+      const rightVal = (b[base] >>> 1) & 1;
+      if (leftVal) b[base] |= 1;
+      else b[base] &= ~1;
+      if (rightVal) b[base + wr] |= 1 << br;
+      else b[base + wr] &= maskR;
     }
-    for (let y = 0; y < H; y++) {
-      const row = (y + 1) * S;
-      p[row] = p[row + W]; // 左 padding = 世界最后一列
-      p[row + W + 1] = p[row + 1]; // 右 padding = 世界第一列
+    // 上下 padding 行直接整行拷贝（此时源行的列 padding 已是最新）
+    for (let k = 0; k < BW; k++) {
+      b[k] = b[H * BW + k];
+      b[(H + 1) * BW + k] = b[BW + k];
     }
-    p[0] = p[H * S + W];
-    p[W + 1] = p[H * S + 1];
-    p[(H + 1) * S] = p[S + W];
-    p[(H + 1) * S + W + 1] = p[S + 1];
   }
 
   /** 用未填充位图覆盖整个世界（历史关键帧恢复用）。 */
@@ -458,7 +620,9 @@ export class World {
     const H = this.height;
     const S = this.stride;
     this.cells.fill(0);
-    this.age.fill(0);
+    this.birth.fill(0);
+    this.gen = gen;
+    const g = gen & 0xffff;
     for (let y = 0; y < H; y++) {
       const row = (y + 1) * S;
       const src = y * W;
@@ -466,13 +630,13 @@ export class World {
         if (bits[src + x]) {
           const i = row + x + 1;
           this.cells[i] = 1;
-          this.age[i] = 1;
+          this.birth[i] = g;
         }
       }
     }
     this.population = population;
-    this.gen = gen;
     this.recompute();
+    this.rebuildBits();
     this.markAllDirty();
   }
 
@@ -524,7 +688,9 @@ export class World {
     const H = this.height;
     const S = this.stride;
     this.cells.fill(0);
-    this.age.fill(0);
+    this.birth.fill(0);
+    this.gen = gen;
+    const g = gen & 0xffff;
     let bit = 0;
     for (let y = 0; y < H; y++) {
       const row = (y + 1) * S;
@@ -532,14 +698,14 @@ export class World {
         if ((packed[bit >> 3] >> (bit & 7)) & 1) {
           const i = row + x + 1;
           this.cells[i] = 1;
-          this.age[i] = 1;
+          this.birth[i] = g;
         }
         bit++;
       }
     }
     this.population = population;
-    this.gen = gen;
     this.recompute();
+    this.rebuildBits();
     this.markAllDirty();
   }
 
@@ -577,7 +743,8 @@ export class World {
   applyDelta(codes: Int32Array): Rect {
     const S = this.stride;
     const cells = this.cells;
-    const age = this.age;
+    const birth = this.birth;
+    const g = this.gen & 0xffff;
     let pop = this.population;
     let x0 = this.width;
     let y0 = this.height;
@@ -588,11 +755,13 @@ export class World {
       const i = code >= 0 ? code : -code - 1;
       if (code >= 0) {
         cells[i] = 1;
-        age[i] = 1;
+        birth[i] = g;
+        this.setBit(i, 1);
         pop++;
       } else {
         cells[i] = 0;
-        age[i] = 0;
+        birth[i] = 0;
+        this.setBit(i, 0);
         pop--;
       }
       const cx = (i % S) - 1;
@@ -615,7 +784,8 @@ export class World {
   revertDelta(codes: Int32Array): Rect {
     const S = this.stride;
     const cells = this.cells;
-    const age = this.age;
+    const birth = this.birth;
+    const g = this.gen & 0xffff;
     let pop = this.population;
     let x0 = this.width;
     let y0 = this.height;
@@ -626,11 +796,13 @@ export class World {
       const i = code >= 0 ? code : -code - 1;
       if (code >= 0) {
         cells[i] = 0;
-        age[i] = 0;
+        birth[i] = 0;
+        this.setBit(i, 0);
         pop--;
       } else {
         cells[i] = 1;
-        age[i] = 1;
+        birth[i] = g;
+        this.setBit(i, 1);
         pop++;
       }
       const cx = (i % S) - 1;

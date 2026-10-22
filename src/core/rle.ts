@@ -166,8 +166,11 @@ export function toRle(
   for (let y = 0; y < H; y++) {
     const row = encodeRow(cells, y * W, W);
     if (!row) continue;
-    const gap = y - prevRow - 1;
-    if (gap > 0) tokens.push(gap > 1 ? `${gap}$` : '$');
+    if (prevRow >= 0) {
+      // 换行：相邻行写一个 $，跨过空行写 n$
+      const step = y - prevRow;
+      tokens.push(step > 1 ? `${step}$` : '$');
+    }
     tokens.push(row);
     prevRow = y;
   }
@@ -186,22 +189,19 @@ export function toRle(
 }
 
 function encodeRow(cells: Uint8Array, offset: number, w: number): string {
-  let out = '';
-  let run = 0;
-  let cur = 0;
   let lastAlive = -1;
   for (let x = 0; x < w; x++) if (cells[offset + x]) lastAlive = x;
   if (lastAlive < 0) return '';
-  for (let x = 0; x <= lastAlive; x++) {
+  let out = '';
+  let x = 0;
+  while (x <= lastAlive) {
     const v = cells[offset + x] ? 1 : 0;
-    if (v === cur) {
-      run++;
-    } else {
-      out += (run > 1 ? String(run) : '') + (cur ? 'o' : 'b');
-      cur = v;
-      run = 1;
+    let n = 0;
+    while (x <= lastAlive && (cells[offset + x] ? 1 : 0) === v) {
+      n++;
+      x++;
     }
+    out += (n > 1 ? String(n) : '') + (v ? 'o' : 'b');
   }
-  out += (run > 1 ? String(run) : '') + (cur ? 'o' : 'b');
   return out;
 }

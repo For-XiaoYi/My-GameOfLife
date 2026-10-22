@@ -7,7 +7,8 @@ export interface PatternDef {
   id: string;
   name: string;
   en: string;
-  category: PatternCategory;
+  /** 分类：内置图案是中文分类名，自定义图案存分类 id */
+  category: string;
   w: number;
   h: number;
   cells: Uint8Array;

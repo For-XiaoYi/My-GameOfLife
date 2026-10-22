@@ -2,6 +2,7 @@
 // 用法：node scripts/shoot-hero.mjs [输出路径] [DPR] [缩放] [中心x] [中心y] [代数] [模式 soup|scene]
 import { mkdirSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { launch } from './cdp.mjs';
 
 const out = resolve(process.argv[2] || 'assets/screenshot.png');
@@ -11,7 +12,8 @@ const cx = Number(process.argv[5] || 470);
 const cy = Number(process.argv[6] || 480);
 const gens = Number(process.argv[7] || 55);
 const mode = process.argv[8] || 'soup';
-const URL = 'https://for-xiaoyi.github.io/My-GameOfLife/';
+// 默认截本地构建产物，这样未推送的改动也能反映在图里
+const URL = process.argv[9] || pathToFileURL(resolve('生命游戏.html')).href;
 
 mkdirSync(dirname(out), { recursive: true });
 

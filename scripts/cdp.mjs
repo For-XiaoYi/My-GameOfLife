@@ -2,7 +2,7 @@
 // 之所以不用 --virtual-time-budget：那会让 requestAnimationFrame 几乎不触发，
 // 主循环跑不起来，测不出真实行为。
 import { spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -41,8 +41,21 @@ export function findChrome() {
   throw new Error('没找到 Chrome 或 Edge：设 CHROME_PATH 环境变量，或在 build/browser-path.txt 写一行浏览器路径');
 }
 
+/** 临时配置目录：系统临时目录不可写时（受限环境）退回 build/tmp。 */
+function makeProfileDir() {
+  for (const root of [tmpdir(), join(process.cwd(), 'build', 'tmp')]) {
+    try {
+      mkdirSync(root, { recursive: true });
+      return mkdtempSync(join(root, 'life-cdp-'));
+    } catch {
+      /* 换下一个位置 */
+    }
+  }
+  throw new Error('无法创建临时目录：系统临时目录和 build/tmp 都不可写');
+}
+
 export async function launch({ port = 9411, width = 1600, height = 1000 } = {}) {
-  const profile = mkdtempSync(join(tmpdir(), 'life-cdp-'));
+  const profile = makeProfileDir();
   const proc = spawn(
     findChrome(),
     [
@@ -90,6 +103,8 @@ export async function launch({ port = 9411, width = 1600, height = 1000 } = {}) 
     let id = 0;
     const pending = new Map();
     const logs = [];
+    const listeners = new Map();
+    const on = (method, cb) => listeners.set(method, cb);
     ws.addEventListener('message', (ev) => {
       const msg = JSON.parse(ev.data);
       if (msg.id && pending.has(msg.id)) {
@@ -99,6 +114,7 @@ export async function launch({ port = 9411, width = 1600, height = 1000 } = {}) 
         else res(msg.result);
         return;
       }
+      if (msg.method && listeners.has(msg.method)) listeners.get(msg.method)(msg.params);
       if (msg.method === 'Runtime.consoleAPICalled') {
         logs.push(
           `[console.${msg.params.type}] ` +
@@ -169,7 +185,7 @@ export async function launch({ port = 9411, width = 1600, height = 1000 } = {}) 
       }
     };
 
-    return { send, evaluate, waitFor, screenshot, navigate, close, logs };
+    return { send, evaluate, waitFor, screenshot, navigate, close, logs, on };
   }
 
   const close = () => {
