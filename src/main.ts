@@ -76,6 +76,8 @@ const state = {
   rotation: 0,
   mirror: false,
   grid: true,
+  /** 显示模式：0 关闭 / 1 网格 / 2 网格 + 世界边界 */
+  display: 2 as 0 | 1 | 2,
   playing: false,
   unlimited: false,
   speed: 10,
@@ -187,7 +189,7 @@ function loop(ts: number): void {
 
   renderer.sync();
   const overlay = buildOverlay();
-  renderer.render(view, { grid: state.grid }, overlay);
+  renderer.render(view, { grid: state.display >= 1, bounds: state.display === 2 }, overlay);
 
   if (uiDirty && ts - lastUi > 80) {
     lastUi = ts;
@@ -761,7 +763,10 @@ function worldAtRaw(p: { x: number; y: number }): { x: number; y: number } {
  * 取模是为了在环面上作画，选择框还是先老实待在正位世界里。
  */
 function worldAtForTool(p: { x: number; y: number }): { x: number; y: number } {
-  return state.tool === 'select' ? worldAtRaw(p) : worldAt(p);
+  // 除了平移，所有工具都用未取模坐标：笔迹跨过接缝时继续往前推进，
+  // 真正落格时（paintCell / stamp / 选区判定）再取模。
+  // 否则"上一笔 1020、这一笔 5"会被直线插值成一条横贯世界的线。
+  return state.tool === 'pan' ? worldAt(p) : worldAtRaw(p);
 }
 
 /** 环面上的最短位移（结果落在 -n/2..n/2）。 */
@@ -1078,7 +1083,7 @@ window.addEventListener('pointermove', (e) => {
   }
 
   if (p.x >= 0 && p.y >= 0 && p.x <= canvas.clientWidth && p.y <= canvas.clientHeight) {
-    state.hover = worldAt(p);
+    state.hover = worldAtRaw(p);
   } else {
     state.hover = null;
   }
@@ -1199,13 +1204,13 @@ canvas.addEventListener(
     const sizeTool = state.tool === 'brush' || state.tool === 'erase';
     // 滚轮默认缩放；画笔/橡皮下 Ctrl+滚轮改笔刷大小（Alt/Shift 也行）
     if (sizeTool && (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey)) {
-      state.hover = worldAt(p);
+      state.hover = worldAtRaw(p);
       adjustBrushSize(e.deltaY > 0 ? -2 : 2);
       return;
     }
     const factor = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.06 : 0.0016));
     view.zoomAt(p.x, p.y, factor);
-    state.hover = worldAt(p);
+    state.hover = worldAtRaw(p);
   },
   { passive: false },
 );
@@ -1307,7 +1312,7 @@ window.addEventListener('keydown', (e) => {
       setTool('pan');
       break;
     case 'g':
-      toggleGrid();
+      toggleDisplay();
       break;
     case 'f':
       toggleImmersive();
@@ -1432,9 +1437,18 @@ function randomWorld(): void {
   toast('随机播种完成');
 }
 
-function toggleGrid(): void {
-  state.grid = !state.grid;
-  el('tgl-grid').classList.toggle('on', state.grid);
+function toggleDisplay(): void {
+  // 三态：0 关闭 → 1 只画网格 → 2 网格 + 世界边界 → 回到 0
+  state.display = ((state.display + 1) % 3) as 0 | 1 | 2;
+  applyDisplayButton();
+}
+
+function applyDisplayButton(): void {
+  const btn = el('tgl-grid');
+  btn.classList.toggle('on', state.display > 0);
+  btn.classList.toggle('bounds', state.display === 2);
+  btn.dataset.tip =
+    state.display === 0 ? '显示：关（G 切换）' : state.display === 1 ? '显示：网格（G 切换）' : '显示：网格 + 世界边界（G 切换）';
 }
 
 function rotatePattern(): void {
@@ -3119,7 +3133,7 @@ function openClipPlayer(rec: ClipRecord): void {
 
     const paint = (): void => {
       r.sync();
-      r.render(v, { grid: false });
+      r.render(v, { grid: false, bounds: false });
       labelEl.textContent = `第 ${nf.format(rec.startGen + idx)} 代`;
     };
 
@@ -3558,7 +3572,7 @@ function bindUi(): void {
   });
   el('fs-exit').addEventListener('click', () => void exitImmersive());
 
-  el('tgl-grid').addEventListener('click', toggleGrid);
+  el('tgl-grid').addEventListener('click', toggleDisplay);
   el('btn-rotate').addEventListener('click', rotatePattern);
   el('btn-mirror').addEventListener('click', mirrorPattern);
   el('btn-lib-manage').addEventListener('click', () => {
@@ -3692,7 +3706,7 @@ async function boot(): Promise<void> {
   // 图案库初始化时会顺手切到贴图工具，这里恢复成默认的平移
   setTool('pan');
   setPlaying(false);
-  el('tgl-grid').classList.toggle('on', state.grid);
+  applyDisplayButton();
   flushUi();
 
   // 调试钩子：自动化冒烟测试与线上排查用，正常操作不依赖它

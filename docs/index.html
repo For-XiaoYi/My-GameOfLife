@@ -1769,6 +1769,7 @@ kbd {
 
 /* ---------- 顶栏图标按钮 ---------- */
 .iconbtn {
+  position: relative;
   width: 30px;
   height: 30px;
   padding: 0;
@@ -1805,6 +1806,18 @@ kbd {
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* 第三档（网格 + 世界边界）用右下角一个小圆点提示 */
+.iconbtn.chip.bounds::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 /* ---------- 全屏 / 沉浸观察 ---------- */
@@ -4304,6 +4317,7 @@ body.dragging-sort {
         ctx.drawImage(this.off, dx, dy, dw, dh);
       }
       if (opts.grid) this.drawGrid(ctx, view2, w);
+      if (opts.bounds && wrapMode) this.drawBounds(ctx, view2, w);
       if (!wrapMode) this.drawBorder(ctx, view2, w);
       if (overlay?.ghost) this.drawGhost(ctx, view2, overlay.ghost);
       if (overlay?.brush) this.drawBrush(ctx, view2, overlay.brush, w);
@@ -4417,6 +4431,40 @@ body.dragging-sort {
       }
       ctx.restore();
     }
+    /**
+     * 环绕模式下的世界边界参考线。
+     * 环面本身没有边，但没有参照物就不知道"这一张世界"到哪里为止，
+     * 所以每隔一个世界周期画一条很淡的虚线（只在显示模式的第三档出现）。
+     */
+    drawBounds(ctx, view2, w) {
+      const s = view2.scale;
+      const W = w.width * s;
+      const H = w.height * s;
+      if (W <= 0 || H <= 0) return;
+      ctx.save();
+      ctx.strokeStyle = "rgba(108, 245, 210, 0.26)";
+      ctx.lineWidth = 1;
+      ctx.setLineDash([6, 7]);
+      const kx0 = Math.floor(-view2.ox / W) - 1;
+      const kx1 = Math.ceil((this.cssW - view2.ox) / W) + 1;
+      for (let k = kx0; k <= kx1; k++) {
+        const x = Math.round(view2.ox + k * W) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, this.cssH);
+        ctx.stroke();
+      }
+      const ky0 = Math.floor(-view2.oy / H) - 1;
+      const ky1 = Math.ceil((this.cssH - view2.oy) / H) + 1;
+      for (let k = ky0; k <= ky1; k++) {
+        const y = Math.round(view2.oy + k * H) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(this.cssW, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
     drawGrid(ctx, view2, w) {
       const scale = view2.scale;
       const vis = view2.visibleWorld(this.cssW, this.cssH);
@@ -4509,8 +4557,8 @@ body.dragging-sort {
     drawBrush(ctx, view2, brush, w) {
       const s = view2.scale;
       if (s < 0.4) return;
-      const x = (brush.x % w.width + w.width) % w.width;
-      const y = (brush.y % w.height + w.height) % w.height;
+      const x = w.edge === "wrap" ? brush.x : (brush.x % w.width + w.width) % w.width;
+      const y = w.edge === "wrap" ? brush.y : (brush.y % w.height + w.height) % w.height;
       const n = Math.max(1, brush.size | 0);
       const r = n - 1 >> 1;
       ctx.save();
@@ -4589,6 +4637,8 @@ body.dragging-sort {
     rotation: 0,
     mirror: false,
     grid: true,
+    /** 显示模式：0 关闭 / 1 网格 / 2 网格 + 世界边界 */
+    display: 2,
     playing: false,
     unlimited: false,
     speed: 10,
@@ -4680,7 +4730,7 @@ body.dragging-sort {
     }
     renderer.sync();
     const overlay = buildOverlay();
-    renderer.render(view, { grid: state.grid }, overlay);
+    renderer.render(view, { grid: state.display >= 1, bounds: state.display === 2 }, overlay);
     if (uiDirty && ts - lastUi > 80) {
       lastUi = ts;
       uiDirty = false;
@@ -5135,7 +5185,7 @@ body.dragging-sort {
     return { x: Math.floor(w.x), y: Math.floor(w.y) };
   }
   function worldAtForTool(p) {
-    return state.tool === "select" ? worldAtRaw(p) : worldAt(p);
+    return state.tool === "pan" ? worldAt(p) : worldAtRaw(p);
   }
   function shortestDelta(delta, n) {
     const m = (delta % n + n) % n;
@@ -5406,7 +5456,7 @@ body.dragging-sort {
       return;
     }
     if (p.x >= 0 && p.y >= 0 && p.x <= canvas.clientWidth && p.y <= canvas.clientHeight) {
-      state.hover = worldAt(p);
+      state.hover = worldAtRaw(p);
     } else {
       state.hover = null;
     }
@@ -5517,13 +5567,13 @@ body.dragging-sort {
       const p = localPoint(e);
       const sizeTool = state.tool === "brush" || state.tool === "erase";
       if (sizeTool && (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey)) {
-        state.hover = worldAt(p);
+        state.hover = worldAtRaw(p);
         adjustBrushSize(e.deltaY > 0 ? -2 : 2);
         return;
       }
       const factor = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.06 : 16e-4));
       view.zoomAt(p.x, p.y, factor);
-      state.hover = worldAt(p);
+      state.hover = worldAtRaw(p);
     },
     { passive: false }
   );
@@ -5612,7 +5662,7 @@ body.dragging-sort {
         setTool("pan");
         break;
       case "g":
-        toggleGrid();
+        toggleDisplay();
         break;
       case "f":
         toggleImmersive();
@@ -5723,9 +5773,15 @@ body.dragging-sort {
     commitEdit();
     toast("随机播种完成");
   }
-  function toggleGrid() {
-    state.grid = !state.grid;
-    el("tgl-grid").classList.toggle("on", state.grid);
+  function toggleDisplay() {
+    state.display = (state.display + 1) % 3;
+    applyDisplayButton();
+  }
+  function applyDisplayButton() {
+    const btn = el("tgl-grid");
+    btn.classList.toggle("on", state.display > 0);
+    btn.classList.toggle("bounds", state.display === 2);
+    btn.dataset.tip = state.display === 0 ? "显示：关（G 切换）" : state.display === 1 ? "显示：网格（G 切换）" : "显示：网格 + 世界边界（G 切换）";
   }
   function rotatePattern() {
     state.rotation = (state.rotation + 1) % 4;
@@ -7154,7 +7210,7 @@ body.dragging-sort {
       let acc = 0;
       const paint = () => {
         r.sync();
-        r.render(v, { grid: false });
+        r.render(v, { grid: false, bounds: false });
         labelEl.textContent = `第 ${nf.format(rec.startGen + idx)} 代`;
       };
       const goTo = (target) => {
@@ -7534,7 +7590,7 @@ body.dragging-sort {
       pokeFsBar();
     });
     el("fs-exit").addEventListener("click", () => void exitImmersive());
-    el("tgl-grid").addEventListener("click", toggleGrid);
+    el("tgl-grid").addEventListener("click", toggleDisplay);
     el("btn-rotate").addEventListener("click", rotatePattern);
     el("btn-mirror").addEventListener("click", mirrorPattern);
     el("btn-lib-manage").addEventListener("click", () => {
@@ -7643,7 +7699,7 @@ body.dragging-sort {
     bindUi();
     setTool("pan");
     setPlaying(false);
-    el("tgl-grid").classList.toggle("on", state.grid);
+    applyDisplayButton();
     flushUi();
     Object.defineProperty(window, "__life", {
       configurable: true,

@@ -82,6 +82,8 @@ export interface RenderOverlay {
 
 export interface RenderOptions {
   grid: boolean;
+  /** 环绕模式下画一条很淡的世界边界参考线 */
+  bounds?: boolean;
 }
 
 export class Renderer {
@@ -199,6 +201,7 @@ export class Renderer {
     }
 
     if (opts.grid) this.drawGrid(ctx, view, w);
+    if (opts.bounds && wrapMode) this.drawBounds(ctx, view, w);
     // 环面没有"边"，不画世界边框；死亡边界照旧
     if (!wrapMode) this.drawBorder(ctx, view, w);
     if (overlay?.ghost) this.drawGhost(ctx, view, overlay.ghost);
@@ -332,6 +335,41 @@ export class Renderer {
     ctx.restore();
   }
 
+  /**
+   * 环绕模式下的世界边界参考线。
+   * 环面本身没有边，但没有参照物就不知道"这一张世界"到哪里为止，
+   * 所以每隔一个世界周期画一条很淡的虚线（只在显示模式的第三档出现）。
+   */
+  private drawBounds(ctx: CanvasRenderingContext2D, view: Viewport, w: World): void {
+    const s = view.scale;
+    const W = w.width * s;
+    const H = w.height * s;
+    if (W <= 0 || H <= 0) return;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(108, 245, 210, 0.26)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([6, 7]);
+    const kx0 = Math.floor(-view.ox / W) - 1;
+    const kx1 = Math.ceil((this.cssW - view.ox) / W) + 1;
+    for (let k = kx0; k <= kx1; k++) {
+      const x = Math.round(view.ox + k * W) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, this.cssH);
+      ctx.stroke();
+    }
+    const ky0 = Math.floor(-view.oy / H) - 1;
+    const ky1 = Math.ceil((this.cssH - view.oy) / H) + 1;
+    for (let k = ky0; k <= ky1; k++) {
+      const y = Math.round(view.oy + k * H) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(this.cssW, y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   private drawGrid(ctx: CanvasRenderingContext2D, view: Viewport, w: World): void {
     const scale = view.scale;
     const vis = view.visibleWorld(this.cssW, this.cssH);
@@ -435,8 +473,9 @@ export class Renderer {
   ): void {
     const s = view.scale;
     if (s < 0.4) return;
-    const x = ((brush.x % w.width) + w.width) % w.width;
-    const y = ((brush.y % w.height) + w.height) % w.height;
+    // 环绕模式下画笔可能停在"隔壁那张图"上，不要再拉回正位，否则光标与落笔位置对不上
+    const x = w.edge === 'wrap' ? brush.x : ((brush.x % w.width) + w.width) % w.width;
+    const y = w.edge === 'wrap' ? brush.y : ((brush.y % w.height) + w.height) % w.height;
     const n = Math.max(1, brush.size | 0);
     const r = (n - 1) >> 1;
     ctx.save();

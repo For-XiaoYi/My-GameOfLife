@@ -1761,6 +1761,7 @@ kbd {
 
 /* ---------- 顶栏图标按钮 ---------- */
 .iconbtn {
+  position: relative;
   width: 30px;
   height: 30px;
   padding: 0;
@@ -1797,6 +1798,18 @@ kbd {
   stroke-width: 1.6;
   stroke-linecap: round;
   stroke-linejoin: round;
+}
+
+/* 第三档（网格 + 世界边界）用右下角一个小圆点提示 */
+.iconbtn.chip.bounds::after {
+  content: '';
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 /* ---------- 全屏 / 沉浸观察 ---------- */
