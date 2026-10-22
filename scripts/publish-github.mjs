@@ -173,10 +173,16 @@ if (parents.length) {
   console.log(`已创建 ${BRANCH} 分支`);
 }
 
-await api(`/repos/${me.login}/${REPO}`, {
-  method: 'PATCH',
-  body: JSON.stringify({ default_branch: 'main' }),
-});
+// 固定默认分支只是锦上添花：fine-grained token 没有 Administration 权限时这里会 403，
+// 内容其实已经推成功了，所以失败只提示、不中断。
+try {
+  await api(`/repos/${me.login}/${REPO}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ default_branch: BRANCH }),
+  });
+} catch (e) {
+  console.warn(`（可选）设置默认分支失败，忽略：${e.message}`);
+}
 
 console.log(`\n完成：${repo.html_url}`);
 console.log(`提交：${commit.sha.slice(0, 7)} · ${files.length} 个文件`);
