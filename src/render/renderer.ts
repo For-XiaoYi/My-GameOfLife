@@ -59,6 +59,9 @@ export interface Ghost {
   x: number;
   y: number;
   ok: boolean;
+  /** 环绕模式下世界的屏幕周期（像素）；给了就把幽灵在接缝两侧一起画出来 */
+  wrapW?: number;
+  wrapH?: number;
 }
 
 export interface ShapePreview {
@@ -395,18 +398,32 @@ export class Renderer {
     ctx.globalAlpha = ghost.ok ? 0.62 : 0.32;
     ctx.fillStyle = ghost.ok ? LIVE_COLOR : '#ff7a7a';
     const size = Math.max(1, s);
-    for (let y = 0; y < ghost.h; y++) {
-      for (let x = 0; x < ghost.w; x++) {
-        if (!ghost.cells[y * ghost.w + x]) continue;
-        const px = view.ox + (ghost.x + x) * s;
-        const py = view.oy + (ghost.y + y) * s;
-        ctx.fillRect(px, py, size, size);
+    // 贴着接缝时，把幽灵在对侧也画一份，预览才和实际落位一致
+    const ox1 = ghost.wrapW ?? 0;
+    const oy1 = ghost.wrapH ?? 0;
+    const shifts: Array<[number, number]> = [[0, 0]];
+    if (ox1 > 0) shifts.push([-ox1, 0], [ox1, 0]);
+    if (oy1 > 0) shifts.push([0, -oy1], [0, oy1]);
+    if (ox1 > 0 && oy1 > 0) shifts.push([-ox1, -oy1], [ox1, -oy1], [-ox1, oy1], [ox1, oy1]);
+    for (const [sx, sy] of shifts) {
+      for (let y = 0; y < ghost.h; y++) {
+        for (let x = 0; x < ghost.w; x++) {
+          if (!ghost.cells[y * ghost.w + x]) continue;
+          const px = view.ox + (ghost.x + x) * s + sx;
+          const py = view.oy + (ghost.y + y) * s + sy;
+          ctx.fillRect(px, py, size, size);
+        }
       }
     }
     ctx.globalAlpha = 0.9;
     ctx.strokeStyle = ghost.ok ? 'rgba(108,245,210,0.8)' : '#ff7a7a';
     ctx.lineWidth = 1;
-    ctx.strokeRect(view.ox + ghost.x * s - 0.5, view.oy + ghost.y * s - 0.5, ghost.w * s + 1, ghost.h * s + 1);
+    ctx.strokeRect(
+      view.ox + ghost.x * s - 0.5,
+      view.oy + ghost.y * s - 0.5,
+      ghost.w * s + 1,
+      ghost.h * s + 1,
+    );
     ctx.restore();
   }
 

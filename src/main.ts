@@ -219,7 +219,17 @@ function buildOverlay(): {
         const ok =
           world.edge === 'wrap' ||
           (x >= 0 && y >= 0 && x + r.w <= world.width && y + r.h <= world.height);
-        ghost = { cells: r.cells, w: r.w, h: r.h, x, y, ok };
+        ghost = {
+          cells: r.cells,
+          w: r.w,
+          h: r.h,
+          x,
+          y,
+          ok,
+          // 环绕模式：贴着接缝时让预览也绕到对侧去
+          wrapW: world.edge === 'wrap' ? world.width * view.scale : undefined,
+          wrapH: world.edge === 'wrap' ? world.height * view.scale : undefined,
+        };
       }
     } else if (state.tool === 'brush' || state.tool === 'erase') {
       brush = { x: state.hover.x, y: state.hover.y, size: state.brushSize };
@@ -736,6 +746,21 @@ function wrapCoord(v: number, n: number): number {
   return ((v % n) + n) % n;
 }
 
+/** 不做取模的世界坐标：框选时越界就停在边界，而不是跳到对侧。 */
+function worldAtRaw(p: { x: number; y: number }): { x: number; y: number } {
+  const w = view.screenToWorld(p.x, p.y);
+  return { x: Math.floor(w.x), y: Math.floor(w.y) };
+}
+
+/**
+ * 框选工具用"不取模"的坐标。
+ * 否则从右边界往外拖时，屏幕坐标会被取模成 x=5，选择框突然横跨整个世界。
+ * 取模是为了在环面上作画，选择框还是先老实待在正位世界里。
+ */
+function worldAtForTool(p: { x: number; y: number }): { x: number; y: number } {
+  return state.tool === 'select' ? worldAtRaw(p) : worldAt(p);
+}
+
 /** 环绕模式下把相机偏移收进一个世界周期，避免长时间拖动后数值无限增长。 */
 function normalizePan(): void {
   if (world.edge !== 'wrap') return;
@@ -855,7 +880,7 @@ canvas.addEventListener('pointerdown', (e) => {
   } catch {
     /* 合成事件或指针已失效时浏览器会抛错，忽略即可 */
   }
-  const wp = worldAt(p);
+  const wp = worldAtForTool(p);
   const wantPan = state.tool === 'pan' || e.button === 2 || e.button === 1;
 
   if (wantPan) {
@@ -1030,7 +1055,7 @@ window.addEventListener('pointermove', (e) => {
     return;
   }
 
-  const wp = worldAt(p);
+  const wp = worldAtForTool(p);
   d.moved = true;
   if (d.kind === 'paint') {
     paintLine(d.lx, d.ly, wp.x, wp.y, d.erase ? 0 : 1);
@@ -1084,7 +1109,7 @@ function endPointer(e: PointerEvent): void {
       editBase = null;
     }
   } else if (d.kind === 'select') {
-    const wp = worldAt(localPoint(e));
+    const wp = worldAtForTool(localPoint(e));
     const rect = normalizeSelection(d.lx, d.ly, wp.x, wp.y);
     if (rect && d.moved) {
       state.selection = d.additive ? [...state.selection, rect] : [rect];
@@ -1591,7 +1616,7 @@ function updateSelectCursor(p: { x: number; y: number }): void {
     return;
   }
   if (state.drag) return;
-  const wp = worldAt(p);
+  const wp = worldAtForTool(p);
   const h = selectionHandleAt(wp.x, wp.y);
   let c = 'crosshair';
   if (h) c = handleCursor(h.edge);

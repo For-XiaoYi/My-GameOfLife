@@ -4479,18 +4479,31 @@ body.dragging-sort {
       ctx.globalAlpha = ghost.ok ? 0.62 : 0.32;
       ctx.fillStyle = ghost.ok ? LIVE_COLOR : "#ff7a7a";
       const size = Math.max(1, s);
-      for (let y = 0; y < ghost.h; y++) {
-        for (let x = 0; x < ghost.w; x++) {
-          if (!ghost.cells[y * ghost.w + x]) continue;
-          const px = view2.ox + (ghost.x + x) * s;
-          const py = view2.oy + (ghost.y + y) * s;
-          ctx.fillRect(px, py, size, size);
+      const ox1 = ghost.wrapW ?? 0;
+      const oy1 = ghost.wrapH ?? 0;
+      const shifts = [[0, 0]];
+      if (ox1 > 0) shifts.push([-ox1, 0], [ox1, 0]);
+      if (oy1 > 0) shifts.push([0, -oy1], [0, oy1]);
+      if (ox1 > 0 && oy1 > 0) shifts.push([-ox1, -oy1], [ox1, -oy1], [-ox1, oy1], [ox1, oy1]);
+      for (const [sx, sy] of shifts) {
+        for (let y = 0; y < ghost.h; y++) {
+          for (let x = 0; x < ghost.w; x++) {
+            if (!ghost.cells[y * ghost.w + x]) continue;
+            const px = view2.ox + (ghost.x + x) * s + sx;
+            const py = view2.oy + (ghost.y + y) * s + sy;
+            ctx.fillRect(px, py, size, size);
+          }
         }
       }
       ctx.globalAlpha = 0.9;
       ctx.strokeStyle = ghost.ok ? "rgba(108,245,210,0.8)" : "#ff7a7a";
       ctx.lineWidth = 1;
-      ctx.strokeRect(view2.ox + ghost.x * s - 0.5, view2.oy + ghost.y * s - 0.5, ghost.w * s + 1, ghost.h * s + 1);
+      ctx.strokeRect(
+        view2.ox + ghost.x * s - 0.5,
+        view2.oy + ghost.y * s - 0.5,
+        ghost.w * s + 1,
+        ghost.h * s + 1
+      );
       ctx.restore();
     }
     drawBrush(ctx, view2, brush, w) {
@@ -4687,7 +4700,17 @@ body.dragging-sort {
           const x = state.hover.x - Math.floor(r.w / 2);
           const y = state.hover.y - Math.floor(r.h / 2);
           const ok = world.edge === "wrap" || x >= 0 && y >= 0 && x + r.w <= world.width && y + r.h <= world.height;
-          ghost = { cells: r.cells, w: r.w, h: r.h, x, y, ok };
+          ghost = {
+            cells: r.cells,
+            w: r.w,
+            h: r.h,
+            x,
+            y,
+            ok,
+            // 环绕模式：贴着接缝时让预览也绕到对侧去
+            wrapW: world.edge === "wrap" ? world.width * view.scale : void 0,
+            wrapH: world.edge === "wrap" ? world.height * view.scale : void 0
+          };
         }
       } else if (state.tool === "brush" || state.tool === "erase") {
         brush = { x: state.hover.x, y: state.hover.y, size: state.brushSize };
@@ -5105,6 +5128,13 @@ body.dragging-sort {
   function wrapCoord(v, n) {
     return (v % n + n) % n;
   }
+  function worldAtRaw(p) {
+    const w = view.screenToWorld(p.x, p.y);
+    return { x: Math.floor(w.x), y: Math.floor(w.y) };
+  }
+  function worldAtForTool(p) {
+    return state.tool === "select" ? worldAtRaw(p) : worldAt(p);
+  }
   function normalizePan() {
     if (world.edge !== "wrap") return;
     const tw = world.width * view.scale;
@@ -5203,7 +5233,7 @@ body.dragging-sort {
       canvas.setPointerCapture(e.pointerId);
     } catch {
     }
-    const wp = worldAt(p);
+    const wp = worldAtForTool(p);
     const wantPan = state.tool === "pan" || e.button === 2 || e.button === 1;
     if (wantPan) {
       stageEl.classList.add("panning");
@@ -5363,7 +5393,7 @@ body.dragging-sort {
       normalizePan();
       return;
     }
-    const wp = worldAt(p);
+    const wp = worldAtForTool(p);
     d.moved = true;
     if (d.kind === "paint") {
       paintLine(d.lx, d.ly, wp.x, wp.y, d.erase ? 0 : 1);
@@ -5414,7 +5444,7 @@ body.dragging-sort {
         editBase = null;
       }
     } else if (d.kind === "select") {
-      const wp = worldAt(localPoint(e));
+      const wp = worldAtForTool(localPoint(e));
       const rect = normalizeSelection(d.lx, d.ly, wp.x, wp.y);
       if (rect && d.moved) {
         state.selection = d.additive ? [...state.selection, rect] : [rect];
@@ -5855,7 +5885,7 @@ body.dragging-sort {
       return;
     }
     if (state.drag) return;
-    const wp = worldAt(p);
+    const wp = worldAtForTool(p);
     const h = selectionHandleAt(wp.x, wp.y);
     let c = "crosshair";
     if (h) c = handleCursor(h.edge);
