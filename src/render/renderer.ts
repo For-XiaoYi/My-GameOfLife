@@ -6,6 +6,14 @@ const BG = '#05080c';
 const WORLD_BG = '#0a1017';
 const DEAD_RGB: [number, number, number] = [10, 16, 23];
 
+/**
+ * 环绕边界下"无限平铺"的缩放下限。
+ * 低于它时一个细胞不到 0.2 个 CSS 像素，铺满整屏只会变成噪点；
+ * 而且图案填充在瓷砖边缘按"边缘钳制"采样，缩放平滑不跨瓷砖取像素，
+ * 交界处会出现亮度断层。这个尺度下本来也看不清单个细胞，退回单张更稳。
+ */
+const TILE_MIN_SCALE = 0.2;
+
 /** 年龄渐变色带：刚出生的细胞最亮，越老越深。 */
 const AGE_STOPS: Array<{ age: number; rgb: [number, number, number] }> = [
   { age: 1, rgb: [206, 255, 244] },
@@ -171,17 +179,25 @@ export class Renderer {
     const scale = view.scale;
     const dx = view.ox;
     const dy = view.oy;
-    const dw = w.width * scale;
-    const dh = w.height * scale;
+    const wrapMode = w.edge === 'wrap';
+    const tiled = wrapMode && scale >= TILE_MIN_SCALE;
 
-    ctx.fillStyle = WORLD_BG;
-    ctx.fillRect(dx, dy, dw, dh);
+    if (tiled) {
+      this.paintTiled(ctx, dx, dy, scale, w);
+    } else {
+      const dw = w.width * scale;
+      const dh = w.height * scale;
 
-    ctx.imageSmoothingEnabled = scale < 1;
-    ctx.drawImage(this.off, dx, dy, dw, dh);
+      ctx.fillStyle = WORLD_BG;
+      ctx.fillRect(dx, dy, dw, dh);
+
+      ctx.imageSmoothingEnabled = scale < 1;
+      ctx.drawImage(this.off, dx, dy, dw, dh);
+    }
 
     if (opts.grid) this.drawGrid(ctx, view, w);
-    this.drawBorder(ctx, view, w);
+    // 环面没有"边"，不画世界边框；死亡边界照旧
+    if (!wrapMode) this.drawBorder(ctx, view, w);
     if (overlay?.ghost) this.drawGhost(ctx, view, overlay.ghost);
     if (overlay?.brush) this.drawBrush(ctx, view, overlay.brush, w);
     if (overlay?.shape) this.drawShape(ctx, view, overlay.shape);
@@ -282,13 +298,46 @@ export class Renderer {
     ctx.restore();
   }
 
+  /**
+   * 环绕边界下的无限平铺：把 1px/格 的离屏位图当瓷砖铺满视口。
+   * 世界本身是环面（左右、上下首尾相接），相邻瓷砖天然吻合，不需要拼接逻辑。
+   * 锚点先对周期取模，避免长时间平移后坐标数值无限增长、精度下降。
+   */
+  private paintTiled(
+    ctx: CanvasRenderingContext2D,
+    ox: number,
+    oy: number,
+    scale: number,
+    w: World,
+  ): void {
+    const tw = w.width * scale;
+    const th = w.height * scale;
+    if (tw <= 0 || th <= 0) return;
+    const nx = ((ox % tw) + tw) % tw;
+    const ny = ((oy % th) + th) % th;
+
+    ctx.save();
+    ctx.translate(nx, ny);
+    ctx.scale(scale, scale);
+    const pattern = ctx.createPattern(this.off, 'repeat');
+    if (pattern) {
+      ctx.fillStyle = pattern;
+      ctx.imageSmoothingEnabled = scale < 1;
+      // 用"格"为单位的视口矩形覆盖整屏
+      ctx.fillRect(-nx / scale, -ny / scale, this.cssW / scale, this.cssH / scale);
+    }
+    ctx.restore();
+  }
+
   private drawGrid(ctx: CanvasRenderingContext2D, view: Viewport, w: World): void {
     const scale = view.scale;
     const vis = view.visibleWorld(this.cssW, this.cssH);
-    const x0 = Math.max(0, vis.x0);
-    const y0 = Math.max(0, vis.y0);
-    const x1 = Math.min(w.width, vis.x1);
-    const y1 = Math.min(w.height, vis.y1);
+    // 环绕边界下网格要跟着瓷砖一起无限延伸，不能再裁到世界矩形
+    const wrap = w.edge === 'wrap';
+    const x0 = wrap ? vis.x0 : Math.max(0, vis.x0);
+    const y0 = wrap ? vis.y0 : Math.max(0, vis.y0);
+    const x1 = wrap ? vis.x1 : Math.min(w.width, vis.x1);
+    const y1 = wrap ? vis.y1 : Math.min(w.height, vis.y1);
     if (x1 <= x0 || y1 <= y0) return;
 
     if (scale >= 5) {
