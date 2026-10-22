@@ -1,0 +1,4102 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="color-scheme" content="dark" />
+    <title>生命游戏 · Conway's Game of Life</title>
+    <style>
+:root {
+  --bg: #05080c;
+  --panel: rgba(13, 20, 28, 0.92);
+  --panel-solid: #0d141c;
+  --line: rgba(120, 200, 220, 0.14);
+  --line-strong: rgba(120, 200, 220, 0.28);
+  --text: #dbe9ee;
+  --dim: #7b939e;
+  --accent: #6cf5d2;
+  --accent-dim: rgba(108, 245, 210, 0.16);
+  --danger: #ff7a7a;
+  --radius: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.4 system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+
+#app {
+  display: grid;
+  grid-template-rows: 52px minmax(0, 1fr) 58px;
+  height: 100dvh;
+  width: 100vw;
+}
+
+/* ---------- 顶栏 ---------- */
+#topbar {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 0 14px;
+  background: var(--panel-solid);
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 0 0 auto;
+}
+
+.logo {
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  background:
+    radial-gradient(circle at 30% 30%, var(--accent) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 70% 30%, var(--accent) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 50% 62%, var(--accent) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 30% 88%, var(--accent) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 70% 88%, var(--accent) 0 2px, transparent 2.5px),
+    #101c25;
+  box-shadow: 0 0 0 1px var(--line-strong), 0 0 16px rgba(108, 245, 210, 0.18);
+}
+
+.brand-text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+}
+
+.brand-text strong {
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.brand-text small {
+  font-size: 9.5px;
+  color: var(--dim);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.stats {
+  display: flex;
+  gap: 4px;
+  flex: 0 0 auto;
+}
+
+.stat {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, 0.028);
+  border: 1px solid transparent;
+}
+
+.stat label {
+  font-size: 10.5px;
+  color: var(--dim);
+  letter-spacing: 0.05em;
+}
+
+.stat b {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.stat i {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--dim);
+}
+
+.top-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+select,
+.btn,
+.chip {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  transition:
+    background 0.14s,
+    border-color 0.14s,
+    color 0.14s;
+  white-space: nowrap;
+}
+
+select {
+  padding: 0 6px;
+  appearance: none;
+  text-align: center;
+}
+
+.btn:hover,
+.chip:hover,
+select:hover {
+  background: rgba(108, 245, 210, 0.1);
+  border-color: var(--line-strong);
+}
+
+.chip.on {
+  background: var(--accent-dim);
+  border-color: rgba(108, 245, 210, 0.5);
+  color: var(--accent);
+}
+
+.btn.icon,
+button.icon {
+  width: 30px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+}
+
+.btn.danger {
+  color: #ffb4b4;
+  border-color: rgba(255, 122, 122, 0.32);
+}
+
+.btn.danger.on {
+  background: rgba(255, 90, 90, 0.2);
+  border-color: rgba(255, 122, 122, 0.7);
+  color: #fff;
+}
+
+/* ---------- 舞台 ---------- */
+#stage {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg);
+  touch-action: none;
+}
+
+#board {
+  position: absolute;
+  inset: 0;
+  display: block;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+#stage.panning #board {
+  cursor: grabbing;
+}
+
+#toolbar {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 5px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+
+.tool {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  font-size: 15px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+}
+
+.tool:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tool.active {
+  color: #04120f;
+  background: var(--accent);
+  box-shadow: 0 0 14px rgba(108, 245, 210, 0.45);
+}
+
+#palette {
+  position: absolute;
+  right: 12px;
+  top: 12px;
+  bottom: 12px;
+  width: 236px;
+  display: flex;
+  flex-direction: column;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  overflow: hidden;
+  transition: width 0.16s ease;
+}
+
+#palette.collapsed {
+  width: 42px;
+}
+
+#palette.collapsed #palette-list,
+#palette.collapsed footer,
+#palette.collapsed header h3 {
+  display: none;
+}
+
+#palette.collapsed header {
+  justify-content: center;
+}
+
+#palette header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+#palette h3 {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
+#palette header .icon {
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--dim);
+  cursor: pointer;
+  border-radius: 6px;
+}
+
+#palette header .icon:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+}
+
+#palette.collapsed header .icon {
+  transform: rotate(180deg);
+}
+
+#palette-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 200, 220, 0.25) transparent;
+}
+
+#palette-list::-webkit-scrollbar {
+  width: 7px;
+}
+
+#palette-list::-webkit-scrollbar-thumb {
+  background: rgba(120, 200, 220, 0.22);
+  border-radius: 4px;
+}
+
+.cat-title {
+  margin: 6px 2px 5px;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  color: var(--dim);
+  text-transform: uppercase;
+}
+
+.pat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+.pat {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 2px 4px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.022);
+  cursor: pointer;
+  transition:
+    border-color 0.14s,
+    background 0.14s,
+    transform 0.1s;
+}
+
+.pat:hover {
+  border-color: var(--line-strong);
+  background: rgba(108, 245, 210, 0.07);
+}
+
+.pat.active {
+  border-color: rgba(108, 245, 210, 0.75);
+  background: var(--accent-dim);
+  box-shadow: inset 0 0 0 1px rgba(108, 245, 210, 0.25);
+}
+
+.pat canvas {
+  width: 100%;
+  height: 38px;
+  display: block;
+  image-rendering: pixelated;
+}
+
+.pat span {
+  font-size: 10px;
+  color: var(--dim);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pat.active span {
+  color: var(--accent);
+}
+
+#palette footer {
+  display: flex;
+  gap: 6px;
+  padding: 8px;
+  border-top: 1px solid var(--line);
+}
+
+#palette footer button {
+  flex: 1;
+  height: 28px;
+  font-size: 11.5px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+}
+
+#palette footer button:hover {
+  background: rgba(108, 245, 210, 0.1);
+  border-color: var(--line-strong);
+}
+
+#hint {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 6px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(8, 13, 18, 0.72);
+  border: 1px solid var(--line);
+  color: var(--dim);
+  font-size: 11px;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+}
+
+#hint i {
+  font-style: normal;
+  opacity: 0.45;
+}
+
+#rec-badge {
+  position: absolute;
+  left: 50%;
+  top: 12px;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: rgba(60, 12, 12, 0.85);
+  border: 1px solid rgba(255, 122, 122, 0.45);
+  color: #ffc9c9;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+}
+
+#rec-badge b {
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 底栏 ---------- */
+#bottombar {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 1fr) minmax(160px, 1.1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 0 14px;
+  background: var(--panel-solid);
+  border-top: 1px solid var(--line);
+}
+
+.play {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.play button {
+  height: 30px;
+  min-width: 34px;
+  padding: 0 9px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.play button:hover {
+  background: rgba(108, 245, 210, 0.1);
+  border-color: var(--line-strong);
+}
+
+.play button.primary {
+  min-width: 46px;
+  color: #04120f;
+  font-weight: 700;
+  background: var(--accent);
+  border-color: transparent;
+  box-shadow: 0 0 16px rgba(108, 245, 210, 0.35);
+}
+
+.play button.primary:hover {
+  filter: brightness(1.08);
+}
+
+.speed,
+.timeline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.speed label,
+.timeline span#timeline-label,
+.speed span#speed-label {
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.speed span#speed-label {
+  min-width: 64px;
+  text-align: right;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline span#timeline-label {
+  min-width: 74px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: #9fd8ff;
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  min-width: 60px;
+  height: 4px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(108, 245, 210, 0.55), rgba(53, 184, 255, 0.45));
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #eafff9;
+  border: 2px solid #0b1a1f;
+  box-shadow: 0 0 8px rgba(108, 245, 210, 0.7);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #eafff9;
+  border: 2px solid #0b1a1f;
+}
+
+.rec {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* ---------- 模态框 ---------- */
+#modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+}
+
+#modal.hidden {
+  display: none;
+}
+
+.modal-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(2, 5, 8, 0.72);
+  backdrop-filter: blur(3px);
+}
+
+.modal-card {
+  position: relative;
+  width: min(880px, calc(100vw - 48px));
+  max-height: min(80vh, 720px);
+  display: flex;
+  flex-direction: column;
+  border-radius: 14px;
+  background: #0b1219;
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.7);
+  overflow: hidden;
+}
+
+.modal-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.modal-card h2 {
+  margin: 0;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+#modal-body {
+  padding: 14px;
+  overflow: auto;
+}
+
+#modal.close-anim {
+  opacity: 0;
+}
+
+/* ---------- 通用小组件 ---------- */
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.grow {
+  flex: 1;
+}
+
+.muted {
+  color: var(--dim);
+}
+
+.small {
+  font-size: 11.5px;
+}
+
+.hidden {
+  display: none !important;
+}
+
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  gap: 10px;
+}
+
+.snap-card {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.022);
+  overflow: hidden;
+  cursor: pointer;
+  transition:
+    border-color 0.14s,
+    transform 0.12s;
+}
+
+.snap-card:hover {
+  border-color: rgba(108, 245, 210, 0.55);
+  transform: translateY(-1px);
+}
+
+.snap-card img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  display: block;
+  background: #0a1017;
+}
+
+.snap-meta {
+  padding: 6px 8px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.snap-meta b {
+  font-size: 11.5px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.snap-meta span {
+  font-size: 10px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.snap-actions {
+  display: flex;
+  gap: 5px;
+  padding: 0 8px 8px;
+}
+
+.snap-actions button {
+  flex: 1;
+  height: 24px;
+  font-size: 10.5px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+}
+
+.snap-actions button:hover {
+  background: rgba(108, 245, 210, 0.12);
+}
+
+.empty {
+  padding: 34px 12px;
+  text-align: center;
+  color: var(--dim);
+  font-size: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+}
+
+textarea.rle {
+  width: 100%;
+  min-height: 220px;
+  resize: vertical;
+  padding: 10px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #070c11;
+  color: var(--text);
+  font: 12px/1.5 ui-monospace, "Cascadia Code", Consolas, monospace;
+  outline: none;
+}
+
+textarea.rle:focus {
+  border-color: var(--line-strong);
+}
+
+.btn-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.btn.primary {
+  color: #04120f;
+  background: var(--accent);
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.btn.primary:hover {
+  filter: brightness(1.08);
+}
+
+.input {
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: #070c11;
+  outline: none;
+}
+
+.input:focus {
+  border-color: var(--line-strong);
+}
+
+kbd {
+  display: inline-block;
+  min-width: 18px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.05);
+  font: 10.5px/1.5 ui-monospace, Consolas, monospace;
+  text-align: center;
+  color: var(--text);
+}
+
+.help-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 7px 14px;
+  font-size: 12px;
+}
+
+.help-list dt {
+  color: var(--dim);
+}
+
+/* 片段播放器 */
+.clip-stage {
+  position: relative;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #05080c;
+  aspect-ratio: 16 / 10;
+}
+
+.clip-stage canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 78px;
+  transform: translate(-50%, 10px);
+  padding: 8px 16px;
+  border-radius: 999px;
+  background: rgba(10, 22, 26, 0.94);
+  border: 1px solid rgba(108, 245, 210, 0.4);
+  color: var(--accent);
+  font-size: 12px;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.2s,
+    transform 0.2s;
+  z-index: 80;
+}
+
+#toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (max-width: 900px) {
+  .brand-text small {
+    display: none;
+  }
+  .stats .stat:nth-child(4) {
+    display: none;
+  }
+  #bottombar {
+    grid-template-columns: auto 1fr auto;
+  }
+  .timeline {
+    display: none;
+  }
+  #palette {
+    width: 190px;
+  }
+}
+</style>
+  </head>
+  <body>
+    <div id="app">
+      <header id="topbar">
+        <div class="brand">
+          <span class="logo"></span>
+          <div class="brand-text">
+            <strong>生命游戏</strong>
+            <small>Conway's Game of Life</small>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><label>代数</label><b id="stat-gen">0</b></div>
+          <div class="stat"><label>人口</label><b id="stat-pop">0</b></div>
+          <div class="stat"><label>速度</label><b id="stat-speed">10</b><i>代/秒</i></div>
+          <div class="stat"><label>可回溯</label><b id="stat-hist">1</b><i>代</i></div>
+        </div>
+
+        <div class="top-actions">
+          <select id="sel-size" title="世界尺寸">
+            <option value="512">512 × 512</option>
+            <option value="1024" selected>1024 × 1024</option>
+            <option value="2048">2048 × 2048</option>
+          </select>
+          <select id="sel-edge" title="边界规则">
+            <option value="wrap">环绕边界</option>
+            <option value="dead">死亡边界</option>
+          </select>
+          <button class="chip" id="tgl-grid" title="网格 (G)">网格</button>
+          <button class="chip" id="tgl-glow" title="光晕 (L)">光晕</button>
+          <button class="btn" id="btn-snapshots">存档</button>
+          <button class="btn" id="btn-clips">片段</button>
+          <button class="btn" id="btn-rle">RLE</button>
+          <button class="btn icon" id="btn-help" title="帮助">?</button>
+        </div>
+      </header>
+
+      <main id="stage">
+        <canvas id="board"></canvas>
+
+        <div id="toolbar">
+          <button class="tool active" data-tool="brush" title="画笔 (B)">✎</button>
+          <button class="tool" data-tool="erase" title="橡皮 (E)">⌫</button>
+          <button class="tool" data-tool="line" title="直线 (L)">╱</button>
+          <button class="tool" data-tool="rect" title="矩形 (U)">▭</button>
+          <button class="tool" data-tool="stamp" title="贴图 (S)">▣</button>
+          <button class="tool" data-tool="pan" title="平移 (H / 右键)">✋</button>
+        </div>
+
+        <aside id="palette">
+          <header>
+            <h3>图案库</h3>
+            <button id="btn-palette-collapse" class="icon" title="收起">›</button>
+          </header>
+          <div id="palette-list"></div>
+          <footer>
+            <button id="btn-rotate" title="旋转 (R)">旋转 0°</button>
+            <button id="btn-mirror" title="镜像 (M)">镜像</button>
+          </footer>
+        </aside>
+
+        <div id="hint">
+          <span>拖拽绘制</span><i>·</i><span>右键 / 空格拖拽平移</span><i>·</i><span>滚轮缩放</span>
+        </div>
+
+        <div id="rec-badge" class="hidden">● 录制中 <b id="rec-count">0</b> 代</div>
+      </main>
+
+      <footer id="bottombar">
+        <div class="play">
+          <button id="btn-prev" title="上一代 (←)">◀</button>
+          <button id="btn-play" class="primary" title="播放 / 暂停 (P)">▶</button>
+          <button id="btn-next" title="下一代 (→)">▶|</button>
+          <button id="btn-clear" title="清空世界">清空</button>
+          <button id="btn-random" title="随机播种">随机</button>
+        </div>
+
+        <div class="speed">
+          <label for="speed">速度</label>
+          <input id="speed" type="range" min="0" max="100" step="1" value="52" />
+          <span id="speed-label">10 代/秒</span>
+          <button class="chip" id="btn-unlimited" title="不限速">∞</button>
+        </div>
+
+        <div class="timeline">
+          <input id="timeline" type="range" min="0" max="0" step="1" value="0" />
+          <span id="timeline-label">第 0 代</span>
+        </div>
+
+        <div class="rec">
+          <button id="btn-record" class="btn danger">● 录制片段</button>
+        </div>
+      </footer>
+    </div>
+
+    <div id="modal" class="hidden">
+      <div class="modal-mask" data-close="1"></div>
+      <div class="modal-card" role="dialog" aria-modal="true">
+        <header>
+          <h2 id="modal-title">标题</h2>
+          <button class="icon" id="modal-close" title="关闭">×</button>
+        </header>
+        <div id="modal-body"></div>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+    <script>
+"use strict";
+(() => {
+  // src/core/world.ts
+  var EMPTY_INT32 = new Int32Array(0);
+  var World = class {
+    width;
+    height;
+    /** 带 padding 的存储，步长 = width + 2。 */
+    stride;
+    cells;
+    age;
+    edge = "wrap";
+    gen = 0;
+    population = 0;
+    nextBuf;
+    changeBuf;
+    /** 活细胞包围盒（右开区间）。population === 0 时视为空。 */
+    bx0 = 0;
+    by0 = 0;
+    bx1 = 0;
+    by1 = 0;
+    /** 待重绘的渲染脏矩形。 */
+    dx0 = 0;
+    dy0 = 0;
+    dx1 = 0;
+    dy1 = 0;
+    constructor(width, height) {
+      this.width = width;
+      this.height = height;
+      this.stride = width + 2;
+      const size = (width + 2) * (height + 2);
+      this.cells = new Uint8Array(size);
+      this.age = new Uint8Array(size);
+      this.nextBuf = new Uint8Array(size);
+      this.changeBuf = new Int32Array(width * height);
+    }
+    // ── 坐标与读写 ──────────────────────────────────────────────
+    /** 未填充索引 -> padding 索引 */
+    pidx(idx) {
+      const x = idx % this.width;
+      return ((idx - x) / this.width + 1) * this.stride + x + 1;
+    }
+    get(x, y) {
+      if (x < 0 || y < 0 || x >= this.width || y >= this.height) return 0;
+      return this.cells[(y + 1) * this.stride + x + 1];
+    }
+    set(x, y, v) {
+      if (x < 0 || y < 0 || x >= this.width || y >= this.height) return;
+      const i = (y + 1) * this.stride + x + 1;
+      const old = this.cells[i];
+      if (old === (v ? 1 : 0)) return;
+      this.cells[i] = v ? 1 : 0;
+      if (v) {
+        this.age[i] = 1;
+        this.population++;
+        this.expandBBox(x, y);
+      } else {
+        this.age[i] = 0;
+        this.population--;
+        if (this.population <= 0) {
+          this.population = 0;
+          this.clearBBox();
+        }
+      }
+      this.markDirty(x, y, x + 1, y + 1);
+    }
+    /** 直接写入 padding 索引（历史回放用），不做脏矩形/包围盒维护。 */
+    writePadded(i, v) {
+      this.cells[i] = v;
+      this.age[i] = v ? 1 : 0;
+    }
+    // ── 包围盒 ──────────────────────────────────────────────────
+    expandBBox(x, y) {
+      if (this.population === 1) {
+        this.bx0 = x;
+        this.by0 = y;
+        this.bx1 = x + 1;
+        this.by1 = y + 1;
+        return;
+      }
+      if (x < this.bx0) this.bx0 = x;
+      if (y < this.by0) this.by0 = y;
+      if (x + 1 > this.bx1) this.bx1 = x + 1;
+      if (y + 1 > this.by1) this.by1 = y + 1;
+    }
+    clearBBox() {
+      this.bx0 = this.by0 = this.bx1 = this.by1 = 0;
+    }
+    /** 重新计算人口与包围盒（粘贴 / RLE 载入 / 历史恢复后用）。 */
+    recompute() {
+      let n = 0;
+      let x0 = this.width;
+      let y0 = this.height;
+      let x1 = 0;
+      let y1 = 0;
+      const { width: W, height: H, stride: S, cells } = this;
+      for (let y = 0; y < H; y++) {
+        const row = (y + 1) * S;
+        for (let x = 0; x < W; x++) {
+          if (cells[row + x + 1]) {
+            n++;
+            if (x < x0) x0 = x;
+            if (x + 1 > x1) x1 = x + 1;
+            if (y < y0) y0 = y;
+            if (y + 1 > y1) y1 = y + 1;
+          }
+        }
+      }
+      this.population = n;
+      if (n === 0) {
+        this.clearBBox();
+      } else {
+        this.bx0 = x0;
+        this.by0 = y0;
+        this.bx1 = x1;
+        this.by1 = y1;
+      }
+    }
+    liveBBox() {
+      if (this.population === 0) return { x0: 0, y0: 0, x1: 0, y1: 0 };
+      return { x0: this.bx0, y0: this.by0, x1: this.bx1, y1: this.by1 };
+    }
+    // ── 渲染脏矩形 ──────────────────────────────────────────────
+    markDirty(x0, y0, x1, y1) {
+      if (this.dx1 <= this.dx0 || this.dy1 <= this.dy0) {
+        this.dx0 = x0;
+        this.dy0 = y0;
+        this.dx1 = x1;
+        this.dy1 = y1;
+        return;
+      }
+      if (x0 < this.dx0) this.dx0 = x0;
+      if (y0 < this.dy0) this.dy0 = y0;
+      if (x1 > this.dx1) this.dx1 = x1;
+      if (y1 > this.dy1) this.dy1 = y1;
+    }
+    markAllDirty() {
+      this.dx0 = 0;
+      this.dy0 = 0;
+      this.dx1 = this.width;
+      this.dy1 = this.height;
+    }
+    /** 取出并清空脏矩形；无变化时返回 null。 */
+    consumeDirty() {
+      if (this.dx1 <= this.dx0 || this.dy1 <= this.dy0) return null;
+      const r = { x0: this.dx0, y0: this.dy0, x1: this.dx1, y1: this.dy1 };
+      this.dx0 = this.dy0 = this.dx1 = this.dy1 = 0;
+      return r;
+    }
+    // ── 编辑操作 ────────────────────────────────────────────────
+    clear() {
+      this.cells.fill(0);
+      this.age.fill(0);
+      this.nextBuf.fill(0);
+      this.population = 0;
+      this.gen = 0;
+      this.clearBBox();
+      this.markAllDirty();
+    }
+    /** 以给定密度随机播种（限定在中心区域，方便观察）。 */
+    randomize(density = 0.32, rng = Math.random) {
+      this.cells.fill(0);
+      this.age.fill(0);
+      const W = this.width;
+      const H = this.height;
+      const span = Math.min(W, H) * 0.62;
+      const x0 = Math.max(0, (W - span) / 2 | 0);
+      const y0 = Math.max(0, (H - span) / 2 | 0);
+      const x1 = Math.min(W, x0 + span);
+      const y1 = Math.min(H, y0 + span);
+      const S = this.stride;
+      const cells = this.cells;
+      const age = this.age;
+      for (let y = y0; y < y1; y++) {
+        const row = (y + 1) * S;
+        for (let x = x0; x < x1; x++) {
+          if (rng() < density) {
+            cells[row + x + 1] = 1;
+            age[row + x + 1] = 1;
+          }
+        }
+      }
+      this.gen = 0;
+      this.recompute();
+      this.markAllDirty();
+    }
+    /**
+     * 把一块未填充图案贴到世界。返回实际写入的格数。
+     * 越界部分按世界尺寸取模（环绕）或裁剪（死边界）。
+     */
+    stamp(cells, pw, ph, ox, oy) {
+      let written = 0;
+      const W = this.width;
+      const H = this.height;
+      const S = this.stride;
+      const wrap = this.edge === "wrap";
+      for (let y = 0; y < ph; y++) {
+        let wy = oy + y;
+        if (wy < 0 || wy >= H) {
+          if (!wrap) continue;
+          wy = (wy % H + H) % H;
+        }
+        const rowM = (wy + 1) * S;
+        const srcRow = y * pw;
+        for (let x = 0; x < pw; x++) {
+          if (!cells[srcRow + x]) continue;
+          let wx = ox + x;
+          if (wx < 0 || wx >= W) {
+            if (!wrap) continue;
+            wx = (wx % W + W) % W;
+          }
+          const i = rowM + wx + 1;
+          if (!this.cells[i]) {
+            this.cells[i] = 1;
+            this.age[i] = 1;
+            this.population++;
+            written++;
+          }
+        }
+      }
+      this.recompute();
+      this.markAllDirty();
+      return written;
+    }
+    /** 读取一块矩形为未填充图案（用于复制/导出）。 */
+    extract(x0, y0, w, h) {
+      const out = new Uint8Array(w * h);
+      const S = this.stride;
+      for (let y = 0; y < h; y++) {
+        const wy = y0 + y;
+        if (wy < 0 || wy >= this.height) continue;
+        const row = (wy + 1) * S;
+        for (let x = 0; x < w; x++) {
+          const wx = x0 + x;
+          if (wx < 0 || wx >= this.width) continue;
+          out[y * w + x] = this.cells[row + wx + 1];
+        }
+      }
+      return out;
+    }
+    /** 统计矩形内的活细胞数（选区信息用）。 */
+    countRect(x0, y0, w, h) {
+      let n = 0;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) if (this.get(x0 + x, y0 + y)) n++;
+      }
+      return n;
+    }
+    // ── 演化 ────────────────────────────────────────────────────
+    /**
+     * 推进一步。返回本代的翻转清单（null 表示无变化/空世界）。
+     * 编码：出生记 +paddedIndex，死亡记 -(paddedIndex + 1)。
+     */
+    step() {
+      const W = this.width;
+      const H = this.height;
+      const S = this.stride;
+      const cells = this.cells;
+      const next = this.nextBuf;
+      const age = this.age;
+      if (this.population === 0) {
+        this.gen++;
+        return null;
+      }
+      if (this.edge === "wrap") this.refreshBorder();
+      const xSpans = expandedSpans(this.bx0, this.bx1, W, this.edge === "wrap");
+      const ySpans = expandedSpans(this.by0, this.by1, H, this.edge === "wrap");
+      const buf = this.changeBuf;
+      let changeCount = 0;
+      let nx0 = W;
+      let ny0 = H;
+      let nx1 = 0;
+      let ny1 = 0;
+      let pop = this.population;
+      for (let sy = 0; sy < ySpans.length; sy += 2) {
+        const ya = ySpans[sy];
+        const yb = ySpans[sy + 1];
+        for (let sx = 0; sx < xSpans.length; sx += 2) {
+          const xa = xSpans[sx];
+          const xb = xSpans[sx + 1];
+          for (let y = ya; y < yb; y++) {
+            const rowM = y * S;
+            const row0 = (y + 1) * S;
+            const rowP = (y + 2) * S;
+            for (let x = xa; x < xb; x++) {
+              const c = x + 1;
+              const n = cells[rowM + c - 1] + cells[rowM + c] + cells[rowM + c + 1] + cells[row0 + c - 1] + cells[row0 + c + 1] + cells[rowP + c - 1] + cells[rowP + c] + cells[rowP + c + 1];
+              const alive = cells[row0 + c];
+              next[row0 + c] = alive ? n === 2 || n === 3 ? 1 : 0 : n === 3 ? 1 : 0;
+            }
+          }
+        }
+      }
+      for (let sy = 0; sy < ySpans.length; sy += 2) {
+        const ya = ySpans[sy];
+        const yb = ySpans[sy + 1];
+        for (let sx = 0; sx < xSpans.length; sx += 2) {
+          const xa = xSpans[sx];
+          const xb = xSpans[sx + 1];
+          for (let y = ya; y < yb; y++) {
+            const row0 = (y + 1) * S;
+            for (let x = xa; x < xb; x++) {
+              const i = row0 + x + 1;
+              const nv = next[i];
+              const ov = cells[i];
+              if (nv !== ov) {
+                cells[i] = nv;
+                if (nv) {
+                  age[i] = 1;
+                  pop++;
+                  buf[changeCount++] = i;
+                } else {
+                  age[i] = 0;
+                  pop--;
+                  buf[changeCount++] = -(i + 1);
+                }
+              } else if (nv && age[i] < 255) {
+                age[i]++;
+              }
+              if (nv) {
+                if (x < nx0) nx0 = x;
+                if (x + 1 > nx1) nx1 = x + 1;
+                if (y < ny0) ny0 = y;
+                if (y + 1 > ny1) ny1 = y + 1;
+              }
+            }
+          }
+        }
+      }
+      this.population = pop;
+      if (pop === 0) {
+        this.clearBBox();
+      } else {
+        this.bx0 = nx0;
+        this.by0 = ny0;
+        this.bx1 = nx1;
+        this.by1 = ny1;
+      }
+      for (let sy = 0; sy < ySpans.length; sy += 2) {
+        for (let sx = 0; sx < xSpans.length; sx += 2) {
+          this.markDirty(xSpans[sx], ySpans[sy], xSpans[sx + 1], ySpans[sy + 1]);
+        }
+      }
+      this.gen++;
+      if (changeCount === 0) return null;
+      const out = new Int32Array(changeCount);
+      out.set(buf.subarray(0, changeCount));
+      return out;
+    }
+    /** 把世界四周的 padding 环填成对边内容（环形边界）。 */
+    refreshBorder() {
+      const W = this.width;
+      const H = this.height;
+      const S = this.stride;
+      const p = this.cells;
+      for (let x = 0; x < W; x++) {
+        p[x + 1] = p[H * S + x + 1];
+        p[(H + 1) * S + x + 1] = p[S + x + 1];
+      }
+      for (let y = 0; y < H; y++) {
+        const row = (y + 1) * S;
+        p[row] = p[row + W];
+        p[row + W + 1] = p[row + 1];
+      }
+      p[0] = p[H * S + W];
+      p[W + 1] = p[H * S + 1];
+      p[(H + 1) * S] = p[S + W];
+      p[(H + 1) * S + W + 1] = p[S + 1];
+    }
+    /** 用未填充位图覆盖整个世界（历史关键帧恢复用）。 */
+    loadBits(bits, population, gen) {
+      const W = this.width;
+      const H = this.height;
+      const S = this.stride;
+      this.cells.fill(0);
+      this.age.fill(0);
+      for (let y = 0; y < H; y++) {
+        const row = (y + 1) * S;
+        const src = y * W;
+        for (let x = 0; x < W; x++) {
+          if (bits[src + x]) {
+            const i = row + x + 1;
+            this.cells[i] = 1;
+            this.age[i] = 1;
+          }
+        }
+      }
+      this.population = population;
+      this.gen = gen;
+      this.recompute();
+      this.markAllDirty();
+    }
+    /** 导出未填充位图（历史关键帧 / 存档用）。 */
+    toBits() {
+      const W = this.width;
+      const H = this.height;
+      const S = this.stride;
+      const out = new Uint8Array(W * H);
+      for (let y = 0; y < H; y++) {
+        const row = (y + 1) * S;
+        const dst = y * W;
+        for (let x = 0; x < W; x++) out[dst + x] = this.cells[row + x + 1];
+      }
+      return out;
+    }
+    /** 打包成 1 bit/格 的位图（比 Uint8Array 小 8 倍，关键帧存储用）。 */
+    toPacked() {
+      const W = this.width;
+      const H = this.height;
+      const S = this.stride;
+      const out = new Uint8Array((W * H >> 3) + 1);
+      const cells = this.cells;
+      let bit = 0;
+      let acc = 0;
+      let n = 0;
+      let o = 0;
+      for (let y = 0; y < H; y++) {
+        const row = (y + 1) * S;
+        for (let x = 0; x < W; x++) {
+          if (cells[row + x + 1]) acc |= 1 << n;
+          n++;
+          bit++;
+          if (n === 8) {
+            out[o++] = acc;
+            acc = 0;
+            n = 0;
+          }
+        }
+      }
+      if (n) out[o++] = acc;
+      return out.subarray(0, o);
+    }
+    /** 从打包位图恢复整个世界。 */
+    loadPacked(packed, population, gen) {
+      const W = this.width;
+      const H = this.height;
+      const S = this.stride;
+      this.cells.fill(0);
+      this.age.fill(0);
+      let bit = 0;
+      for (let y = 0; y < H; y++) {
+        const row = (y + 1) * S;
+        for (let x = 0; x < W; x++) {
+          if (packed[bit >> 3] >> (bit & 7) & 1) {
+            const i = row + x + 1;
+            this.cells[i] = 1;
+            this.age[i] = 1;
+          }
+          bit++;
+        }
+      }
+      this.population = population;
+      this.gen = gen;
+      this.recompute();
+      this.markAllDirty();
+    }
+    /** 与打包位图比较，返回把世界变成该位图所需的翻转清单。 */
+    diffPacked(packed) {
+      const W = this.width;
+      const H = this.height;
+      const S = this.stride;
+      const cells = this.cells;
+      const out = [];
+      let bit = 0;
+      for (let y = 0; y < H; y++) {
+        const row = (y + 1) * S;
+        for (let x = 0; x < W; x++) {
+          const bitVal = packed[bit >> 3] >> (bit & 7) & 1;
+          bit++;
+          const i = row + x + 1;
+          const cur = cells[i];
+          if (cur !== bitVal) out.push(cur ? -(i + 1) : i);
+        }
+      }
+      return Int32Array.from(out);
+    }
+    /** 从打包位图统计人口。 */
+    populationOfPacked(packed) {
+      let n = 0;
+      const total = this.width * this.height;
+      for (let bit = 0; bit < total; bit++) if (packed[bit >> 3] >> (bit & 7) & 1) n++;
+      return n;
+    }
+    /** 应用一次翻转清单（历史前进用）。返回被改动的矩形并标记脏区。 */
+    applyDelta(codes) {
+      const S = this.stride;
+      const cells = this.cells;
+      const age = this.age;
+      let pop = this.population;
+      let x0 = this.width;
+      let y0 = this.height;
+      let x1 = 0;
+      let y1 = 0;
+      for (let k = 0; k < codes.length; k++) {
+        const code = codes[k];
+        const i = code >= 0 ? code : -code - 1;
+        if (code >= 0) {
+          cells[i] = 1;
+          age[i] = 1;
+          pop++;
+        } else {
+          cells[i] = 0;
+          age[i] = 0;
+          pop--;
+        }
+        const cx = i % S - 1;
+        const cy = (i - cx - 1) / S - 1;
+        if (cx < x0) x0 = cx;
+        if (cy < y0) y0 = cy;
+        if (cx + 1 > x1) x1 = cx + 1;
+        if (cy + 1 > y1) y1 = cy + 1;
+      }
+      this.population = pop < 0 ? 0 : pop;
+      if (codes.length) {
+        this.markDirty(x0, y0, x1, y1);
+        this.expandBBox(x0, y0);
+        this.expandBBox(x1 - 1, y1 - 1);
+      }
+      return { x0, y0, x1, y1 };
+    }
+    /** 反向应用一次翻转清单（历史后退用）。 */
+    revertDelta(codes) {
+      const S = this.stride;
+      const cells = this.cells;
+      const age = this.age;
+      let pop = this.population;
+      let x0 = this.width;
+      let y0 = this.height;
+      let x1 = 0;
+      let y1 = 0;
+      for (let k = 0; k < codes.length; k++) {
+        const code = codes[k];
+        const i = code >= 0 ? code : -code - 1;
+        if (code >= 0) {
+          cells[i] = 0;
+          age[i] = 0;
+          pop--;
+        } else {
+          cells[i] = 1;
+          age[i] = 1;
+          pop++;
+        }
+        const cx = i % S - 1;
+        const cy = (i - cx - 1) / S - 1;
+        if (cx < x0) x0 = cx;
+        if (cy < y0) y0 = cy;
+        if (cx + 1 > x1) x1 = cx + 1;
+        if (cy + 1 > y1) y1 = cy + 1;
+      }
+      this.population = pop < 0 ? 0 : pop;
+      if (codes.length) {
+        this.markDirty(x0, y0, x1, y1);
+        this.expandBBox(x0, y0);
+        this.expandBBox(x1 - 1, y1 - 1);
+      }
+      return { x0, y0, x1, y1 };
+    }
+  };
+  function expandedSpans(a, b, n, wrap) {
+    const s = a - 1;
+    const e = b + 1;
+    if (!wrap) {
+      return [Math.max(0, s), Math.min(n, e)];
+    }
+    if (s >= 0 && e <= n) return [s, e];
+    if (s < 0 && e > n) return [0, n];
+    if (s < 0) {
+      const tail = n + s;
+      if (e >= tail) return [0, n];
+      return [tail, n, 0, e];
+    }
+    const head = e - n;
+    if (s <= head) return [0, n];
+    return [s, n, 0, head];
+  }
+
+  // src/core/history.ts
+  var EMPTY = new Int32Array(0);
+  var History = class {
+    world;
+    deltas = /* @__PURE__ */ new Map();
+    keyframes = /* @__PURE__ */ new Map();
+    minGen = 0;
+    maxGen = 0;
+    bytes = 0;
+    lastKfGen = 0;
+    lastKfAt = 0;
+    /** 最多保留多少代。 */
+    limitGens = 3e3;
+    /** 内存上限（字节）。 */
+    limitBytes = 32 * 1024 * 1024;
+    /** 关键帧间隔（代）。 */
+    keyframeEvery = 64;
+    /** 录制片段期间暂停淘汰，避免录到一半丢了起点。 */
+    protectedRange = null;
+    constructor(world2) {
+      this.world = world2;
+      this.reset();
+    }
+    /** 以世界当前状态作为新的历史起点。 */
+    reset() {
+      this.deltas.clear();
+      this.keyframes.clear();
+      this.bytes = 0;
+      const gen = this.world.gen;
+      this.captureKeyframe(gen);
+      this.minGen = gen;
+      this.maxGen = gen;
+      this.protectedRange = null;
+    }
+    captureKeyframe(gen) {
+      const old = this.keyframes.get(gen);
+      if (old) this.bytes -= old.packed.byteLength;
+      const kf = {
+        packed: this.world.toPacked(),
+        population: this.world.population
+      };
+      this.keyframes.set(gen, kf);
+      this.bytes += kf.packed.byteLength;
+      this.lastKfGen = gen;
+      this.lastKfAt = performance.now();
+    }
+    /**
+     * 记录一代的演化结果。
+     * @param gen 演化后的代数
+     * @param codes world.step() 返回的翻转清单（null 表示无变化）
+     */
+    record(gen, codes) {
+      if (gen - 1 < this.maxGen) this.truncate(gen - 1);
+      this.maxGen = gen;
+      this.setDelta(gen, codes && codes.length ? codes : EMPTY);
+      this.maybeKeyframe(gen);
+      this.evict();
+    }
+    /**
+     * 用户编辑（画/擦/贴图）后提交一代的历史。
+     * 世界此时已经是编辑后的状态；内部会先回到 gen-1 再与快照求差。
+     */
+    markEdited(gen, packed, population) {
+      this.truncate(gen);
+      this.maxGen = gen;
+      if (gen > this.minGen) {
+        this.forceSeek(gen - 1);
+        const codes = this.world.diffPacked(packed);
+        this.setDelta(gen, codes.length ? codes : EMPTY);
+        this.maxGen = gen;
+      } else {
+        const old = this.deltas.get(gen);
+        if (old) {
+          this.bytes -= old.byteLength;
+          this.deltas.delete(gen);
+        }
+        this.minGen = gen;
+      }
+      const oldKf = this.keyframes.get(gen);
+      if (oldKf) this.bytes -= oldKf.packed.byteLength;
+      const kf = { packed, population };
+      this.keyframes.set(gen, kf);
+      this.bytes += packed.byteLength;
+      this.lastKfGen = gen;
+      this.lastKfAt = performance.now();
+      this.world.loadPacked(packed, population, gen);
+      this.evict();
+    }
+    /** 跳到指定代数（自动选择"逐代重放"或"从关键帧重放"）。 */
+    seek(target) {
+      const w = this.world;
+      const t = Math.max(this.minGen, Math.min(this.maxGen, Math.round(target)));
+      if (t === w.gen) return;
+      if (t > w.gen) {
+        let g = w.gen + 1;
+        for (; g <= t; g++) {
+          const d = this.deltas.get(g);
+          if (!d) break;
+          w.applyDelta(d);
+        }
+        w.gen = g - 1;
+      } else if (w.gen - t <= this.keyframeEvery) {
+        for (let g = w.gen; g > t; g--) {
+          const d = this.deltas.get(g);
+          if (!d) break;
+          w.revertDelta(d);
+        }
+        w.gen = t;
+      } else {
+        const k = this.keyframeLE(t);
+        const kf = this.keyframes.get(k);
+        if (!kf) {
+          w.gen = t;
+          return;
+        }
+        w.loadPacked(kf.packed, kf.population, k);
+        for (let g = k + 1; g <= t; g++) {
+          const d = this.deltas.get(g);
+          if (!d) break;
+          w.applyDelta(d);
+        }
+        w.gen = t;
+      }
+    }
+    /** 截取 [g0, g1] 的演化片段（不改变世界当前状态）。 */
+    extractClip(g0, g1) {
+      const a = Math.max(this.minGen, g0);
+      const b = Math.min(this.maxGen, g1);
+      if (b < a) return null;
+      const keep = this.world.gen;
+      this.seek(a);
+      const start = {
+        packed: this.world.toPacked(),
+        population: this.world.population
+      };
+      const ds = [];
+      for (let g = a + 1; g <= b; g++) ds.push(this.deltas.get(g) ?? EMPTY);
+      this.seek(keep);
+      return { startGen: a, endGen: b, start, deltas: ds };
+    }
+    stats() {
+      return {
+        minGen: this.minGen,
+        maxGen: this.maxGen,
+        gens: this.maxGen - this.minGen,
+        bytes: this.bytes,
+        keyframes: this.keyframes.size,
+        deltas: this.deltas.size
+      };
+    }
+    clearFuture() {
+      this.truncate(this.world.gen);
+    }
+    // ---- 内部 ----
+    /** 不看当前世界内容，强制从最近的关键帧重放到 t（世界内容被外部改过之后用）。 */
+    forceSeek(t) {
+      const k = this.keyframeLE(t);
+      const kf = this.keyframes.get(k);
+      if (!kf) return;
+      this.world.loadPacked(kf.packed, kf.population, k);
+      for (let g = k + 1; g <= t; g++) {
+        const d = this.deltas.get(g);
+        if (!d) break;
+        this.world.applyDelta(d);
+      }
+      this.world.gen = t;
+    }
+    setDelta(gen, codes) {
+      const old = this.deltas.get(gen);
+      if (old) this.bytes -= old.byteLength;
+      this.deltas.set(gen, codes);
+      this.bytes += codes.byteLength;
+    }
+    truncate(upTo) {
+      if (upTo < this.minGen) return;
+      for (const [g, c] of this.deltas) {
+        if (g > upTo) {
+          this.bytes -= c.byteLength;
+          this.deltas.delete(g);
+        }
+      }
+      for (const [g, k] of this.keyframes) {
+        if (g > upTo) {
+          this.bytes -= k.packed.byteLength;
+          this.keyframes.delete(g);
+        }
+      }
+      if (this.maxGen > upTo) this.maxGen = upTo;
+    }
+    maybeKeyframe(gen) {
+      const gap = gen - this.lastKfGen;
+      if (gap <= 0) return;
+      const now = performance.now();
+      if (gap >= 512 || gap >= this.keyframeEvery && now - this.lastKfAt > 24) {
+        this.captureKeyframe(gen);
+      }
+    }
+    keyframeLE(t) {
+      let best = this.minGen;
+      for (const g of this.keyframes.keys()) {
+        if (g <= t && g > best) best = g;
+      }
+      return best;
+    }
+    evict() {
+      if (this.protectedRange) return;
+      let guard = 0;
+      while ((this.maxGen - this.minGen > this.limitGens || this.bytes > this.limitBytes) && guard++ < 256) {
+        const kfs = [...this.keyframes.keys()].sort((a, b) => a - b);
+        if (kfs.length < 2) break;
+        const nextMin = kfs[1];
+        if (nextMin <= this.minGen) break;
+        for (const [g, c] of this.deltas) {
+          if (g <= nextMin) {
+            this.bytes -= c.byteLength;
+            this.deltas.delete(g);
+          }
+        }
+        for (const [g, k] of this.keyframes) {
+          if (g < nextMin) {
+            this.bytes -= k.packed.byteLength;
+            this.keyframes.delete(g);
+          }
+        }
+        this.minGen = nextMin;
+      }
+    }
+  };
+
+  // src/core/pattern-data.ts
+  var PATTERN_ENTRIES = [
+    {
+      id: "block",
+      name: "方块",
+      en: "Block",
+      category: "静物",
+      rows: [
+        "OO",
+        "OO"
+      ],
+      period: 1,
+      move: [0, 0]
+    },
+    {
+      id: "beehive",
+      name: "蜂巢",
+      en: "Beehive",
+      category: "静物",
+      rows: [
+        ".OO.",
+        "O..O",
+        ".OO."
+      ],
+      period: 1,
+      move: [0, 0]
+    },
+    {
+      id: "loaf",
+      name: "面包",
+      en: "Loaf",
+      category: "静物",
+      rows: [
+        ".OO.",
+        "O..O",
+        ".O.O",
+        "..O."
+      ],
+      period: 1,
+      move: [0, 0]
+    },
+    {
+      id: "boat",
+      name: "小船",
+      en: "Boat",
+      category: "静物",
+      rows: [
+        "OO.",
+        "O.O",
+        ".O."
+      ],
+      period: 1,
+      move: [0, 0]
+    },
+    {
+      id: "tub",
+      name: "浴缸",
+      en: "Tub",
+      category: "静物",
+      rows: [
+        ".O.",
+        "O.O",
+        ".O."
+      ],
+      period: 1,
+      move: [0, 0]
+    },
+    {
+      id: "pond",
+      name: "池塘",
+      en: "Pond",
+      category: "静物",
+      rows: [
+        ".OO.",
+        "O..O",
+        "O..O",
+        ".OO."
+      ],
+      period: 1,
+      move: [0, 0]
+    },
+    {
+      id: "ship",
+      name: "大船",
+      en: "Ship",
+      category: "静物",
+      rows: [
+        "OO.",
+        "O.O",
+        ".OO"
+      ],
+      period: 1,
+      move: [0, 0]
+    },
+    {
+      id: "blinker",
+      name: "闪光灯",
+      en: "Blinker",
+      category: "振荡子",
+      rows: [
+        "OOO"
+      ],
+      period: 2,
+      move: [0, 0]
+    },
+    {
+      id: "toad",
+      name: "蟾蜍",
+      en: "Toad",
+      category: "振荡子",
+      rows: [
+        ".OOO",
+        "OOO."
+      ],
+      period: 2,
+      move: [0, 0]
+    },
+    {
+      id: "beacon",
+      name: "灯塔",
+      en: "Beacon",
+      category: "振荡子",
+      rows: [
+        "OO..",
+        "O...",
+        "...O",
+        "..OO"
+      ],
+      period: 2,
+      move: [0, 0]
+    },
+    {
+      id: "pulsar",
+      name: "脉冲星",
+      en: "Pulsar",
+      category: "振荡子",
+      rows: [
+        "..OOO...OOO..",
+        ".............",
+        "O....O.O....O",
+        "O....O.O....O",
+        "O....O.O....O",
+        "..OOO...OOO..",
+        ".............",
+        "..OOO...OOO..",
+        "O....O.O....O",
+        "O....O.O....O",
+        "O....O.O....O",
+        ".............",
+        "..OOO...OOO.."
+      ],
+      period: 3,
+      move: [0, 0]
+    },
+    {
+      id: "pentadecathlon",
+      name: "十五面体",
+      en: "Pentadecathlon",
+      category: "振荡子",
+      rows: [
+        "..O....O..",
+        "OO.OOOO.OO",
+        "..O....O.."
+      ],
+      period: 15,
+      move: [0, 0]
+    },
+    {
+      id: "glider",
+      name: "滑翔机",
+      en: "Glider",
+      category: "飞船",
+      rows: [
+        ".O.",
+        "..O",
+        "OOO"
+      ],
+      period: 4,
+      move: [1, 1]
+    },
+    {
+      id: "lwss",
+      name: "轻型飞船",
+      en: "Lightweight Spaceship",
+      category: "飞船",
+      rows: [
+        ".O..O",
+        "O....",
+        "O...O",
+        "OOOO."
+      ],
+      period: 4,
+      move: [-2, 0]
+    },
+    {
+      id: "mwss",
+      name: "中型飞船",
+      en: "Middleweight Spaceship",
+      category: "飞船",
+      rows: [
+        "...O..",
+        ".O...O",
+        "O.....",
+        "O....O",
+        "OOOOO."
+      ],
+      period: 4,
+      move: [-2, 0]
+    },
+    {
+      id: "hwss",
+      name: "重型飞船",
+      en: "Heavyweight Spaceship",
+      category: "飞船",
+      rows: [
+        "...OO..",
+        ".O....O",
+        "O......",
+        "O.....O",
+        "OOOOOO."
+      ],
+      period: 4,
+      move: [-2, 0]
+    },
+    {
+      id: "gosperglidergun",
+      name: "高斯帕滑翔机枪",
+      en: "Gosper Glider Gun",
+      category: "枪",
+      rows: [
+        "........................O...........",
+        "......................O.O...........",
+        "............OO......OO............OO",
+        "...........O...O....OO............OO",
+        "OO........O.....O...OO..............",
+        "OO........O...O.OO....O.O...........",
+        "..........O.....O.......O...........",
+        "...........O...O....................",
+        "............OO......................"
+      ],
+      period: 30,
+      move: null
+    },
+    {
+      id: "rpentomino",
+      name: "R 五连块",
+      en: "R-pentomino",
+      category: "长寿者",
+      rows: [
+        ".OO",
+        "OO.",
+        ".O."
+      ],
+      period: null,
+      move: null
+    },
+    {
+      id: "acorn",
+      name: "橡果",
+      en: "Acorn",
+      category: "长寿者",
+      rows: [
+        ".O.....",
+        "...O...",
+        "OO..OOO"
+      ],
+      period: null,
+      move: null
+    },
+    {
+      id: "diehard",
+      name: "顽固者",
+      en: "Diehard",
+      category: "长寿者",
+      rows: [
+        "......O.",
+        "OO......",
+        ".O...OOO"
+      ],
+      period: null,
+      move: null
+    }
+  ];
+
+  // src/core/patterns.ts
+  function parseRows(rows) {
+    const h = rows.length;
+    let w = 0;
+    for (const r of rows) if (r.length > w) w = r.length;
+    const cells = new Uint8Array(w * h);
+    let population = 0;
+    for (let y = 0; y < h; y++) {
+      const row = rows[y];
+      for (let x = 0; x < w; x++) {
+        const ch = row[x] ?? ".";
+        if (ch === "O" || ch === "#" || ch === "*") {
+          cells[y * w + x] = 1;
+          population++;
+        }
+      }
+    }
+    return { w, h, cells, population };
+  }
+  var PATTERNS = PATTERN_ENTRIES.map((e) => {
+    const { w, h, cells, population } = parseRows(e.rows);
+    return {
+      id: e.id,
+      name: e.name,
+      en: e.en,
+      category: e.category,
+      w,
+      h,
+      cells,
+      period: e.period ?? -1,
+      move: e.move,
+      population,
+      still: e.period === 1
+    };
+  });
+  var PATTERN_BY_ID = new Map(PATTERNS.map((p) => [p.id, p]));
+  var CATEGORY_ORDER = ["静物", "振荡子", "飞船", "枪", "长寿者"];
+  function patternSize(pat, rotation) {
+    const rot = (rotation % 4 + 4) % 4;
+    const swap = rot === 1 || rot === 3;
+    return { w: swap ? pat.h : pat.w, h: swap ? pat.w : pat.h };
+  }
+  function stampPattern(world2, pat, x, y, rotation = 0, mirror = false) {
+    const r = renderPattern(pat, rotation, mirror);
+    world2.stamp(r.cells, r.w, r.h, x, y);
+    return { x0: x, y0: y, x1: x + r.w, y1: y + r.h };
+  }
+  function renderPattern(pat, rotation, mirror) {
+    const { cells, w, h } = pat;
+    const rot = (rotation % 4 + 4) % 4;
+    const swap = rot === 1 || rot === 3;
+    const ow = swap ? h : w;
+    const oh = swap ? w : h;
+    const out = new Uint8Array(ow * oh);
+    for (let sy = 0; sy < h; sy++) {
+      for (let sx = 0; sx < w; sx++) {
+        if (!cells[sy * w + sx]) continue;
+        const dx = mirror ? w - 1 - sx : sx;
+        const dy = sy;
+        let rx;
+        let ry;
+        if (rot === 0) {
+          rx = dx;
+          ry = dy;
+        } else if (rot === 1) {
+          rx = h - 1 - dy;
+          ry = dx;
+        } else if (rot === 2) {
+          rx = w - 1 - dx;
+          ry = h - 1 - dy;
+        } else {
+          rx = dy;
+          ry = w - 1 - dx;
+        }
+        out[ry * ow + rx] = 1;
+      }
+    }
+    return { w: ow, h: oh, cells: out };
+  }
+
+  // src/core/rle.ts
+  var DEFAULT_RULE = "B3/S23";
+  function cropBitmap(cells, width, height) {
+    let x0 = width;
+    let y0 = height;
+    let x1 = -1;
+    let y1 = -1;
+    for (let y = 0; y < height; y++) {
+      const row = y * width;
+      for (let x = 0; x < width; x++) {
+        if (cells[row + x]) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+      }
+    }
+    if (x1 < 0) return { width: 1, height: 1, cells: new Uint8Array(1) };
+    const w = x1 - x0 + 1;
+    const h = y1 - y0 + 1;
+    const out = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) out[y * w + x] = cells[(y + y0) * width + (x + x0)];
+    }
+    return { width: w, height: h, cells: out };
+  }
+  function parsePatternText(text) {
+    const lines = text.replace(/\uFEFF/g, "").replace(/\r\n?/g, "\n").split("\n");
+    const comments = [];
+    let name;
+    let rule;
+    const bodyLines = [];
+    for (const raw of lines) {
+      const line = raw.trim();
+      if (!line) continue;
+      if (line[0] === "#") {
+        const v = line.slice(1).trim();
+        const tag = v[0] ?? "";
+        const rest = v.slice(1).trim();
+        if (tag === "N" || tag === "n") name = rest;
+        else if (tag === "C" || tag === "c" || tag === "D" || tag === "d") comments.push(rest);
+        if (!rule) {
+          const m = /B[0-9]*\s*\/\s*S[0-9]*/i.exec(v);
+          if (m) rule = m[0].replace(/\s+/g, "").toUpperCase();
+        }
+        continue;
+      }
+      bodyLines.push(line);
+    }
+    const body = bodyLines.join("\n");
+    if (!body.trim()) return null;
+    if (/^\s*x\s*=/im.test(body)) return parseRleBody(body, name, rule, comments);
+    return parsePlaintext(body, name, rule, comments);
+  }
+  function parseRleBody(body, name, rule, comments) {
+    const head = /x\s*=\s*(\d+)\s*,\s*y\s*=\s*(\d+)\s*(?:,\s*rule\s*=\s*([^,\n]+))?/i.exec(body);
+    if (!head) return null;
+    const W = Math.max(1, Math.min(1e5, parseInt(head[1], 10)));
+    const H = Math.max(1, Math.min(1e5, parseInt(head[2], 10)));
+    const ruleText = (head[3] ?? "").trim();
+    const cells = new Uint8Array(W * H);
+    const rest = body.slice(head.index + head[0].length);
+    const re = /(\d*)\s*([bo$!])/gi;
+    let x = 0;
+    let y = 0;
+    let m;
+    while (m = re.exec(rest)) {
+      const n = m[1] ? parseInt(m[1], 10) : 1;
+      const t = m[2].toLowerCase();
+      if (t === "b") {
+        x += n;
+      } else if (t === "o") {
+        for (let k = 0; k < n; k++) {
+          if (x >= 0 && x < W && y >= 0 && y < H) cells[y * W + x] = 1;
+          x++;
+        }
+      } else if (t === "$") {
+        y += n;
+        x = 0;
+      } else {
+        break;
+      }
+      if (y >= H) break;
+    }
+    const cropped = cropBitmap(cells, W, H);
+    return {
+      ...cropped,
+      name,
+      rule: ruleText ? ruleText.toUpperCase() : rule,
+      comments
+    };
+  }
+  function parsePlaintext(body, name, rule, comments) {
+    const rows = body.split("\n").map((l) => l.replace(/\s+$/, "")).filter((l) => /[.O*#oX]/.test(l));
+    if (!rows.length) return null;
+    let w = 0;
+    for (const r of rows) if (r.length > w) w = r.length;
+    const h = rows.length;
+    const cells = new Uint8Array(w * h);
+    for (let y = 0; y < h; y++) {
+      const r = rows[y];
+      for (let x = 0; x < r.length; x++) {
+        const c = r[x];
+        if (c === "O" || c === "o" || c === "*" || c === "#" || c === "X") cells[y * w + x] = 1;
+      }
+    }
+    const cropped = cropBitmap(cells, w, h);
+    return { ...cropped, name, rule, comments };
+  }
+  function toRle(bmp, opts = {}) {
+    const { width: W, height: H, cells } = bmp;
+    const lineWidth = opts.lineWidth ?? 70;
+    const lines = [];
+    if (opts.name) lines.push(`#N ${opts.name}`);
+    for (const c of opts.comments ?? []) lines.push(`#C ${c}`);
+    lines.push(`x = ${W}, y = ${H}, rule = ${opts.rule ?? DEFAULT_RULE}`);
+    const tokens = [];
+    let prevRow = -1;
+    for (let y = 0; y < H; y++) {
+      const row = encodeRow(cells, y * W, W);
+      if (!row) continue;
+      const gap = y - prevRow - 1;
+      if (gap > 0) tokens.push(gap > 1 ? `${gap}$` : "$");
+      tokens.push(row);
+      prevRow = y;
+    }
+    tokens.push("!");
+    let cur = "";
+    for (const t of tokens) {
+      if (cur.length + t.length > lineWidth && cur) {
+        lines.push(cur);
+        cur = "";
+      }
+      cur += t;
+    }
+    if (cur) lines.push(cur);
+    return lines.join("\n") + "\n";
+  }
+  function encodeRow(cells, offset, w) {
+    let out = "";
+    let run = 0;
+    let cur = 0;
+    let lastAlive = -1;
+    for (let x = 0; x < w; x++) if (cells[offset + x]) lastAlive = x;
+    if (lastAlive < 0) return "";
+    for (let x = 0; x <= lastAlive; x++) {
+      const v = cells[offset + x] ? 1 : 0;
+      if (v === cur) {
+        run++;
+      } else {
+        out += (run > 1 ? String(run) : "") + (cur ? "o" : "b");
+        cur = v;
+        run = 1;
+      }
+    }
+    out += (run > 1 ? String(run) : "") + (cur ? "o" : "b");
+    return out;
+  }
+
+  // src/core/storage.ts
+  var DB_NAME = "life-studio";
+  var DB_VERSION = 1;
+  var STORE_SNAPSHOTS = "snapshots";
+  var STORE_CLIPS = "clips";
+  var STORE_META = "meta";
+  var LS_PREFIX = "life-studio:";
+  function uid() {
+    return Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+  }
+  function bytesToB64(a) {
+    let s = "";
+    const chunk = 32768;
+    for (let i = 0; i < a.length; i += chunk) {
+      s += String.fromCharCode.apply(null, Array.from(a.subarray(i, i + chunk)));
+    }
+    return btoa(s);
+  }
+  function b64ToBytes(s) {
+    const bin = atob(s);
+    const out = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+  function i32ToB64(a) {
+    return bytesToB64(new Uint8Array(a.buffer, a.byteOffset, a.byteLength));
+  }
+  function b64ToI32(s) {
+    const bytes = b64ToBytes(s);
+    return new Int32Array(bytes.buffer, 0, bytes.byteLength >> 2);
+  }
+  var Store = class {
+    mode = "local";
+    available = true;
+    db = null;
+    async init() {
+      if (typeof indexedDB !== "undefined") {
+        try {
+          this.db = await Promise.race([
+            new Promise((resolve, reject) => {
+              const req = indexedDB.open(DB_NAME, DB_VERSION);
+              req.onupgradeneeded = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains(STORE_SNAPSHOTS)) db.createObjectStore(STORE_SNAPSHOTS, { keyPath: "id" });
+                if (!db.objectStoreNames.contains(STORE_CLIPS)) db.createObjectStore(STORE_CLIPS, { keyPath: "id" });
+                if (!db.objectStoreNames.contains(STORE_META)) db.createObjectStore(STORE_META, { keyPath: "key" });
+              };
+              req.onsuccess = () => resolve(req.result);
+              req.onerror = () => reject(req.error ?? new Error("indexedDB open failed"));
+              req.onblocked = () => reject(new Error("indexedDB blocked"));
+            }),
+            // file:// 下 Chrome 的 indexedDB 可能永远不回调，超时后直接退回 localStorage
+            new Promise(
+              (_, reject) => window.setTimeout(() => reject(new Error("indexedDB timeout")), 1200)
+            )
+          ]);
+          this.mode = "idb";
+          return;
+        } catch {
+          this.db = null;
+        }
+      }
+      try {
+        localStorage.setItem(LS_PREFIX + "probe", "1");
+        localStorage.removeItem(LS_PREFIX + "probe");
+        this.mode = "local";
+      } catch {
+        this.available = false;
+      }
+    }
+    get persistent() {
+      return this.available;
+    }
+    // ---------------- 快照 ----------------
+    async listSnapshots() {
+      if (this.mode === "idb" && this.db) {
+        const rows = await this.idbAll(STORE_SNAPSHOTS);
+        return rows.sort((a, b) => b.created - a.created);
+      }
+      return this.localAll("snapshot").sort((a, b) => b.created - a.created);
+    }
+    async saveSnapshot(rec) {
+      if (this.mode === "idb" && this.db) {
+        await this.idbPut(STORE_SNAPSHOTS, rec);
+        return;
+      }
+      this.localPut("snapshot", rec.id, {
+        ...rec,
+        packed: bytesToB64(rec.packed)
+      });
+    }
+    async deleteSnapshot(id) {
+      if (this.mode === "idb" && this.db) {
+        await this.idbDelete(STORE_SNAPSHOTS, id);
+        return;
+      }
+      localStorage.removeItem(LS_PREFIX + "snapshot:" + id);
+    }
+    // ---------------- 片段 ----------------
+    async listClips() {
+      if (this.mode === "idb" && this.db) {
+        const rows = await this.idbAll(STORE_CLIPS);
+        return rows.sort((a, b) => b.created - a.created);
+      }
+      return this.localAll("clip").sort((a, b) => b.created - a.created);
+    }
+    async saveClip(rec) {
+      if (this.mode === "idb" && this.db) {
+        await this.idbPut(STORE_CLIPS, rec);
+        return;
+      }
+      this.localPut("clip", rec.id, {
+        ...rec,
+        startPacked: bytesToB64(rec.startPacked),
+        deltas: rec.deltas.map(i32ToB64)
+      });
+    }
+    async deleteClip(id) {
+      if (this.mode === "idb" && this.db) {
+        await this.idbDelete(STORE_CLIPS, id);
+        return;
+      }
+      localStorage.removeItem(LS_PREFIX + "clip:" + id);
+    }
+    // ---------------- 自动存档 ----------------
+    async getAutoSave() {
+      if (this.mode === "idb" && this.db) {
+        const row = await this.idbGet(STORE_META, "autosave");
+        return row?.value ?? null;
+      }
+      const raw = localStorage.getItem(LS_PREFIX + "meta:autosave");
+      if (!raw) return null;
+      try {
+        const v = JSON.parse(raw);
+        return { ...v, packed: b64ToBytes(v.packed) };
+      } catch {
+        return null;
+      }
+    }
+    async setAutoSave(rec) {
+      if (this.mode === "idb" && this.db) {
+        await this.idbPut(STORE_META, { key: "autosave", value: rec });
+        return;
+      }
+      this.localSetRaw("meta:autosave", JSON.stringify({ ...rec, packed: bytesToB64(rec.packed) }));
+    }
+    async clearAutoSave() {
+      if (this.mode === "idb" && this.db) {
+        await this.idbDelete(STORE_META, "autosave");
+        return;
+      }
+      localStorage.removeItem(LS_PREFIX + "meta:autosave");
+    }
+    // ---------------- 底层 ----------------
+    idbAll(store2) {
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(store2, "readonly");
+        const req = tx.objectStore(store2).getAll();
+        req.onsuccess = () => resolve(req.result ?? []);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    idbGet(store2, key) {
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(store2, "readonly");
+        const req = tx.objectStore(store2).get(key);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    idbPut(store2, value) {
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(store2, "readwrite");
+        tx.objectStore(store2).put(value);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+        tx.onabort = () => reject(tx.error);
+      });
+    }
+    idbDelete(store2, key) {
+      return new Promise((resolve, reject) => {
+        const tx = this.db.transaction(store2, "readwrite");
+        tx.objectStore(store2).delete(key);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    }
+    localIndexOf(kind) {
+      const out = [];
+      const prefix = LS_PREFIX + kind + ":";
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(prefix)) out.push(k);
+      }
+      return out;
+    }
+    localAll(kind) {
+      const out = [];
+      for (const k of this.localIndexOf(kind)) {
+        const raw = localStorage.getItem(k);
+        if (!raw) continue;
+        try {
+          const v = JSON.parse(raw);
+          if (kind === "snapshot") v.packed = b64ToBytes(v.packed);
+          if (kind === "clip") {
+            v.startPacked = b64ToBytes(v.startPacked);
+            v.deltas = v.deltas.map(b64ToI32);
+          }
+          out.push(v);
+        } catch {
+        }
+      }
+      return out;
+    }
+    localPut(kind, id, value) {
+      this.localSetRaw(kind + ":" + id, JSON.stringify(value));
+    }
+    localSetRaw(key, json) {
+      try {
+        localStorage.setItem(LS_PREFIX + key, json);
+      } catch {
+        this.available = false;
+        throw new Error("本地存储空间不足，导出成文件更保险");
+      }
+    }
+  };
+
+  // src/view/viewport.ts
+  function clamp(v, lo, hi) {
+    return v < lo ? lo : v > hi ? hi : v;
+  }
+  var Viewport = class {
+    /** 每个细胞占多少屏幕像素 */
+    scale = 1;
+    /** 世界 (0,0) 在屏幕上的位置 */
+    ox = 0;
+    oy = 0;
+    minScale = 0.03;
+    maxScale = 64;
+    screenToWorld(px, py) {
+      return { x: (px - this.ox) / this.scale, y: (py - this.oy) / this.scale };
+    }
+    worldToScreen(wx, wy) {
+      return { x: wx * this.scale + this.ox, y: wy * this.scale + this.oy };
+    }
+    clampScale(s) {
+      return clamp(s, this.minScale, this.maxScale);
+    }
+    /** 以屏幕上某点为锚缩放（滚轮缩放用）。 */
+    zoomAt(px, py, factor) {
+      const next = this.clampScale(this.scale * factor);
+      if (next === this.scale) return;
+      const k = next / this.scale;
+      this.ox = px - (px - this.ox) * k;
+      this.oy = py - (py - this.oy) * k;
+      this.scale = next;
+    }
+    panBy(dx, dy) {
+      this.ox += dx;
+      this.oy += dy;
+    }
+    /** 让整个世界铺满视口。 */
+    fit(worldW, worldH, viewW, viewH, pad = 48) {
+      const s = Math.min((viewW - pad) / worldW, (viewH - pad) / worldH);
+      this.scale = this.clampScale(s);
+      this.ox = (viewW - worldW * this.scale) / 2;
+      this.oy = (viewH - worldH * this.scale) / 2;
+    }
+    /** 把世界坐标点放到视口中心。 */
+    centerOn(wx, wy, viewW, viewH) {
+      this.ox = viewW / 2 - wx * this.scale;
+      this.oy = viewH / 2 - wy * this.scale;
+    }
+    getView() {
+      return { scale: this.scale, ox: this.ox, oy: this.oy };
+    }
+    setView(v) {
+      this.scale = this.clampScale(v.scale);
+      this.ox = v.ox;
+      this.oy = v.oy;
+    }
+    /** 当前视口覆盖的世界矩形（右开区间，未裁剪）。 */
+    visibleWorld(viewW, viewH) {
+      return {
+        x0: Math.floor((0 - this.ox) / this.scale),
+        y0: Math.floor((0 - this.oy) / this.scale),
+        x1: Math.ceil((viewW - this.ox) / this.scale),
+        y1: Math.ceil((viewH - this.oy) / this.scale)
+      };
+    }
+  };
+
+  // src/render/renderer.ts
+  var BG = "#05080c";
+  var WORLD_BG = "#0a1017";
+  var DEAD_RGB = [10, 16, 23];
+  var AGE_STOPS = [
+    { age: 1, rgb: [206, 255, 244] },
+    { age: 2, rgb: [162, 255, 229] },
+    { age: 4, rgb: [112, 252, 214] },
+    { age: 8, rgb: [70, 238, 197] },
+    { age: 16, rgb: [44, 212, 182] },
+    { age: 32, rgb: [30, 178, 168] },
+    { age: 64, rgb: [24, 145, 154] },
+    { age: 120, rgb: [21, 112, 136] },
+    { age: 200, rgb: [19, 86, 118] },
+    { age: 255, rgb: [17, 68, 99] }
+  ];
+  function pack(rgb) {
+    return 255 << 24 | rgb[2] << 16 | rgb[1] << 8 | rgb[0];
+  }
+  var PALETTE = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    PALETTE[i] = pack(DEAD_RGB);
+  }
+  for (let s = 0; s < AGE_STOPS.length - 1; s++) {
+    const a = AGE_STOPS[s];
+    const b = AGE_STOPS[s + 1];
+    for (let age = a.age; age <= b.age; age++) {
+      const t = (age - a.age) / (b.age - a.age);
+      const rgb = [
+        Math.round(a.rgb[0] + (b.rgb[0] - a.rgb[0]) * t),
+        Math.round(a.rgb[1] + (b.rgb[1] - a.rgb[1]) * t),
+        Math.round(a.rgb[2] + (b.rgb[2] - a.rgb[2]) * t)
+      ];
+      PALETTE[age] = pack(rgb);
+    }
+  }
+  PALETTE[0] = pack(DEAD_RGB);
+  var LIVE_COLOR = "#6cf5d2";
+  var Renderer = class {
+    canvas;
+    ctx;
+    off;
+    offCtx;
+    img = null;
+    buf = null;
+    world = null;
+    dpr = 1;
+    cssW = 0;
+    cssH = 0;
+    constructor(canvas2) {
+      this.canvas = canvas2;
+      this.ctx = canvas2.getContext("2d", { alpha: false });
+      this.off = document.createElement("canvas");
+      this.offCtx = this.off.getContext("2d", { alpha: false, willReadFrequently: false });
+    }
+    attach(world2) {
+      this.world = world2;
+      this.off.width = world2.width;
+      this.off.height = world2.height;
+      this.img = this.offCtx.createImageData(world2.width, world2.height);
+      this.buf = new Uint32Array(this.img.data.buffer);
+      this.paintAll();
+    }
+    resize(cssW, cssH, dpr = window.devicePixelRatio || 1) {
+      this.dpr = dpr;
+      this.cssW = cssW;
+      this.cssH = cssH;
+      this.canvas.width = Math.max(1, Math.round(cssW * dpr));
+      this.canvas.height = Math.max(1, Math.round(cssH * dpr));
+      this.canvas.style.width = cssW + "px";
+      this.canvas.style.height = cssH + "px";
+    }
+    /** 全量重画离屏位图（切换世界 / 载入存档后调用）。 */
+    paintAll() {
+      const w = this.world;
+      if (!w) return;
+      this.paintRect(0, 0, w.width, w.height);
+    }
+    paintRect(x0, y0, x1, y1) {
+      const w = this.world;
+      const img = this.img;
+      const buf = this.buf;
+      if (!w || !img || !buf) return;
+      const W = w.width;
+      const S = w.stride;
+      const cells = w.cells;
+      const age = w.age;
+      const ax0 = Math.max(0, Math.floor(x0));
+      const ay0 = Math.max(0, Math.floor(y0));
+      const ax1 = Math.min(W, Math.ceil(x1));
+      const ay1 = Math.min(w.height, Math.ceil(y1));
+      if (ax1 <= ax0 || ay1 <= ay0) return;
+      for (let y = ay0; y < ay1; y++) {
+        const base = (y + 1) * S + 1;
+        let o = y * W + ax0;
+        for (let x = ax0; x < ax1; x++) {
+          buf[o++] = cells[base + x] ? PALETTE[age[base + x] || 1] : PALETTE[0];
+        }
+      }
+      this.offCtx.putImageData(img, 0, 0, ax0, ay0, ax1 - ax0, ay1 - ay0);
+    }
+    /** 把世界标脏的区域刷到离屏画布。 */
+    sync() {
+      const w = this.world;
+      if (!w) return;
+      const d = w.consumeDirty();
+      if (!d) return;
+      this.paintRect(d.x0, d.y0, d.x1, d.y1);
+    }
+    render(view2, opts, overlay) {
+      const ctx = this.ctx;
+      ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+      ctx.fillStyle = BG;
+      ctx.fillRect(0, 0, this.cssW, this.cssH);
+      const w = this.world;
+      if (!w) return;
+      const scale = view2.scale;
+      const dx = view2.ox;
+      const dy = view2.oy;
+      const dw = w.width * scale;
+      const dh = w.height * scale;
+      ctx.fillStyle = WORLD_BG;
+      ctx.fillRect(dx, dy, dw, dh);
+      ctx.imageSmoothingEnabled = scale < 1;
+      if (opts.glow && scale >= 0.1) {
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        ctx.filter = `blur(${Math.min(18, Math.max(2, scale * 1.6))}px)`;
+        ctx.drawImage(this.off, dx, dy, dw, dh);
+        ctx.restore();
+      }
+      ctx.drawImage(this.off, dx, dy, dw, dh);
+      if (opts.grid) this.drawGrid(ctx, view2, w);
+      this.drawBorder(ctx, view2, w);
+      if (overlay?.ghost) this.drawGhost(ctx, view2, overlay.ghost);
+      if (overlay?.brush) this.drawBrush(ctx, view2, overlay.brush, w);
+      if (overlay?.shape) this.drawShape(ctx, view2, overlay.shape);
+    }
+    drawShape(ctx, view2, shape) {
+      const s = view2.scale;
+      if (s < 0.12) return;
+      const x0 = Math.min(shape.x0, shape.x1);
+      const y0 = Math.min(shape.y0, shape.y1);
+      const x1 = Math.max(shape.x0, shape.x1);
+      const y1 = Math.max(shape.y0, shape.y1);
+      ctx.save();
+      ctx.fillStyle = shape.erase ? "rgba(255,122,122,0.34)" : "rgba(108,245,210,0.34)";
+      ctx.strokeStyle = shape.erase ? "#ff7a7a" : LIVE_COLOR;
+      ctx.lineWidth = 1;
+      if (shape.kind === "rect") {
+        const w = x1 - x0 + 1;
+        const h = y1 - y0 + 1;
+        ctx.fillRect(view2.ox + x0 * s, view2.oy + y0 * s, w * s, h * s);
+        ctx.globalAlpha = 0.9;
+        ctx.strokeRect(view2.ox + x0 * s - 0.5, view2.oy + y0 * s - 0.5, w * s + 1, h * s + 1);
+      } else {
+        const size = Math.max(1, s);
+        let x = shape.x0;
+        let y = shape.y0;
+        const dx = Math.abs(shape.x1 - shape.x0);
+        const dy = -Math.abs(shape.y1 - shape.y0);
+        const sx = shape.x0 < shape.x1 ? 1 : -1;
+        const sy = shape.y0 < shape.y1 ? 1 : -1;
+        let err = dx + dy;
+        for (; ; ) {
+          ctx.fillRect(view2.ox + x * s, view2.oy + y * s, size, size);
+          if (x === shape.x1 && y === shape.y1) break;
+          const e2 = 2 * err;
+          if (e2 >= dy) {
+            err += dy;
+            x += sx;
+          }
+          if (e2 <= dx) {
+            err += dx;
+            y += sy;
+          }
+        }
+      }
+      ctx.restore();
+    }
+    drawGrid(ctx, view2, w) {
+      const scale = view2.scale;
+      const vis = view2.visibleWorld(this.cssW, this.cssH);
+      const x0 = Math.max(0, vis.x0);
+      const y0 = Math.max(0, vis.y0);
+      const x1 = Math.min(w.width, vis.x1);
+      const y1 = Math.min(w.height, vis.y1);
+      if (x1 <= x0 || y1 <= y0) return;
+      if (scale >= 5) {
+        if (x1 - x0 > 3e3 || y1 - y0 > 3e3) return;
+        ctx.strokeStyle = "rgba(110, 190, 200, 0.13)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (let x = x0; x <= x1; x++) {
+          const px = Math.round(view2.ox + x * scale) + 0.5;
+          ctx.moveTo(px, view2.oy + y0 * scale);
+          ctx.lineTo(px, view2.oy + y1 * scale);
+        }
+        for (let y = y0; y <= y1; y++) {
+          const py = Math.round(view2.oy + y * scale) + 0.5;
+          ctx.moveTo(view2.ox + x0 * scale, py);
+          ctx.lineTo(view2.ox + x1 * scale, py);
+        }
+        ctx.stroke();
+      } else if (scale >= 0.5) {
+        const step = 16;
+        ctx.strokeStyle = "rgba(110, 190, 200, 0.08)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        const gx0 = Math.ceil(x0 / step) * step;
+        const gy0 = Math.ceil(y0 / step) * step;
+        for (let x = gx0; x <= x1; x += step) {
+          const px = Math.round(view2.ox + x * scale) + 0.5;
+          ctx.moveTo(px, view2.oy + y0 * scale);
+          ctx.lineTo(px, view2.oy + y1 * scale);
+        }
+        for (let y = gy0; y <= y1; y += step) {
+          const py = Math.round(view2.oy + y * scale) + 0.5;
+          ctx.moveTo(view2.ox + x0 * scale, py);
+          ctx.lineTo(view2.ox + x1 * scale, py);
+        }
+        ctx.stroke();
+      }
+    }
+    drawBorder(ctx, view2, w) {
+      ctx.strokeStyle = "rgba(120, 210, 225, 0.28)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(
+        Math.round(view2.ox) + 0.5,
+        Math.round(view2.oy) + 0.5,
+        Math.round(w.width * view2.scale),
+        Math.round(w.height * view2.scale)
+      );
+    }
+    drawGhost(ctx, view2, ghost) {
+      const s = view2.scale;
+      if (s < 0.15) return;
+      ctx.save();
+      ctx.globalAlpha = ghost.ok ? 0.62 : 0.32;
+      ctx.fillStyle = ghost.ok ? LIVE_COLOR : "#ff7a7a";
+      const size = Math.max(1, s);
+      for (let y = 0; y < ghost.h; y++) {
+        for (let x = 0; x < ghost.w; x++) {
+          if (!ghost.cells[y * ghost.w + x]) continue;
+          const px = view2.ox + (ghost.x + x) * s;
+          const py = view2.oy + (ghost.y + y) * s;
+          ctx.fillRect(px, py, size, size);
+        }
+      }
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = ghost.ok ? "rgba(108,245,210,0.8)" : "#ff7a7a";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(view2.ox + ghost.x * s - 0.5, view2.oy + ghost.y * s - 0.5, ghost.w * s + 1, ghost.h * s + 1);
+      ctx.restore();
+    }
+    drawBrush(ctx, view2, brush, w) {
+      const s = view2.scale;
+      if (s < 0.4) return;
+      const x = (brush.x % w.width + w.width) % w.width;
+      const y = (brush.y % w.height + w.height) % w.height;
+      ctx.save();
+      ctx.strokeStyle = "rgba(255,255,255,0.55)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(Math.round(view2.ox + x * s) + 0.5, Math.round(view2.oy + y * s) + 0.5, Math.max(s, 2), Math.max(s, 2));
+      ctx.restore();
+    }
+  };
+  function makeThumb(world2, size = 192) {
+    const canvas2 = document.createElement("canvas");
+    canvas2.width = size;
+    canvas2.height = size;
+    const ctx = canvas2.getContext("2d");
+    ctx.fillStyle = WORLD_BG;
+    ctx.fillRect(0, 0, size, size);
+    const bb = world2.liveBBox();
+    const empty = bb.x1 <= bb.x0 || bb.y1 <= bb.y0;
+    const bx0 = empty ? 0 : bb.x0;
+    const by0 = empty ? 0 : bb.y0;
+    const bw = empty ? world2.width : Math.max(1, bb.x1 - bb.x0);
+    const bh = empty ? world2.height : Math.max(1, bb.y1 - bb.y0);
+    const pad = 6;
+    const k = Math.min((size - pad * 2) / bw, (size - pad * 2) / bh);
+    const dw = Math.max(1, Math.round(bw * k));
+    const dh = Math.max(1, Math.round(bh * k));
+    const ox = Math.round((size - dw) / 2);
+    const oy = Math.round((size - dh) / 2);
+    const img = ctx.createImageData(dw, dh);
+    const buf = new Uint32Array(img.data.buffer);
+    const S = world2.stride;
+    for (let y = 0; y < dh; y++) {
+      const wy = by0 + Math.floor((y + 0.5) / k);
+      if (wy < 0 || wy >= world2.height) continue;
+      for (let x = 0; x < dw; x++) {
+        const wx = bx0 + Math.floor((x + 0.5) / k);
+        if (wx < 0 || wx >= world2.width) continue;
+        const i = (wy + 1) * S + (wx + 1);
+        buf[y * dw + x] = world2.cells[i] ? PALETTE[Math.max(1, world2.age[i])] : pack([8, 13, 19]);
+      }
+    }
+    ctx.putImageData(img, ox, oy);
+    return canvas2.toDataURL("image/png");
+  }
+
+  // src/main.ts
+  var el = (id) => document.getElementById(id);
+  var nf = new Intl.NumberFormat("en-US");
+  var SPEED_MIN = 0.1;
+  var SPEED_MAX = 120;
+  var world;
+  var history;
+  var renderer;
+  var store;
+  var view = new Viewport();
+  var state = {
+    tool: "brush",
+    patternId: "gosperglidergun",
+    rotation: 0,
+    mirror: false,
+    grid: true,
+    glow: true,
+    playing: false,
+    unlimited: false,
+    speed: 10,
+    acc: 0,
+    drag: null,
+    hover: null,
+    editPending: false,
+    recordStart: -1,
+    pointers: /* @__PURE__ */ new Map(),
+    pinch: null,
+    modalOpen: false
+  };
+  var keys = { space: false };
+  var lastTs = 0;
+  var uiDirty = true;
+  var lastUi = 0;
+  var canvas = el("board");
+  var stageEl = el("stage");
+  function sliderToSpeed(v) {
+    return SPEED_MIN * Math.pow(SPEED_MAX / SPEED_MIN, v / 100);
+  }
+  function speedToSlider(s) {
+    return 100 * Math.log(s / SPEED_MIN) / Math.log(SPEED_MAX / SPEED_MIN);
+  }
+  function fmtSpeed(s) {
+    if (s < 1) return (Math.round(s * 100) / 100).toFixed(2).replace(/0$/, "");
+    if (s < 10) return (Math.round(s * 10) / 10).toFixed(1).replace(/\.0$/, "");
+    return String(Math.round(s));
+  }
+  function seedShowcase(w) {
+    const cx = Math.floor(w.width / 2);
+    const cy = Math.floor(w.height / 2);
+    const gun = PATTERN_BY_ID.get("gosperglidergun");
+    const pulsar = PATTERN_BY_ID.get("pulsar");
+    const penta = PATTERN_BY_ID.get("pentadecathlon");
+    const rp = PATTERN_BY_ID.get("rpentomino");
+    if (gun) stampPattern(w, gun, cx - 52, cy - 22, 0, false);
+    if (pulsar) stampPattern(w, pulsar, cx + 20, cy - 30, 0, false);
+    if (penta) stampPattern(w, penta, cx - 26, cy + 18, 0, false);
+    if (rp) stampPattern(w, rp, cx + 44, cy + 26, 0, false);
+  }
+  function rebuildWorld(width, height, edge, seed = false) {
+    world = new World(width, height);
+    world.edge = edge;
+    if (seed) seedShowcase(world);
+    history = new History(world);
+    renderer.attach(world);
+    if (renderer.cssW > 0) fitWorld();
+    uiDirty = true;
+  }
+  function advanceOne() {
+    const codes = world.step();
+    history.record(world.gen, codes);
+    if (state.recordStart >= 0) {
+      history.protectedRange = { from: state.recordStart, to: world.gen };
+      updateRecordBadge();
+    }
+    uiDirty = true;
+  }
+  function loop(ts) {
+    const dt = lastTs ? Math.min(0.3, (ts - lastTs) / 1e3) : 0;
+    lastTs = ts;
+    if (state.playing) {
+      if (state.unlimited) {
+        const t0 = performance.now();
+        while (performance.now() - t0 < 11) {
+          advanceOne();
+          if (!state.playing) break;
+        }
+      } else {
+        state.acc += dt * state.speed;
+        let budget = 64;
+        while (state.acc >= 1 && budget-- > 0) {
+          state.acc -= 1;
+          advanceOne();
+        }
+        if (state.acc > 3) state.acc = 1;
+      }
+    } else {
+      state.acc = 0;
+    }
+    renderer.sync();
+    const overlay = buildOverlay();
+    renderer.render(view, { grid: state.grid, glow: state.glow }, overlay);
+    if (uiDirty && ts - lastUi > 80) {
+      lastUi = ts;
+      uiDirty = false;
+      flushUi();
+    }
+    requestAnimationFrame(loop);
+  }
+  function buildOverlay() {
+    let ghost = null;
+    let brush = null;
+    if (state.hover && !state.drag) {
+      if (state.tool === "stamp") {
+        const pat = PATTERN_BY_ID.get(state.patternId);
+        if (pat) {
+          const r = renderPattern(pat, state.rotation, state.mirror);
+          const x = state.hover.x - Math.floor(r.w / 2);
+          const y = state.hover.y - Math.floor(r.h / 2);
+          const ok = x >= 0 && y >= 0 && x + r.w <= world.width && y + r.h <= world.height;
+          ghost = { cells: r.cells, w: r.w, h: r.h, x, y, ok };
+        }
+      } else if (state.tool === "brush" || state.tool === "erase") {
+        brush = { x: state.hover.x, y: state.hover.y, size: 1 };
+      }
+    }
+    const d = state.drag;
+    return { ghost, brush, shape: d && d.kind === "shape" ? d.shape : null };
+  }
+  function flushUi() {
+    el("stat-gen").textContent = nf.format(world.gen);
+    el("stat-pop").textContent = nf.format(world.population);
+    el("stat-speed").textContent = state.unlimited ? "∞" : fmtSpeed(state.speed);
+    el("speed-label").textContent = state.unlimited ? "不限速" : `${fmtSpeed(state.speed)} 代/秒`;
+    const st = history.stats();
+    el("stat-hist").textContent = nf.format(st.gens);
+    updateTimeline(st.minGen, st.maxGen);
+  }
+  function updateTimeline(min, max) {
+    const tl = el("timeline");
+    tl.min = String(min);
+    tl.max = String(max);
+    if (document.activeElement !== tl) tl.value = String(world.gen);
+    el("timeline-label").textContent = `第 ${nf.format(world.gen)} 代`;
+  }
+  function updateRecordBadge() {
+    const badge = el("rec-badge");
+    if (state.recordStart < 0) {
+      badge.classList.add("hidden");
+      return;
+    }
+    badge.classList.remove("hidden");
+    el("rec-count").textContent = String(Math.max(0, world.gen - state.recordStart));
+  }
+  function setPlaying(on) {
+    state.playing = on;
+    state.acc = 0;
+    el("btn-play").textContent = on ? "❙❙" : "▶";
+    el("btn-play").classList.toggle("primary", !on);
+  }
+  var toastEl = el("toast");
+  var toastTimer = 0;
+  function toast(msg) {
+    toastEl.textContent = msg;
+    toastEl.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => toastEl.classList.remove("show"), 1900);
+  }
+  function commitEdit() {
+    history.markEdited(world.gen, world.toPacked(), world.population);
+    uiDirty = true;
+  }
+  function paintCell(x, y, value) {
+    if (x < 0 || y < 0 || x >= world.width || y >= world.height) return;
+    if (world.get(x, y) === value) return;
+    world.set(x, y, value);
+    state.editPending = true;
+  }
+  function paintLine(x0, y0, x1, y1, value) {
+    let x = x0;
+    let y = y0;
+    const dx = Math.abs(x1 - x0);
+    const dy = -Math.abs(y1 - y0);
+    const sx = x0 < x1 ? 1 : -1;
+    const sy = y0 < y1 ? 1 : -1;
+    let err = dx + dy;
+    for (; ; ) {
+      paintCell(x, y, value);
+      if (x === x1 && y === y1) break;
+      const e2 = 2 * err;
+      if (e2 >= dy) {
+        err += dy;
+        x += sx;
+      }
+      if (e2 <= dx) {
+        err += dx;
+        y += sy;
+      }
+    }
+  }
+  function applyShape(s) {
+    const value = s.erase ? 0 : 1;
+    if (s.kind === "line") {
+      paintLine(s.x0, s.y0, s.x1, s.y1, value);
+    } else {
+      const x0 = Math.min(s.x0, s.x1);
+      const y0 = Math.min(s.y0, s.y1);
+      const x1 = Math.max(s.x0, s.x1);
+      const y1 = Math.max(s.y0, s.y1);
+      for (let y = y0; y <= y1; y++) {
+        for (let x = x0; x <= x1; x++) paintCell(x, y, value);
+      }
+    }
+  }
+  function placePattern(p) {
+    const pat = PATTERN_BY_ID.get(state.patternId);
+    if (!pat) return;
+    const size = patternSize(pat, state.rotation);
+    const x = p.x - Math.floor(size.w / 2);
+    const y = p.y - Math.floor(size.h / 2);
+    stampPattern(world, pat, x, y, state.rotation, state.mirror);
+    state.editPending = false;
+    commitEdit();
+    toast(`${pat.name} 已放置`);
+  }
+  function localPoint(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  function worldAt(p) {
+    const w = view.screenToWorld(p.x, p.y);
+    return { x: Math.floor(w.x), y: Math.floor(w.y) };
+  }
+  function setTool(tool) {
+    state.tool = tool;
+    for (const btn of document.querySelectorAll("#toolbar .tool")) {
+      btn.classList.toggle("active", btn.dataset.tool === tool);
+    }
+  }
+  canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+  canvas.addEventListener("pointerdown", (e) => {
+    const p = localPoint(e);
+    state.pointers.set(e.pointerId, p);
+    if (state.pointers.size === 2) {
+      if (state.drag && state.drag.kind === "paint" && state.editPending) {
+        commitEdit();
+        state.editPending = false;
+      }
+      state.drag = null;
+      state.pinch = null;
+      return;
+    }
+    if (state.pointers.size > 2) return;
+    canvas.setPointerCapture(e.pointerId);
+    const wp = worldAt(p);
+    const wantPan = state.tool === "pan" || e.button === 2 || e.button === 1 || keys.space;
+    if (wantPan) {
+      stageEl.classList.add("panning");
+      state.drag = {
+        kind: "pan",
+        tool: state.tool,
+        erase: false,
+        sx: p.x,
+        sy: p.y,
+        lx: p.x,
+        ly: p.y,
+        viewOx: view.ox,
+        viewOy: view.oy,
+        shape: null,
+        moved: false
+      };
+      return;
+    }
+    if (state.playing) setPlaying(false);
+    if (state.tool === "stamp") {
+      placePattern(wp);
+      return;
+    }
+    const erase = state.tool === "erase" || e.altKey;
+    if (state.tool === "line" || state.tool === "rect") {
+      state.drag = {
+        kind: "shape",
+        tool: state.tool,
+        erase,
+        sx: p.x,
+        sy: p.y,
+        lx: wp.x,
+        ly: wp.y,
+        viewOx: view.ox,
+        viewOy: view.oy,
+        shape: {
+          kind: state.tool,
+          x0: wp.x,
+          y0: wp.y,
+          x1: wp.x,
+          y1: wp.y,
+          erase
+        },
+        moved: false
+      };
+      return;
+    }
+    state.drag = {
+      kind: "paint",
+      tool: state.tool,
+      erase,
+      sx: p.x,
+      sy: p.y,
+      lx: wp.x,
+      ly: wp.y,
+      viewOx: view.ox,
+      viewOy: view.oy,
+      shape: null,
+      moved: false
+    };
+    paintCell(wp.x, wp.y, erase ? 0 : 1);
+  });
+  window.addEventListener("pointermove", (e) => {
+    const p = localPoint(e);
+    if (state.pointers.has(e.pointerId)) state.pointers.set(e.pointerId, p);
+    if (state.pointers.size === 2) {
+      updatePinch();
+      return;
+    }
+    if (p.x >= 0 && p.y >= 0 && p.x <= canvas.clientWidth && p.y <= canvas.clientHeight) {
+      state.hover = worldAt(p);
+    } else {
+      state.hover = null;
+    }
+    const d = state.drag;
+    if (!d) return;
+    if (d.kind === "pan") {
+      const dx = p.x - d.sx;
+      const dy = p.y - d.sy;
+      if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true;
+      view.ox = d.viewOx + dx;
+      view.oy = d.viewOy + dy;
+      return;
+    }
+    const wp = worldAt(p);
+    d.moved = true;
+    if (d.kind === "paint") {
+      paintLine(d.lx, d.ly, wp.x, wp.y, d.erase ? 0 : 1);
+      d.lx = wp.x;
+      d.ly = wp.y;
+    } else if (d.kind === "shape" && d.shape) {
+      d.shape.x1 = wp.x;
+      d.shape.y1 = wp.y;
+    }
+  });
+  function endPointer(e) {
+    state.pointers.delete(e.pointerId);
+    if (state.pointers.size < 2) state.pinch = null;
+    const d = state.drag;
+    state.drag = null;
+    stageEl.classList.remove("panning");
+    if (!d) return;
+    if (d.kind === "paint") {
+      if (state.editPending) {
+        commitEdit();
+        state.editPending = false;
+      }
+    } else if (d.kind === "shape" && d.shape) {
+      applyShape(d.shape);
+      if (state.editPending) {
+        commitEdit();
+        state.editPending = false;
+      }
+    }
+  }
+  window.addEventListener("pointerup", endPointer);
+  window.addEventListener("pointercancel", endPointer);
+  canvas.addEventListener("pointerleave", () => {
+    if (state.pointers.size === 0) state.hover = null;
+  });
+  function updatePinch() {
+    const pts = Array.from(state.pointers.values());
+    if (pts.length < 2) return;
+    const a = pts[0];
+    const b = pts[1];
+    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+    const cx = (a.x + b.x) / 2;
+    const cy = (a.y + b.y) / 2;
+    const prev = state.pinch;
+    if (!prev) {
+      state.pinch = { dist, cx, cy };
+      return;
+    }
+    if (prev.dist > 1) view.zoomAt(cx, cy, dist / prev.dist);
+    view.panBy(cx - prev.cx, cy - prev.cy);
+    state.pinch = { dist, cx, cy };
+  }
+  canvas.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const p = localPoint(e);
+      const factor = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.06 : 16e-4));
+      view.zoomAt(p.x, p.y, factor);
+      state.hover = worldAt(p);
+    },
+    { passive: false }
+  );
+  window.addEventListener("keydown", (e) => {
+    const t = e.target;
+    if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+    if (e.key === "Escape" && state.modalOpen) {
+      closeModal();
+      return;
+    }
+    if (state.modalOpen) return;
+    if (e.code === "Space") {
+      if (!keys.space) {
+        keys.space = true;
+        stageEl.classList.add("panning");
+      }
+      e.preventDefault();
+      return;
+    }
+    const k = e.key.toLowerCase();
+    switch (k) {
+      case "b":
+        setTool("brush");
+        break;
+      case "e":
+        setTool("erase");
+        break;
+      case "i":
+        setTool("line");
+        break;
+      case "u":
+        setTool("rect");
+        break;
+      case "s":
+        setTool("stamp");
+        break;
+      case "h":
+        setTool("pan");
+        break;
+      case "g":
+        toggleGrid();
+        break;
+      case "o":
+        toggleGlow();
+        break;
+      case "p":
+        setPlaying(!state.playing);
+        break;
+      case "r":
+        rotatePattern();
+        break;
+      case "m":
+        mirrorPattern();
+        break;
+      case "arrowright":
+        stepOnce(1);
+        e.preventDefault();
+        break;
+      case "arrowleft":
+        stepOnce(-1);
+        e.preventDefault();
+        break;
+      case "arrowup":
+        view.zoomAt(renderer.cssW / 2, renderer.cssH / 2, 1.25);
+        e.preventDefault();
+        break;
+      case "arrowdown":
+        view.zoomAt(renderer.cssW / 2, renderer.cssH / 2, 0.8);
+        e.preventDefault();
+        break;
+      case "0":
+        fitWorld();
+        break;
+      case "delete":
+      case "backspace":
+        clearWorld();
+        break;
+      default:
+        break;
+    }
+  });
+  window.addEventListener("keyup", (e) => {
+    if (e.code === "Space") {
+      keys.space = false;
+      stageEl.classList.remove("panning");
+    }
+  });
+  function stepOnce(dir) {
+    if (state.playing) setPlaying(false);
+    if (dir > 0) {
+      advanceOne();
+    } else {
+      const st = history.stats();
+      if (world.gen > st.minGen) history.seek(world.gen - 1);
+    }
+    renderer.sync();
+    flushUi();
+  }
+  function freeArea() {
+    const box = stageEl.getBoundingClientRect();
+    const palEl = el("palette");
+    const palW = palEl.offsetWidth > 0 ? palEl.offsetWidth + 24 : 16;
+    const left = 72;
+    const right = palW + 12;
+    return {
+      x: left,
+      y: 14,
+      w: Math.max(180, box.width - left - right),
+      h: Math.max(180, box.height - 28)
+    };
+  }
+  function fitWorld() {
+    const a = freeArea();
+    const s = view.clampScale(Math.min(a.w / world.width, a.h / world.height));
+    view.scale = s;
+    view.ox = a.x + (a.w - world.width * s) / 2;
+    view.oy = a.y + (a.h - world.height * s) / 2;
+    uiDirty = true;
+  }
+  function fitContent(pad = 28) {
+    const bb = world.liveBBox();
+    if (bb.x1 <= bb.x0 || bb.y1 <= bb.y0) {
+      fitWorld();
+      return;
+    }
+    const a = freeArea();
+    const w = bb.x1 - bb.x0;
+    const h = bb.y1 - bb.y0;
+    const s = view.clampScale(Math.min((a.w - pad * 2) / w, (a.h - pad * 2) / h, 11));
+    view.scale = s;
+    view.ox = a.x + (a.w - w * s) / 2 - bb.x0 * s;
+    view.oy = a.y + (a.h - h * s) / 2 - bb.y0 * s;
+    uiDirty = true;
+  }
+  function clearWorld() {
+    if (state.playing) setPlaying(false);
+    world.clear();
+    commitEdit();
+    toast("世界已清空");
+  }
+  function randomWorld() {
+    if (state.playing) setPlaying(false);
+    world.clear();
+    world.randomize(0.28);
+    commitEdit();
+    toast("随机播种完成");
+  }
+  function toggleGrid() {
+    state.grid = !state.grid;
+    el("tgl-grid").classList.toggle("on", state.grid);
+  }
+  function toggleGlow() {
+    state.glow = !state.glow;
+    el("tgl-glow").classList.toggle("on", state.glow);
+  }
+  function rotatePattern() {
+    state.rotation = (state.rotation + 1) % 4;
+    el("btn-rotate").textContent = `旋转 ${state.rotation * 90}°`;
+  }
+  function mirrorPattern() {
+    state.mirror = !state.mirror;
+    el("btn-mirror").classList.toggle("on", state.mirror);
+    el("btn-mirror").textContent = state.mirror ? "镜像 开" : "镜像";
+  }
+  function drawPatternIcon(c, pat) {
+    const ctx = c.getContext("2d");
+    const W = c.width;
+    const H = c.height;
+    ctx.clearRect(0, 0, W, H);
+    const k = Math.min((W - 6) / pat.w, (H - 6) / pat.h);
+    const ox = (W - pat.w * k) / 2;
+    const oy = (H - pat.h * k) / 2;
+    ctx.fillStyle = "#6cf5d2";
+    for (let y = 0; y < pat.h; y++) {
+      for (let x = 0; x < pat.w; x++) {
+        if (!pat.cells[y * pat.w + x]) continue;
+        ctx.fillRect(ox + x * k, oy + y * k, Math.max(1, k), Math.max(1, k));
+      }
+    }
+  }
+  function buildPalette() {
+    const list = el("palette-list");
+    list.innerHTML = "";
+    for (const cat of CATEGORY_ORDER) {
+      const items = PATTERNS.filter((p) => p.category === cat);
+      if (!items.length) continue;
+      const title = document.createElement("div");
+      title.className = "cat-title";
+      title.textContent = cat;
+      list.append(title);
+      const grid = document.createElement("div");
+      grid.className = "pat-grid";
+      for (const pat of items) {
+        const btn = document.createElement("button");
+        btn.className = "pat";
+        btn.dataset.id = pat.id;
+        btn.title = `${pat.name} · ${pat.en}${pat.period > 1 ? ` · 周期 ${pat.period}` : ""}`;
+        const c = document.createElement("canvas");
+        c.width = 56;
+        c.height = 38;
+        drawPatternIcon(c, pat);
+        const label = document.createElement("span");
+        label.textContent = pat.name;
+        btn.append(c, label);
+        btn.addEventListener("click", () => selectPattern(pat.id));
+        grid.append(btn);
+      }
+      list.append(grid);
+    }
+    selectPattern(state.patternId);
+  }
+  function selectPattern(id) {
+    const pat = PATTERN_BY_ID.get(id);
+    if (!pat) return;
+    state.patternId = id;
+    for (const btn of document.querySelectorAll("#palette .pat")) {
+      btn.classList.toggle("active", btn.dataset.id === id);
+    }
+    setTool("stamp");
+  }
+  var modalCleanup = null;
+  function openModal(title, build) {
+    const body = el("modal-body");
+    el("modal-title").textContent = title;
+    body.innerHTML = "";
+    build(body);
+    el("modal").classList.remove("hidden");
+    state.modalOpen = true;
+  }
+  function closeModal() {
+    el("modal").classList.add("hidden");
+    state.modalOpen = false;
+    if (modalCleanup) {
+      modalCleanup();
+      modalCleanup = null;
+    }
+    el("modal-body").innerHTML = "";
+  }
+  el("modal-close").addEventListener("click", closeModal);
+  document.querySelector(".modal-mask").addEventListener("click", closeModal);
+  function fmtTime(ts) {
+    const d = new Date(ts);
+    const p = (n) => String(n).padStart(2, "0");
+    return `${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+  }
+  function makeSnapshot(name) {
+    return {
+      id: uid(),
+      name: name || `第 ${world.gen} 代`,
+      created: Date.now(),
+      gen: world.gen,
+      population: world.population,
+      edge: world.edge,
+      width: world.width,
+      height: world.height,
+      packed: world.toPacked(),
+      view: view.getView(),
+      thumb: makeThumb(world, 192)
+    };
+  }
+  async function openSnapshots() {
+    openModal("存档", (body) => {
+      const head = document.createElement("div");
+      head.className = "row";
+      head.style.marginBottom = "12px";
+      head.innerHTML = `
+      <input class="input grow" id="snap-name" placeholder="给这个瞬间起个名字…" maxlength="40" />
+      <button class="btn primary" id="snap-save">保存当前</button>`;
+      body.append(head);
+      const grid = document.createElement("div");
+      grid.className = "card-grid";
+      body.append(grid);
+      const refresh = async () => {
+        const list = await store.listSnapshots();
+        list.sort((a, b) => b.created - a.created);
+        grid.innerHTML = "";
+        if (!list.length) {
+          const empty = document.createElement("div");
+          empty.className = "empty";
+          empty.textContent = "还没有存档。画出有趣的一幕，然后点「保存当前」。";
+          grid.style.gridTemplateColumns = "1fr";
+          grid.append(empty);
+          return;
+        }
+        grid.style.gridTemplateColumns = "";
+        for (const rec of list) {
+          grid.append(snapshotCard(rec, refresh));
+        }
+      };
+      head.querySelector("#snap-save").addEventListener("click", async () => {
+        const input = body.querySelector("#snap-name");
+        const rec = makeSnapshot(input.value.trim());
+        await store.saveSnapshot(rec);
+        input.value = "";
+        toast("已保存到存档库");
+        await refresh();
+      });
+      void refresh();
+    });
+  }
+  function snapshotCard(rec, refresh) {
+    const card = document.createElement("div");
+    card.className = "snap-card";
+    card.innerHTML = `
+    <img alt="" src="${rec.thumb}">
+    <div class="snap-meta"><b></b><span class="m1"></span><span class="m2"></span></div>
+    <div class="snap-actions">
+      <button data-act="load">载入</button>
+      <button data-act="del">删除</button>
+    </div>`;
+    card.querySelector("b").textContent = rec.name;
+    card.querySelector(".m1").textContent = `第 ${nf.format(rec.gen)} 代 · 人口 ${nf.format(rec.population)}`;
+    card.querySelector(".m2").textContent = `${rec.width}² · ${fmtTime(rec.created)}`;
+    card.querySelector('[data-act="load"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      loadSnapshot(rec);
+      closeModal();
+    });
+    card.querySelector('[data-act="del"]').addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await store.deleteSnapshot(rec.id);
+      await refresh();
+    });
+    card.addEventListener("click", () => {
+      loadSnapshot(rec);
+      closeModal();
+    });
+    return card;
+  }
+  function loadSnapshot(rec) {
+    if (state.playing) setPlaying(false);
+    const sameSize = world.width === rec.width && world.height === rec.height;
+    if (!sameSize) {
+      world = new World(rec.width, rec.height);
+      world.edge = rec.edge;
+      world.loadPacked(rec.packed, rec.population, rec.gen);
+      history = new History(world);
+      renderer.attach(world);
+    } else {
+      world.edge = rec.edge;
+      world.loadPacked(rec.packed, rec.population, rec.gen);
+      history.reset();
+      renderer.paintAll();
+    }
+    el("sel-size").value = String(rec.width);
+    el("sel-edge").value = rec.edge;
+    view.setView(rec.view);
+    uiDirty = true;
+    flushUi();
+    toast(`已载入「${rec.name}」`);
+  }
+  async function toggleRecord() {
+    const btn = el("btn-record");
+    if (state.recordStart < 0) {
+      state.recordStart = world.gen;
+      history.protectedRange = { from: world.gen, to: world.gen };
+      btn.classList.add("on");
+      btn.textContent = "■ 停止录制";
+      if (!state.playing) setPlaying(true);
+      updateRecordBadge();
+      toast("开始录制，按「停止」后即可回放");
+      return;
+    }
+    const start = state.recordStart;
+    state.recordStart = -1;
+    history.protectedRange = null;
+    btn.classList.remove("on");
+    btn.textContent = "● 录制片段";
+    updateRecordBadge();
+    const clip = history.extractClip(start, world.gen);
+    if (!clip) {
+      toast("片段太短，未保存");
+      return;
+    }
+    const rec = {
+      id: uid(),
+      name: `第 ${nf.format(clip.startGen)}–${nf.format(clip.endGen)} 代`,
+      created: Date.now(),
+      width: world.width,
+      height: world.height,
+      startGen: clip.startGen,
+      endGen: clip.endGen,
+      startPacked: clip.start.packed,
+      startPopulation: clip.start.population,
+      deltas: clip.deltas,
+      thumb: makeThumb(world, 192)
+    };
+    await store.saveClip(rec);
+    toast(`片段已保存（${clip.deltas.length} 代）`);
+    void openClips();
+  }
+  async function openClips() {
+    openModal("片段库", (body) => {
+      const grid = document.createElement("div");
+      grid.className = "card-grid";
+      body.append(grid);
+      const refresh = async () => {
+        const list = await store.listClips();
+        list.sort((a, b) => b.created - a.created);
+        grid.innerHTML = "";
+        if (!list.length) {
+          const empty = document.createElement("div");
+          empty.className = "empty";
+          empty.textContent = "还没有片段。点底栏「录制片段」开始录，停止后自动出现在这里。";
+          grid.style.gridTemplateColumns = "1fr";
+          grid.append(empty);
+          return;
+        }
+        grid.style.gridTemplateColumns = "";
+        for (const rec of list) grid.append(clipCard(rec, refresh));
+      };
+      void refresh();
+    });
+  }
+  function clipCard(rec, refresh) {
+    const card = document.createElement("div");
+    card.className = "snap-card";
+    card.innerHTML = `
+    <img alt="" src="${rec.thumb}">
+    <div class="snap-meta"><b></b><span class="m1"></span><span class="m2"></span></div>
+    <div class="snap-actions">
+      <button data-act="play">播放</button>
+      <button data-act="del">删除</button>
+    </div>`;
+    card.querySelector("b").textContent = rec.name;
+    card.querySelector(".m1").textContent = `${rec.deltas.length} 代 · 起点人口 ${nf.format(rec.startPopulation)}`;
+    card.querySelector(".m2").textContent = `${rec.width}² · ${fmtTime(rec.created)}`;
+    card.querySelector('[data-act="play"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      openClipPlayer(rec);
+    });
+    card.querySelector('[data-act="del"]').addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await store.deleteClip(rec.id);
+      await refresh();
+    });
+    return card;
+  }
+  function openClipPlayer(rec) {
+    openModal(`片段 · ${rec.name}`, (body) => {
+      body.innerHTML = `
+      <div class="clip-stage"><canvas id="clip-canvas"></canvas></div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn primary" id="clip-play">▶ 播放</button>
+        <input id="clip-seek" type="range" class="grow" min="0" max="${rec.deltas.length}" value="0" />
+        <span class="small muted" id="clip-label" style="min-width:96px;text-align:right"></span>
+      </div>`;
+      const cvs = body.querySelector("#clip-canvas");
+      const seekEl = body.querySelector("#clip-seek");
+      const playEl = body.querySelector("#clip-play");
+      const labelEl = body.querySelector("#clip-label");
+      const w = new World(rec.width, rec.height);
+      w.loadPacked(rec.startPacked, rec.startPopulation, rec.startGen);
+      const r = new Renderer(cvs);
+      r.attach(w);
+      const v = new Viewport();
+      const box = body.querySelector(".clip-stage");
+      const rect = box.getBoundingClientRect();
+      r.resize(rect.width || 640, rect.height || 400);
+      let bx0 = Infinity;
+      let by0 = Infinity;
+      let bx1 = -Infinity;
+      let by1 = -Infinity;
+      const grow = () => {
+        const bb = w.liveBBox();
+        if (bb.x1 > bb.x0 && bb.y1 > bb.y0) {
+          bx0 = Math.min(bx0, bb.x0);
+          by0 = Math.min(by0, bb.y0);
+          bx1 = Math.max(bx1, bb.x1);
+          by1 = Math.max(by1, bb.y1);
+        }
+      };
+      grow();
+      for (const d of rec.deltas) {
+        w.applyDelta(d);
+        w.gen++;
+        grow();
+      }
+      for (let i = rec.deltas.length - 1; i >= 0; i--) {
+        w.revertDelta(rec.deltas[i]);
+        w.gen--;
+      }
+      if (bx0 < Infinity) {
+        const bw = Math.max(8, bx1 - bx0);
+        const bh = Math.max(8, by1 - by0);
+        const s = v.clampScale(Math.min((r.cssW - 28) / bw, (r.cssH - 28) / bh, 26));
+        v.scale = s;
+        v.ox = (r.cssW - bw * s) / 2 - bx0 * s;
+        v.oy = (r.cssH - bh * s) / 2 - by0 * s;
+      } else {
+        v.fit(rec.width, rec.height, r.cssW, r.cssH, 16);
+      }
+      let idx = 0;
+      let playing = false;
+      let raf = 0;
+      let last = 0;
+      let acc = 0;
+      const paint = () => {
+        r.sync();
+        r.render(v, { grid: false, glow: true });
+        labelEl.textContent = `第 ${nf.format(rec.startGen + idx)} 代`;
+      };
+      const goTo = (target) => {
+        const t = Math.max(0, Math.min(rec.deltas.length, target));
+        while (idx < t) {
+          w.applyDelta(rec.deltas[idx]);
+          w.gen++;
+          idx++;
+        }
+        while (idx > t) {
+          idx--;
+          w.revertDelta(rec.deltas[idx]);
+          w.gen--;
+        }
+        seekEl.value = String(idx);
+        paint();
+      };
+      const tick = (ts) => {
+        if (!playing) return;
+        const dt = last ? ts - last : 16;
+        last = ts;
+        acc += dt;
+        if (acc >= 70) {
+          acc = 0;
+          goTo(idx + 1);
+          if (idx >= rec.deltas.length) {
+            playing = false;
+            playEl.textContent = "▶ 播放";
+          }
+        }
+        raf = requestAnimationFrame(tick);
+      };
+      playEl.addEventListener("click", () => {
+        playing = !playing;
+        playEl.textContent = playing ? "❙❙ 暂停" : "▶ 播放";
+        if (playing) {
+          if (idx >= rec.deltas.length) goTo(0);
+          last = 0;
+          acc = 0;
+          raf = requestAnimationFrame(tick);
+        }
+      });
+      seekEl.addEventListener("input", () => {
+        playing = false;
+        playEl.textContent = "▶ 播放";
+        goTo(Number(seekEl.value));
+      });
+      paint();
+      modalCleanup = () => {
+        playing = false;
+        cancelAnimationFrame(raf);
+      };
+    });
+  }
+  function openRle() {
+    openModal("RLE 导入 / 导出", (body) => {
+      body.innerHTML = `
+      <p class="small muted" style="margin:0 0 8px">
+        粘贴 LifeWiki 上的 RLE 或纯文本图案，导入到当前视图中心；也可以把整个世界导出成 RLE。
+      </p>
+      <textarea class="rle" id="rle-text" placeholder="x = 3, y = 3, rule = B3/S23&#10;bo$2bo$3o!"></textarea>
+      <div class="btn-row">
+        <button class="btn primary" id="rle-import">导入到世界</button>
+        <button class="btn" id="rle-export">把世界导出到此处</button>
+        <button class="btn" id="rle-download">下载 .rle</button>
+      </div>`;
+      const text = body.querySelector("#rle-text");
+      body.querySelector("#rle-import").addEventListener("click", () => {
+        const parsed = parsePatternText(text.value);
+        if (!parsed) {
+          toast("解析失败：看看是不是缺少 RLE 头或字符不合法");
+          return;
+        }
+        if (state.playing) setPlaying(false);
+        const cx = Math.floor((view.visibleWorld(renderer.cssW, renderer.cssH).x0 + view.visibleWorld(renderer.cssW, renderer.cssH).x1) / 2);
+        const cy = Math.floor((view.visibleWorld(renderer.cssW, renderer.cssH).y0 + view.visibleWorld(renderer.cssW, renderer.cssH).y1) / 2);
+        world.stamp(parsed.cells, parsed.width, parsed.height, cx - Math.floor(parsed.width / 2), cy - Math.floor(parsed.height / 2));
+        commitEdit();
+        closeModal();
+        toast(`已导入 ${parsed.width}×${parsed.height} 图案`);
+      });
+      const exportTo = () => {
+        const bb = world.liveBBox();
+        const empty = bb.x1 <= bb.x0 || bb.y1 <= bb.y0;
+        const x0 = empty ? 0 : bb.x0;
+        const y0 = empty ? 0 : bb.y0;
+        const w = empty ? 1 : bb.x1 - bb.x0;
+        const h = empty ? 1 : bb.y1 - bb.y0;
+        const cells = world.extract(x0, y0, w, h);
+        return toRle({ width: w, height: h, cells }, { name: `gen-${world.gen}` });
+      };
+      body.querySelector("#rle-export").addEventListener("click", () => {
+        text.value = exportTo();
+        toast("已导出到文本框");
+      });
+      body.querySelector("#rle-download").addEventListener("click", () => {
+        const blob = new Blob([exportTo()], { type: "text/plain" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `life-gen-${world.gen}.rle`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 4e3);
+      });
+    });
+  }
+  function openHelp() {
+    openModal("操作说明", (body) => {
+      body.innerHTML = `
+      <dl class="help-list">
+        <dt>拖拽</dt><dd>用当前工具绘制（画笔 / 橡皮 / 直线 / 矩形）</dd>
+        <dt>右键 / 空格 + 拖拽</dt><dd>平移画布</dd>
+        <dt>滚轮 / 双指</dt><dd>以光标为中心缩放（0.03× – 64×）</dd>
+        <dt><kbd>B</kbd> <kbd>E</kbd> <kbd>I</kbd> <kbd>U</kbd> <kbd>S</kbd> <kbd>H</kbd></dt>
+        <dd>画笔 / 橡皮 / 直线 / 矩形 / 贴图 / 平移</dd>
+        <dt><kbd>R</kbd> <kbd>M</kbd></dt><dd>旋转 90°、左右镜像（贴图前）</dd>
+        <dt><kbd>P</kbd></dt><dd>播放 / 暂停</dd>
+        <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>时间轴上退一代 / 前进一代</dd>
+        <dt><kbd>G</kbd> <kbd>O</kbd></dt><dd>网格、光晕开关</dd>
+        <dt><kbd>0</kbd></dt><dd>缩放到整幅世界</dd>
+        <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>放大 / 缩小</dd>
+        <dt><kbd>Del</kbd></dt><dd>清空世界</dd>
+      </dl>
+      <p class="small muted" style="margin-top:14px">
+        回溯原理：程序记录每一代被翻转的格子（增量），并按固定间隔保存关键帧，
+        所以拖动底栏进度条可以瞬时回到过去的任意一代。历史默认保留最近 3000 代。
+      </p>`;
+    });
+  }
+  async function autoSaveNow() {
+    try {
+      await store.setAutoSave({
+        width: world.width,
+        height: world.height,
+        gen: world.gen,
+        population: world.population,
+        edge: world.edge,
+        packed: world.toPacked(),
+        view: view.getView(),
+        savedAt: Date.now()
+      });
+    } catch {
+    }
+  }
+  function bindUi() {
+    for (const btn of document.querySelectorAll("#toolbar .tool")) {
+      btn.addEventListener("click", () => setTool(btn.dataset.tool));
+    }
+    el("btn-play").addEventListener("click", () => setPlaying(!state.playing));
+    el("btn-next").addEventListener("click", () => stepOnce(1));
+    el("btn-prev").addEventListener("click", () => stepOnce(-1));
+    el("btn-clear").addEventListener("click", clearWorld);
+    el("btn-random").addEventListener("click", randomWorld);
+    const speedEl = el("speed");
+    speedEl.value = String(Math.round(speedToSlider(state.speed)));
+    speedEl.addEventListener("input", () => {
+      state.speed = sliderToSpeed(Number(speedEl.value));
+      state.unlimited = false;
+      el("btn-unlimited").classList.remove("on");
+      uiDirty = true;
+    });
+    el("btn-unlimited").addEventListener("click", () => {
+      state.unlimited = !state.unlimited;
+      el("btn-unlimited").classList.toggle("on", state.unlimited);
+      uiDirty = true;
+    });
+    const tl = el("timeline");
+    tl.addEventListener("input", () => {
+      if (state.playing) setPlaying(false);
+      history.seek(Number(tl.value));
+      renderer.sync();
+      flushUi();
+    });
+    el("btn-record").addEventListener("click", () => void toggleRecord());
+    el("btn-snapshots").addEventListener("click", () => void openSnapshots());
+    el("btn-clips").addEventListener("click", () => void openClips());
+    el("btn-rle").addEventListener("click", openRle);
+    el("btn-help").addEventListener("click", openHelp);
+    el("tgl-grid").addEventListener("click", toggleGrid);
+    el("tgl-glow").addEventListener("click", toggleGlow);
+    el("btn-rotate").addEventListener("click", rotatePattern);
+    el("btn-mirror").addEventListener("click", mirrorPattern);
+    el("btn-palette-collapse").addEventListener("click", () => {
+      el("palette").classList.toggle("collapsed");
+    });
+    el("sel-size").addEventListener("change", (e) => {
+      const size = Number(e.target.value);
+      if (size === world.width) return;
+      if (state.playing) setPlaying(false);
+      rebuildWorld(size, size, world.edge, true);
+      toast(`世界已重建为 ${size}×${size}`);
+      flushUi();
+    });
+    el("sel-edge").addEventListener("change", (e) => {
+      const mode = e.target.value;
+      world.edge = mode;
+      world.recompute();
+      history.reset();
+      renderer.paintAll();
+      uiDirty = true;
+      toast(mode === "wrap" ? "边界：环绕（左右上下相连）" : "边界：死亡（越界即消失）");
+    });
+    window.addEventListener("resize", () => {
+      const r = stageEl.getBoundingClientRect();
+      renderer.resize(r.width, r.height);
+    });
+  }
+  async function boot() {
+    store = new Store();
+    try {
+      await store.init();
+    } catch {
+    }
+    renderer = new Renderer(canvas);
+    let auto = null;
+    try {
+      auto = await store.getAutoSave();
+    } catch {
+      auto = null;
+    }
+    if (auto && auto.width > 0) {
+      world = new World(auto.width, auto.height);
+      world.edge = auto.edge;
+      world.loadPacked(auto.packed, auto.population, auto.gen);
+      el("sel-size").value = String(auto.width);
+      el("sel-edge").value = auto.edge;
+    } else {
+      world = new World(1024, 1024);
+      seedShowcase(world);
+    }
+    history = new History(world);
+    renderer.attach(world);
+    buildPalette();
+    const r = stageEl.getBoundingClientRect();
+    renderer.resize(r.width, r.height);
+    if (auto && auto.view) view.setView(auto.view);
+    else fitContent();
+    bindUi();
+    setPlaying(false);
+    el("tgl-grid").classList.toggle("on", state.grid);
+    el("tgl-glow").classList.toggle("on", state.glow);
+    flushUi();
+    Object.defineProperty(window, "__life", {
+      configurable: true,
+      value: {
+        get world() {
+          return world;
+        },
+        get history() {
+          return history;
+        },
+        get view() {
+          return view;
+        },
+        get store() {
+          return store;
+        },
+        step(n = 1) {
+          for (let i = 0; i < n; i++) advanceOne();
+        },
+        commit: () => commitEdit(),
+        set(x, y, v) {
+          world.set(x, y, v);
+        },
+        place(id, x, y) {
+          const p = PATTERN_BY_ID.get(id);
+          if (!p) return null;
+          stampPattern(world, p, x, y, 0, false);
+          commitEdit();
+          return patternSize(p, 0);
+        },
+        fit: () => fitContent(),
+        scale: (s) => {
+          view.scale = view.clampScale(s);
+          uiDirty = true;
+        }
+      }
+    });
+    new ResizeObserver(() => {
+      const box = stageEl.getBoundingClientRect();
+      if (box.width === 0 || box.height === 0) return;
+      if (box.width === renderer.cssW && box.height === renderer.cssH) return;
+      const w0 = view.screenToWorld(renderer.cssW / 2, renderer.cssH / 2);
+      renderer.resize(box.width, box.height);
+      const p0 = view.worldToScreen(w0.x, w0.y);
+      view.panBy(box.width / 2 - p0.x, box.height / 2 - p0.y);
+      uiDirty = true;
+    }).observe(stageEl);
+    requestAnimationFrame(loop);
+    window.setInterval(() => void autoSaveNow(), 15e3);
+    window.addEventListener("pagehide", () => void autoSaveNow());
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "hidden") void autoSaveNow();
+    });
+    if (auto) toast(`已恢复上次的现场（第 ${nf.format(auto.gen)} 代）`);
+  }
+  void boot();
+})();
+</script>
+  </body>
+</html>

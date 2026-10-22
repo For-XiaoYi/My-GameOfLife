@@ -95,7 +95,13 @@ writeFileSync(distFile, html, 'utf8');
 const singleFile = join(root, '生命游戏.html');
 writeFileSync(singleFile, html, 'utf8');
 
+// GitHub Pages 用：docs/ 目录直接作为站点根，index.html 就是这份自包含页面。
+mkdirSync(join(root, 'docs'), { recursive: true });
+const docsFile = join(root, 'docs', 'index.html');
+writeFileSync(docsFile, html, 'utf8');
+
 const kb = (p) => `${(statSync(p).size / 1024).toFixed(0)} KB`;
 console.log(`✔ build/app.js       ${kb(outFile)}`);
 console.log(`✔ dist/index.html    ${kb(distFile)}`);
 console.log(`✔ 生命游戏.html      ${kb(singleFile)}   ← 双击即可打开`);
+console.log(`✔ docs/index.html    ${kb(docsFile)}   ← GitHub Pages`);

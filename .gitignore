@@ -2,7 +2,7 @@
 node_modules/
 .pnpm-store/
 
-# 构建产物（生命游戏.html 是刻意留下的成品，其余可重新生成）
+# 构建产物（生命游戏.html 和 docs/ 是刻意留下的成品，其余可重新生成）
 build/
 dist/
 
