@@ -181,7 +181,15 @@ try {
     body: JSON.stringify({ default_branch: BRANCH }),
   });
 } catch (e) {
-  console.warn(`（可选）设置默认分支失败，忽略：${e.message}`);
+  console.log(`（可选）设置默认分支跳过：${e.message}`);
+}
+
+// 如果仓库已经开过 Pages，顺便触发一次重新构建，省得等自动那几分钟。
+try {
+  const builds = await api(`/repos/${me.login}/${REPO}/pages/builds`, { method: 'POST' });
+  console.log(`已触发 Pages 重新部署（${builds.status}）`);
+} catch (e) {
+  console.log(`Pages 未启用或无法触发，跳过：${e.message}`);
 }
 
 console.log(`\n完成：${repo.html_url}`);
