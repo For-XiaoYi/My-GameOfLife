@@ -1,0 +1,20 @@
+{
+  "name": "game-of-life-studio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Conway's Game of Life simulator — infinite-feeling 1024x1024 torus world, zoomable canvas, pattern library, snapshots and time travel.",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && node scripts/build.mjs",
+    "build:vite": "tsc --noEmit && vite build && node scripts/postbuild.mjs",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types scripts/selftest.ts"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11",
+    "vite-plugin-singlefile": "^2.0.3"
+  }
+}

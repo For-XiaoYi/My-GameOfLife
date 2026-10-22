@@ -1,0 +1,14 @@
+# 依赖
+node_modules/
+.pnpm-store/
+
+# 构建产物（生命游戏.html 是刻意留下的成品，其余可重新生成）
+build/
+dist/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.log

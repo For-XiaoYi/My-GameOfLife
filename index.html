@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="color-scheme" content="dark" />
+    <title>生命游戏 · Conway's Game of Life</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <header id="topbar">
+        <div class="brand">
+          <span class="logo"></span>
+          <div class="brand-text">
+            <strong>生命游戏</strong>
+            <small>Conway's Game of Life</small>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><label>代数</label><b id="stat-gen">0</b></div>
+          <div class="stat"><label>人口</label><b id="stat-pop">0</b></div>
+          <div class="stat"><label>速度</label><b id="stat-speed">10</b><i>代/秒</i></div>
+          <div class="stat"><label>可回溯</label><b id="stat-hist">1</b><i>代</i></div>
+        </div>
+
+        <div class="top-actions">
+          <select id="sel-size" title="世界尺寸">
+            <option value="512">512 × 512</option>
+            <option value="1024" selected>1024 × 1024</option>
+            <option value="2048">2048 × 2048</option>
+          </select>
+          <select id="sel-edge" title="边界规则">
+            <option value="wrap">环绕边界</option>
+            <option value="dead">死亡边界</option>
+          </select>
+          <button class="chip" id="tgl-grid" title="网格 (G)">网格</button>
+          <button class="chip" id="tgl-glow" title="光晕 (L)">光晕</button>
+          <button class="btn" id="btn-snapshots">存档</button>
+          <button class="btn" id="btn-clips">片段</button>
+          <button class="btn" id="btn-rle">RLE</button>
+          <button class="btn icon" id="btn-help" title="帮助">?</button>
+        </div>
+      </header>
+
+      <main id="stage">
+        <canvas id="board"></canvas>
+
+        <div id="toolbar">
+          <button class="tool active" data-tool="brush" title="画笔 (B)">✎</button>
+          <button class="tool" data-tool="erase" title="橡皮 (E)">⌫</button>
+          <button class="tool" data-tool="line" title="直线 (L)">╱</button>
+          <button class="tool" data-tool="rect" title="矩形 (U)">▭</button>
+          <button class="tool" data-tool="stamp" title="贴图 (S)">▣</button>
+          <button class="tool" data-tool="pan" title="平移 (H / 右键)">✋</button>
+        </div>
+
+        <aside id="palette">
+          <header>
+            <h3>图案库</h3>
+            <button id="btn-palette-collapse" class="icon" title="收起">›</button>
+          </header>
+          <div id="palette-list"></div>
+          <footer>
+            <button id="btn-rotate" title="旋转 (R)">旋转 0°</button>
+            <button id="btn-mirror" title="镜像 (M)">镜像</button>
+          </footer>
+        </aside>
+
+        <div id="hint">
+          <span>拖拽绘制</span><i>·</i><span>右键 / 空格拖拽平移</span><i>·</i><span>滚轮缩放</span>
+        </div>
+
+        <div id="rec-badge" class="hidden">● 录制中 <b id="rec-count">0</b> 代</div>
+      </main>
+
+      <footer id="bottombar">
+        <div class="play">
+          <button id="btn-prev" title="上一代 (←)">◀</button>
+          <button id="btn-play" class="primary" title="播放 / 暂停 (P)">▶</button>
+          <button id="btn-next" title="下一代 (→)">▶|</button>
+          <button id="btn-clear" title="清空世界">清空</button>
+          <button id="btn-random" title="随机播种">随机</button>
+        </div>
+
+        <div class="speed">
+          <label for="speed">速度</label>
+          <input id="speed" type="range" min="0" max="100" step="1" value="52" />
+          <span id="speed-label">10 代/秒</span>
+          <button class="chip" id="btn-unlimited" title="不限速">∞</button>
+        </div>
+
+        <div class="timeline">
+          <input id="timeline" type="range" min="0" max="0" step="1" value="0" />
+          <span id="timeline-label">第 0 代</span>
+        </div>
+
+        <div class="rec">
+          <button id="btn-record" class="btn danger">● 录制片段</button>
+        </div>
+      </footer>
+    </div>
+
+    <div id="modal" class="hidden">
+      <div class="modal-mask" data-close="1"></div>
+      <div class="modal-card" role="dialog" aria-modal="true">
+        <header>
+          <h2 id="modal-title">标题</h2>
+          <button class="icon" id="modal-close" title="关闭">×</button>
+        </header>
+        <div id="modal-body"></div>
+      </div>
+    </div>
+
+    <div id="toast"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
