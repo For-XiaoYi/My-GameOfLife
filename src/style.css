@@ -1018,6 +1018,32 @@ input[type="range"]::-moz-range-thumb {
   display: none !important;
 }
 
+/* 画布右下角的「回正」：只有环绕边界才有意义，死亡边界下由 JS 隐藏 */
+#btn-recenter {
+  position: absolute;
+  right: 14px;
+  bottom: 14px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  font-size: 16px;
+  line-height: 1;
+  background: rgba(9, 16, 22, 0.82);
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  cursor: pointer;
+  z-index: 4;
+  backdrop-filter: blur(6px);
+}
+
+#btn-recenter:hover {
+  background-color: rgba(108, 245, 210, 0.14);
+  color: var(--accent);
+  border-color: rgba(108, 245, 210, 0.5);
+}
+
 /* 全局悬浮提示层：position:fixed 挂在 body 末尾，
    不放在按钮内部——否则会被顶栏的 overflow:hidden 或横向滚动容器裁掉 */
 #tip {

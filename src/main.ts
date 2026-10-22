@@ -141,6 +141,7 @@ function rebuildWorld(width: number, height: number, edge: 'wrap' | 'dead', seed
   state.selection = [];
   updateSelBar();
   if (renderer.cssW > 0) fitWorld();
+  syncRecenterButton();
   uiDirty = true;
 }
 
@@ -463,21 +464,28 @@ function redoEdit(): void {
 
 function paintCell(x: number, y: number, value: number): void {
   const n = state.brushSize;
+  const wrap = world.edge === 'wrap';
+  const W = world.width;
+  const H = world.height;
   if (n <= 1) {
-    if (x < 0 || y < 0 || x >= world.width || y >= world.height) return;
-    if (world.get(x, y) === value) return;
-    world.set(x, y, value);
+    if (!wrap && (x < 0 || y < 0 || x >= W || y >= H)) return;
+    const wx = wrap ? wrapCoord(x, W) : x;
+    const wy = wrap ? wrapCoord(y, H) : y;
+    if (world.get(wx, wy) === value) return;
+    world.set(wx, wy, value);
     state.editPending = true;
     return;
   }
   const r = (n - 1) >> 1;
   let touched = false;
   for (let dy = -r; dy <= r; dy++) {
-    const wy = y + dy;
-    if (wy < 0 || wy >= world.height) continue;
+    let wy = y + dy;
+    if (wrap) wy = wrapCoord(wy, H);
+    else if (wy < 0 || wy >= H) continue;
     for (let dx = -r; dx <= r; dx++) {
-      const wx = x + dx;
-      if (wx < 0 || wx >= world.width) continue;
+      let wx = x + dx;
+      if (wrap) wx = wrapCoord(wx, W);
+      else if (wx < 0 || wx >= W) continue;
       if (world.get(wx, wy) === value) continue;
       world.set(wx, wy, value);
       touched = true;
@@ -550,7 +558,48 @@ function localPoint(e: PointerEvent | MouseEvent | WheelEvent): { x: number; y: 
 
 function worldAt(p: { x: number; y: number }): { x: number; y: number } {
   const w = view.screenToWorld(p.x, p.y);
-  return { x: Math.floor(w.x), y: Math.floor(w.y) };
+  let x = Math.floor(w.x);
+  let y = Math.floor(w.y);
+  // 环面视角下画面可以无限平移，屏幕坐标必须取模归位到"正位世界"，
+  // 否则在第二、三张图上作画会落到世界外面，什么都没发生。
+  if (world.edge === 'wrap') {
+    x = wrapCoord(x, world.width);
+    y = wrapCoord(y, world.height);
+  }
+  return { x, y };
+}
+
+/** 负数也能正确取模。 */
+function wrapCoord(v: number, n: number): number {
+  return ((v % n) + n) % n;
+}
+
+/** 环绕模式下把相机偏移收进一个世界周期，避免长时间拖动后数值无限增长。 */
+function normalizePan(): void {
+  if (world.edge !== 'wrap') return;
+  const tw = world.width * view.scale;
+  const th = world.height * view.scale;
+  if (tw <= 0 || th <= 0) return;
+  view.ox = wrapCoord(view.ox, tw);
+  view.oy = wrapCoord(view.oy, th);
+}
+
+/** 把世界中心对齐到视口中心（不改变缩放）。 */
+function centerWorld(): void {
+  view.ox = renderer.cssW / 2 - (world.width / 2) * view.scale;
+  view.oy = renderer.cssH / 2 - (world.height / 2) * view.scale;
+  uiDirty = true;
+}
+
+/** 「回正」：只有环面有这个概念，死亡边界下按钮不显示。 */
+function recenterView(): void {
+  if (world.edge !== 'wrap') return;
+  centerWorld();
+  toast('视角已回正');
+}
+
+function syncRecenterButton(): void {
+  el('btn-recenter').classList.toggle('hidden', world.edge !== 'wrap');
 }
 
 function setTool(tool: ToolName): void {
@@ -795,6 +844,7 @@ window.addEventListener('pointermove', (e) => {
     if (Math.abs(dx) + Math.abs(dy) > 2) d.moved = true;
     view.ox = d.viewOx + dx;
     view.oy = d.viewOy + dy;
+    normalizePan();
     return;
   }
 
@@ -965,6 +1015,14 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     if (e.repeat) return;
     setPlaying(!state.playing);
+    return;
+  }
+
+  // 回正：与 `0` 同一个物理键。用 e.code 而不是 e.key，
+  // 这样中文输入法或非 US 布局下也能按到。
+  if (e.code === 'Digit0' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    e.preventDefault();
+    recenterView();
     return;
   }
 
@@ -2954,6 +3012,7 @@ function openHelp(): void {
         <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>上一代 / 下一代（可以按住连发）</dd>
         <dt><kbd>G</kbd></dt><dd>网格开关</dd>
         <dt><kbd>0</kbd></dt><dd>缩放到整幅世界</dd>
+        <dt><kbd>Shift</kbd> + <kbd>0</kbd></dt><dd>回正视角：保持当前缩放，把世界中心拖回画面中央（环绕边界下画面可以无限平移，转远了用它找回来）</dd>
         <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>放大 / 缩小</dd>
         <dt><kbd>Del</kbd></dt><dd>有选区时删掉选区里的细胞，没有选区时清空世界（都能撤销）</dd>
         <dt>分享</dt><dd>存成 PNG 图片、复制一条能还原当前画面的链接，或全屏观看</dd>
@@ -3032,6 +3091,7 @@ function bindUi(): void {
   el('btn-clips').addEventListener('click', () => void openClips());
   el('btn-rle').addEventListener('click', openRle);
   el('btn-help').addEventListener('click', openHelp);
+  el('btn-recenter').addEventListener('click', recenterView);
 
   el('tgl-grid').addEventListener('click', toggleGrid);
   el('btn-rotate').addEventListener('click', rotatePattern);
@@ -3099,6 +3159,9 @@ function bindUi(): void {
   el<HTMLSelectElement>('sel-edge').addEventListener('change', (e) => {
     const mode = (e.target as HTMLSelectElement).value as 'wrap' | 'dead';
     world.edge = mode;
+    // 死亡边界没有"世界之外"，切过去时把视角收回正位，否则会站在空白里
+    if (mode === 'dead') centerWorld();
+    syncRecenterButton();
     world.recompute();
     history.reset();
     renderer.paintAll();
@@ -3275,6 +3338,7 @@ async function boot(): Promise<void> {
   }).observe(stageEl);
 
   initTooltips();
+  syncRecenterButton();
   requestAnimationFrame(loop);
 
   window.setInterval(() => void autoSaveNow(), 15000);
