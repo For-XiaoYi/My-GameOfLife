@@ -478,14 +478,7 @@ interface Menu {
   close(): void;
 }
 
-let sizeMenu: Menu | null = null;
-let edgeMenu: Menu | null = null;
-
-/** 把顶栏两个下拉的显示同步到当前世界。 */
-function syncWorldMenus(): void {
-  sizeMenu?.setValue(String(state.longEdge));
-  edgeMenu?.setValue(world.edge);
-}
+/** 世界尺寸与边界规则都收进「画布设置」窗口，顶栏不再保留下拉。 */
 
 function makeMenu(
   btn: HTMLElement,
@@ -3049,7 +3042,7 @@ function loadSnapshot(rec: SnapshotRecord): void {
     history.reset();
     renderer.paintAll();
   }
-  syncWorldMenus();
+  syncShapeFromWorld();
   view.setView(rec.view);
   uiDirty = true;
   flushUi();
@@ -3398,7 +3391,7 @@ function applyShareFromHash(): boolean {
     const [px, py] = (params.get('xy') ?? '0,0').split(',').map(Number);
     world.stamp(parsed.cells, parsed.width, parsed.height, px || 0, py || 0);
     world.gen = Number(params.get('g')) || 0;
-    syncWorldMenus();
+    syncShapeFromWorld();
     shareMode = true;
     return true;
   } catch {
@@ -3833,43 +3826,6 @@ function bindUi(): void {
     setPaletteCollapsed(!el('palette').classList.contains('collapsed'));
   });
 
-  sizeMenu = makeMenu(el('sel-size'), {
-    options: LONG_EDGES.map((v) => ({ value: String(v), label: `长边 ${v}` })),
-    value: String(state.longEdge),
-    onChange: (v) => {
-      const long = Number(v);
-      const d = dimsFor(state.aspect, long);
-      if (d.w === world.width && d.h === world.height) return;
-      state.longEdge = long;
-      saveCanvasShape();
-      applyWorldShape(d.w, d.h, world.edge);
-      toast(`世界已重建为 ${d.w} × ${d.h}（长边 ${long}）`);
-      flushUi();
-    },
-  });
-
-  edgeMenu = makeMenu(el('sel-edge'), {
-    options: [
-      { value: 'wrap', label: '环绕边界' },
-      { value: 'dead', label: '死亡边界' },
-    ],
-    value: world.edge,
-    onChange: (v) => {
-      const mode = v as 'wrap' | 'dead';
-      world.edge = mode;
-      // 死亡边界没有"世界之外"，切过去时把视角收回正位，否则会站在空白里
-      if (mode === 'dead') centerWorld();
-      syncRecenterButton();
-      updateZoomBounds();
-      world.recompute();
-      history.reset();
-      renderer.paintAll();
-      uiDirty = true;
-      toast(mode === 'wrap' ? '边界：环绕（左右上下相连）' : '边界：死亡（越界即消失）');
-    },
-  });
-  syncWorldMenus();
-
   // 尺寸变化由 ResizeObserver 统一处理（它还会更新缩放下限），这里不再重复
 }
 
@@ -3913,7 +3869,6 @@ async function boot(): Promise<void> {
     world.edge = auto.edge;
     world.loadPacked(auto.packed, auto.population, auto.gen);
     syncShapeFromWorld();
-    syncWorldMenus();
   } else {
     const d = dimsFor(state.aspect, state.longEdge);
     world = new World(d.w, d.h);

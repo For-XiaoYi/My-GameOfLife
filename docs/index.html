@@ -2044,12 +2044,6 @@ body.dragging-sort {
         </div>
 
         <div class="top-actions">
-          <button class="menubtn" id="sel-size" data-tip="世界尺寸">
-            <span class="menubtn-label">1024 × 1024</span><i class="menubtn-caret"></i>
-          </button>
-          <button class="menubtn" id="sel-edge" data-tip="边界规则">
-            <span class="menubtn-label">环绕边界</span><i class="menubtn-caret"></i>
-          </button>
           <button class="iconbtn" id="btn-settings" data-tip="画布设置：比例 / 尺寸 / 边界" aria-label="画布设置">
             <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>
           </button>
@@ -5090,12 +5084,6 @@ body.dragging-sort {
     document.addEventListener("pointerdown", hide, true);
     window.addEventListener("scroll", hide, true);
   }
-  var sizeMenu = null;
-  var edgeMenu = null;
-  function syncWorldMenus() {
-    sizeMenu?.setValue(String(state.longEdge));
-    edgeMenu?.setValue(world.edge);
-  }
   function makeMenu(btn, cfg) {
     let value = cfg.value;
     let pop = null;
@@ -7263,7 +7251,7 @@ body.dragging-sort {
       history.reset();
       renderer.paintAll();
     }
-    syncWorldMenus();
+    syncShapeFromWorld();
     view.setView(rec.view);
     uiDirty = true;
     flushUi();
@@ -7574,7 +7562,7 @@ body.dragging-sort {
       const [px, py] = (params.get("xy") ?? "0,0").split(",").map(Number);
       world.stamp(parsed.cells, parsed.width, parsed.height, px || 0, py || 0);
       world.gen = Number(params.get("g")) || 0;
-      syncWorldMenus();
+      syncShapeFromWorld();
       shareMode = true;
       return true;
     } catch {
@@ -7951,40 +7939,6 @@ body.dragging-sort {
       if (state.paletteMode === "edit") setPaletteMode("browse");
       setPaletteCollapsed(!el("palette").classList.contains("collapsed"));
     });
-    sizeMenu = makeMenu(el("sel-size"), {
-      options: LONG_EDGES.map((v) => ({ value: String(v), label: `长边 ${v}` })),
-      value: String(state.longEdge),
-      onChange: (v) => {
-        const long = Number(v);
-        const d = dimsFor(state.aspect, long);
-        if (d.w === world.width && d.h === world.height) return;
-        state.longEdge = long;
-        saveCanvasShape();
-        applyWorldShape(d.w, d.h, world.edge);
-        toast(`世界已重建为 ${d.w} × ${d.h}（长边 ${long}）`);
-        flushUi();
-      }
-    });
-    edgeMenu = makeMenu(el("sel-edge"), {
-      options: [
-        { value: "wrap", label: "环绕边界" },
-        { value: "dead", label: "死亡边界" }
-      ],
-      value: world.edge,
-      onChange: (v) => {
-        const mode = v;
-        world.edge = mode;
-        if (mode === "dead") centerWorld();
-        syncRecenterButton();
-        updateZoomBounds();
-        world.recompute();
-        history.reset();
-        renderer.paintAll();
-        uiDirty = true;
-        toast(mode === "wrap" ? "边界：环绕（左右上下相连）" : "边界：死亡（越界即消失）");
-      }
-    });
-    syncWorldMenus();
   }
   async function boot() {
     store = new Store();
@@ -8016,7 +7970,6 @@ body.dragging-sort {
       world.edge = auto.edge;
       world.loadPacked(auto.packed, auto.population, auto.gen);
       syncShapeFromWorld();
-      syncWorldMenus();
     } else {
       const d = dimsFor(state.aspect, state.longEdge);
       world = new World(d.w, d.h);
