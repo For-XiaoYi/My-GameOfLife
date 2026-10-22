@@ -291,6 +291,71 @@ function toast(msg: string): void {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// 悬浮提示（全局单例）
+// 为什么不用原生 title：延迟长、样式不可控；为什么不用 CSS 伪元素：
+// 顶栏和图案库都有 overflow，提示会被裁掉。所以用一个 fixed 的单例。
+// ──────────────────────────────────────────────────────────────────────────
+function initTooltips(): void {
+  const tip = el('tip');
+  let current: HTMLElement | null = null;
+  let timer = 0;
+
+  const hide = (): void => {
+    window.clearTimeout(timer);
+    current = null;
+    tip.classList.add('hidden');
+  };
+
+  const place = (target: HTMLElement): void => {
+    const text = target.dataset.tip;
+    if (!text) return;
+    tip.textContent = text;
+    tip.classList.remove('hidden');
+    const r = target.getBoundingClientRect();
+    const tw = tip.offsetWidth;
+    const th = tip.offsetHeight;
+    let left = r.left + r.width / 2 - tw / 2;
+    left = Math.max(6, Math.min(window.innerWidth - tw - 6, left));
+    let top = r.bottom + 8;
+    if (top + th > window.innerHeight - 6) top = r.top - th - 8;
+    tip.style.transform = `translate(${Math.round(left)}px, ${Math.round(top)}px)`;
+  };
+
+  document.addEventListener('pointerover', (e) => {
+    const target = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-tip]') ?? null;
+    if (target === current) return;
+    window.clearTimeout(timer);
+    current = target;
+    if (!target) {
+      tip.classList.add('hidden');
+      return;
+    }
+    // 略微延迟，避免鼠标扫过时提示乱闪
+    timer = window.setTimeout(() => {
+      if (current === target) place(target);
+    }, 240);
+  });
+
+  document.addEventListener('pointerout', (e) => {
+    if (!current) return;
+    const to = e.relatedTarget as Node | null;
+    if (to && current.contains(to)) return;
+    hide();
+  });
+
+  document.addEventListener('focusin', (e) => {
+    const target = (e.target as HTMLElement | null)?.closest<HTMLElement>('[data-tip]');
+    if (target) {
+      current = target;
+      place(target);
+    }
+  });
+  document.addEventListener('focusout', hide);
+  document.addEventListener('pointerdown', hide, true);
+  window.addEventListener('scroll', hide, true);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // 编辑与撤销
 // ──────────────────────────────────────────────────────────────────────────
 interface EditSnapshot {
@@ -3209,6 +3274,7 @@ async function boot(): Promise<void> {
     uiDirty = true;
   }).observe(stageEl);
 
+  initTooltips();
   requestAnimationFrame(loop);
 
   window.setInterval(() => void autoSaveNow(), 15000);

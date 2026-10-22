@@ -28,17 +28,15 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-button,
 /* ---------- 主题：让原生下拉列表 / 滚动条也走暗色 ---------- */
+button,
 :root {
   color-scheme: dark;
 }
 
-select option,
-select optgroup {
-  background-color: #0b1218;
-  color: var(--text);
-}
+/* 不要给 option / optgroup 设背景或文字色：
+   Windows 的原生弹层仍会用系统高亮色刷选中项与悬停项，但文字沿用这里设的浅色，
+   结果"浅字压浅蓝底"糊成一片。交给 color-scheme: dark 让浏览器自己画。 */
 
 select,
 input {
@@ -171,16 +169,30 @@ select,
 }
 
 select {
-  padding: 0 6px;
+  padding: 0 26px 0 10px;
   appearance: none;
-  text-align: center;
+  text-align: left;
+  background-color: rgba(255, 255, 255, 0.03);
+  /* 自绘箭头：appearance:none 会把浏览器自带的箭头一起去掉，不补就看不出来能展开 */
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%238ba7b3' d='M0 0h10L5 6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 9px center;
 }
 
 .btn:hover,
 .chip:hover,
 select:hover {
-  background: rgba(108, 245, 210, 0.1);
+  /* 用 background-color 而不是 background：后者会把自绘的箭头一起重置掉 */
+  background-color: rgba(108, 245, 210, 0.1);
   border-color: var(--line-strong);
+}
+
+select:focus-visible,
+.btn:focus-visible,
+.chip:focus-visible {
+  outline: none;
+  border-color: rgba(108, 245, 210, 0.65);
+  box-shadow: 0 0 0 3px rgba(108, 245, 210, 0.14);
 }
 
 .chip.on {
@@ -1006,6 +1018,25 @@ input[type="range"]::-moz-range-thumb {
   display: none !important;
 }
 
+/* 全局悬浮提示层：position:fixed 挂在 body 末尾，
+   不放在按钮内部——否则会被顶栏的 overflow:hidden 或横向滚动容器裁掉 */
+#tip {
+  position: fixed;
+  left: 0;
+  top: 0;
+  z-index: 200;
+  pointer-events: none;
+  padding: 5px 9px;
+  border-radius: 6px;
+  background: rgba(9, 16, 22, 0.97);
+  border: 1px solid var(--line-strong);
+  color: var(--text);
+  font-size: 11.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
 /* ---------- 游戏风格的确认框 ---------- */
 #confirm {
   position: fixed;
@@ -1406,10 +1437,18 @@ kbd {
   padding: 0 9px;
   border-radius: 7px;
   border: 1px solid var(--line);
-  background: #070c11;
+  background-color: #070c11;
   color: var(--text);
   font: 12px/1 inherit;
   outline: none;
+}
+
+.select-input {
+  padding-right: 24px;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath fill='%238ba7b3' d='M0 0h10L5 6z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
 }
 
 .text-input:focus,
