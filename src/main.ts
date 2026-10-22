@@ -239,7 +239,10 @@ function buildOverlay(): {
   const d = state.drag;
   let selection: Rect[] = state.selection;
   if (d && d.kind === 'select' && state.hover) {
-    const live = normalizeSelection(d.lx, d.ly, state.hover.x, state.hover.y);
+    // 拖动预览要和创建用同一套环面坐标，否则越过接缝时预览会错位
+    const hx = unwrapNear(state.hover.x, d.lx, world.width);
+    const hy = unwrapNear(state.hover.y, d.ly, world.height);
+    const live = makeSelection(d.lx, d.ly, hx, hy);
     selection = live ? [...state.selection, live] : state.selection;
   }
   if (moveState) {
@@ -761,6 +764,47 @@ function worldAtForTool(p: { x: number; y: number }): { x: number; y: number } {
   return state.tool === 'select' ? worldAtRaw(p) : worldAt(p);
 }
 
+/** 环面上的最短位移（结果落在 -n/2..n/2）。 */
+function shortestDelta(delta: number, n: number): number {
+  const m = ((delta % n) + n) % n;
+  return m > n / 2 ? m - n : m;
+}
+
+/** 把坐标平移到离 ref 最近的一周。跨缝选区的宽度不超过半个世界，所以不会歧义。 */
+function unwrapNear(v: number, ref: number, n: number): number {
+  let x = v;
+  while (x - ref > n / 2) x -= n;
+  while (ref - x > n / 2) x += n;
+  return x;
+}
+
+/** 点相对某个选区框的"最近副本"坐标。 */
+function nearRect(x: number, y: number, r: Rect): { x: number; y: number } {
+  const cx = r.x0 + (r.x1 - r.x0) / 2;
+  const cy = r.y0 + (r.y1 - r.y0) / 2;
+  return { x: unwrapNear(x, cx, world.width), y: unwrapNear(y, cy, world.height) };
+}
+
+/**
+ * 由拖拽两端生成选区。
+ * 环绕模式走最短路径，允许跨过接缝：x1 / y1 可以超过世界尺寸，
+ * 读取格子时统一取模，于是"一个框跨两边"在数据上就是一条连续区间。
+ */
+function makeSelection(ax: number, ay: number, bx: number, by: number): Rect | null {
+  const W = world.width;
+  const H = world.height;
+  if (world.edge !== 'wrap') return normalizeSelection(ax, ay, bx, by);
+  const sx = wrapCoord(ax, W);
+  const sy = wrapCoord(ay, H);
+  const dx = shortestDelta(bx - ax, W);
+  const dy = shortestDelta(by - ay, H);
+  const w = Math.abs(dx) + 1;
+  const h = Math.abs(dy) + 1;
+  const x0 = wrapCoord(dx >= 0 ? sx : sx + dx, W);
+  const y0 = wrapCoord(dy >= 0 ? sy : sy + dy, H);
+  return { x0, y0, x1: x0 + w - 1, y1: y0 + h - 1 };
+}
+
 /** 环绕模式下把相机偏移收进一个世界周期，避免长时间拖动后数值无限增长。 */
 function normalizePan(): void {
   if (world.edge !== 'wrap') return;
@@ -1110,7 +1154,7 @@ function endPointer(e: PointerEvent): void {
     }
   } else if (d.kind === 'select') {
     const wp = worldAtForTool(localPoint(e));
-    const rect = normalizeSelection(d.lx, d.ly, wp.x, wp.y);
+    const rect = makeSelection(d.lx, d.ly, wp.x, wp.y);
     if (rect && d.moved) {
       state.selection = d.additive ? [...state.selection, rect] : [rect];
     }
@@ -1533,7 +1577,8 @@ function selectionMask(
   for (const r of rects) {
     for (let y = r.y0; y <= r.y1; y++) {
       for (let x = r.x0; x <= r.x1; x++) {
-        if (!world.get(x, y)) continue;
+        // 跨缝选区的坐标会超过世界尺寸，读取时取模
+        if (!world.get(wrapCoord(x, world.width), wrapCoord(y, world.height))) continue;
         cells[(y - box.y0) * w + (x - box.x0)] = 1;
       }
     }
@@ -1542,7 +1587,10 @@ function selectionMask(
 }
 
 function insideSelection(wx: number, wy: number): boolean {
-  return state.selection.some((s) => wx >= s.x0 && wx <= s.x1 && wy >= s.y0 && wy <= s.y1);
+  return state.selection.some((s) => {
+    const p = nearRect(wx, wy, s);
+    return p.x >= s.x0 && p.x <= s.x1 && p.y >= s.y0 && p.y <= s.y1;
+  });
 }
 
 // ── 选择框的边角手柄：拖边框改大小、Alt 拖框内只挪框 ──────────────────────
@@ -1556,16 +1604,17 @@ function selectionHandleAt(wx: number, wy: number): { index: number; edge: SelEd
   const tol = HANDLE_PX / Math.max(view.scale, 0.001);
   for (let i = state.selection.length - 1; i >= 0; i--) {
     const r = state.selection[i]!;
+    const p = nearRect(wx, wy, r);
     const left = r.x0;
     const right = r.x1 + 1;
     const top = r.y0;
     const bottom = r.y1 + 1;
-    const onL = Math.abs(wx - left) <= tol;
-    const onR = Math.abs(wx - right) <= tol;
-    const onT = Math.abs(wy - top) <= tol;
-    const onB = Math.abs(wy - bottom) <= tol;
-    const inX = wx >= left - tol && wx <= right + tol;
-    const inY = wy >= top - tol && wy <= bottom + tol;
+    const onL = Math.abs(p.x - left) <= tol;
+    const onR = Math.abs(p.x - right) <= tol;
+    const onT = Math.abs(p.y - top) <= tol;
+    const onB = Math.abs(p.y - bottom) <= tol;
+    const inX = p.x >= left - tol && p.x <= right + tol;
+    const inY = p.y >= top - tol && p.y <= bottom + tol;
     if (!inX || !inY) continue;
     const hSide = onL ? 'l' : onR ? 'r' : '';
     const vSide = onT ? 't' : onB ? 'b' : '';
@@ -1595,19 +1644,30 @@ function handleCursor(edge: SelEdge): string {
 function selectionIndexAt(wx: number, wy: number): number {
   for (let i = state.selection.length - 1; i >= 0; i--) {
     const r = state.selection[i]!;
-    if (wx >= r.x0 && wx <= r.x1 && wy >= r.y0 && wy <= r.y1) return i;
+    const p = nearRect(wx, wy, r);
+    if (p.x >= r.x0 && p.x <= r.x1 && p.y >= r.y0 && p.y <= r.y1) return i;
   }
   return -1;
 }
 
-/** 正在拖的框按鼠标位置重算（保持对边不动，钳在世界内）。 */
+/** 正在拖的框按鼠标位置重算（保持对边不动；环绕模式下允许跨过接缝）。 */
 function resizeRect(orig: Rect, edge: SelEdge, wx: number, wy: number): Rect {
+  const wrap = world.edge === 'wrap';
+  const W = world.width;
+  const H = world.height;
   let { x0, y0, x1, y1 } = orig;
-  if (edge.includes('l')) x0 = Math.max(0, Math.min(wx, x1));
-  if (edge.includes('r')) x1 = Math.min(world.width - 1, Math.max(wx, x0));
-  if (edge.includes('t')) y0 = Math.max(0, Math.min(wy, y1));
-  if (edge.includes('b')) y1 = Math.min(world.height - 1, Math.max(wy, y0));
-  return { x0, y0, x1, y1 };
+  const p = nearRect(wx, wy, orig);
+  if (edge.includes('l')) x0 = wrap ? Math.min(p.x, x1) : Math.max(0, Math.min(p.x, x1));
+  if (edge.includes('r')) x1 = wrap ? Math.max(p.x, x0) : Math.min(W - 1, Math.max(p.x, x0));
+  if (edge.includes('t')) y0 = wrap ? Math.min(p.y, y1) : Math.max(0, Math.min(p.y, y1));
+  if (edge.includes('b')) y1 = wrap ? Math.max(p.y, y0) : Math.min(H - 1, Math.max(p.y, y0));
+  if (!wrap) return { x0, y0, x1, y1 };
+  // 原点归位，宽高保持不变；跨缝时 x1/y1 会超过世界尺寸，读取时统一取模
+  const w = x1 - x0 + 1;
+  const h = y1 - y0 + 1;
+  const nx = wrapCoord(x0, W);
+  const ny = wrapCoord(y0, H);
+  return { x0: nx, y0: ny, x1: nx + w - 1, y1: ny + h - 1 };
 }
 
 function updateSelectCursor(p: { x: number; y: number }): void {
@@ -1653,7 +1713,9 @@ function startMoveSelection(wx: number, wy: number): void {
   for (const r of state.selection) {
     for (let y = r.y0; y <= r.y1; y++) {
       for (let x = r.x0; x <= r.x1; x++) {
-        if (world.get(x, y)) world.set(x, y, 0);
+        const gx = wrapCoord(x, world.width);
+        const gy = wrapCoord(y, world.height);
+        if (world.get(gx, gy)) world.set(gx, gy, 0);
       }
     }
   }
@@ -1690,9 +1752,20 @@ function finishMoveSelection(): void {
   moveState = null;
   if (!m) return;
   world.stamp(m.cells, m.w, m.h, m.x0 + m.dx, m.y0 + m.dy);
-  state.selection = m.rects.map((r) =>
-    normalizeSelection(r.x0 + m.dx, r.y0 + m.dy, r.x1 + m.dx, r.y1 + m.dy),
-  ).filter((r): r is Rect => !!r);
+  if (world.edge === 'wrap') {
+    // 环面：原点归位，宽高保持不变（落点可能已经跨过接缝）
+    state.selection = m.rects.map((r) => {
+      const w = r.x1 - r.x0 + 1;
+      const h = r.y1 - r.y0 + 1;
+      const nx = wrapCoord(r.x0 + m.dx, world.width);
+      const ny = wrapCoord(r.y0 + m.dy, world.height);
+      return { x0: nx, y0: ny, x1: nx + w - 1, y1: ny + h - 1 };
+    });
+  } else {
+    state.selection = m.rects
+      .map((r) => normalizeSelection(r.x0 + m.dx, r.y0 + m.dy, r.x1 + m.dx, r.y1 + m.dy))
+      .filter((r): r is Rect => !!r);
+  }
   updateSelBar();
   commitEdit();
 }
@@ -1778,7 +1851,9 @@ function deleteSelection(): void {
   for (const r of state.selection) {
     for (let y = r.y0; y <= r.y1; y++) {
       for (let x = r.x0; x <= r.x1; x++) {
-        if (world.get(x, y)) world.set(x, y, 0);
+        const gx = wrapCoord(x, world.width);
+        const gy = wrapCoord(y, world.height);
+        if (world.get(gx, gy)) world.set(gx, gy, 0);
       }
     }
   }

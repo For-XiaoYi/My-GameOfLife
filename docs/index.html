@@ -4719,7 +4719,9 @@ body.dragging-sort {
     const d = state.drag;
     let selection = state.selection;
     if (d && d.kind === "select" && state.hover) {
-      const live = normalizeSelection(d.lx, d.ly, state.hover.x, state.hover.y);
+      const hx = unwrapNear(state.hover.x, d.lx, world.width);
+      const hy = unwrapNear(state.hover.y, d.ly, world.height);
+      const live = makeSelection(d.lx, d.ly, hx, hy);
       selection = live ? [...state.selection, live] : state.selection;
     }
     if (moveState) {
@@ -5135,6 +5137,35 @@ body.dragging-sort {
   function worldAtForTool(p) {
     return state.tool === "select" ? worldAtRaw(p) : worldAt(p);
   }
+  function shortestDelta(delta, n) {
+    const m = (delta % n + n) % n;
+    return m > n / 2 ? m - n : m;
+  }
+  function unwrapNear(v, ref, n) {
+    let x = v;
+    while (x - ref > n / 2) x -= n;
+    while (ref - x > n / 2) x += n;
+    return x;
+  }
+  function nearRect(x, y, r) {
+    const cx = r.x0 + (r.x1 - r.x0) / 2;
+    const cy = r.y0 + (r.y1 - r.y0) / 2;
+    return { x: unwrapNear(x, cx, world.width), y: unwrapNear(y, cy, world.height) };
+  }
+  function makeSelection(ax, ay, bx, by) {
+    const W = world.width;
+    const H = world.height;
+    if (world.edge !== "wrap") return normalizeSelection(ax, ay, bx, by);
+    const sx = wrapCoord(ax, W);
+    const sy = wrapCoord(ay, H);
+    const dx = shortestDelta(bx - ax, W);
+    const dy = shortestDelta(by - ay, H);
+    const w = Math.abs(dx) + 1;
+    const h = Math.abs(dy) + 1;
+    const x0 = wrapCoord(dx >= 0 ? sx : sx + dx, W);
+    const y0 = wrapCoord(dy >= 0 ? sy : sy + dy, H);
+    return { x0, y0, x1: x0 + w - 1, y1: y0 + h - 1 };
+  }
   function normalizePan() {
     if (world.edge !== "wrap") return;
     const tw = world.width * view.scale;
@@ -5445,7 +5476,7 @@ body.dragging-sort {
       }
     } else if (d.kind === "select") {
       const wp = worldAtForTool(localPoint(e));
-      const rect = normalizeSelection(d.lx, d.ly, wp.x, wp.y);
+      const rect = makeSelection(d.lx, d.ly, wp.x, wp.y);
       if (rect && d.moved) {
         state.selection = d.additive ? [...state.selection, rect] : [rect];
       }
@@ -5814,7 +5845,7 @@ body.dragging-sort {
     for (const r of rects) {
       for (let y = r.y0; y <= r.y1; y++) {
         for (let x = r.x0; x <= r.x1; x++) {
-          if (!world.get(x, y)) continue;
+          if (!world.get(wrapCoord(x, world.width), wrapCoord(y, world.height))) continue;
           cells[(y - box.y0) * w + (x - box.x0)] = 1;
         }
       }
@@ -5822,7 +5853,10 @@ body.dragging-sort {
     return { box, cells, w, h };
   }
   function insideSelection(wx, wy) {
-    return state.selection.some((s) => wx >= s.x0 && wx <= s.x1 && wy >= s.y0 && wy <= s.y1);
+    return state.selection.some((s) => {
+      const p = nearRect(wx, wy, s);
+      return p.x >= s.x0 && p.x <= s.x1 && p.y >= s.y0 && p.y <= s.y1;
+    });
   }
   var HANDLE_PX = 7;
   function selectionHandleAt(wx, wy) {
@@ -5830,16 +5864,17 @@ body.dragging-sort {
     const tol = HANDLE_PX / Math.max(view.scale, 1e-3);
     for (let i = state.selection.length - 1; i >= 0; i--) {
       const r = state.selection[i];
+      const p = nearRect(wx, wy, r);
       const left = r.x0;
       const right = r.x1 + 1;
       const top = r.y0;
       const bottom = r.y1 + 1;
-      const onL = Math.abs(wx - left) <= tol;
-      const onR = Math.abs(wx - right) <= tol;
-      const onT = Math.abs(wy - top) <= tol;
-      const onB = Math.abs(wy - bottom) <= tol;
-      const inX = wx >= left - tol && wx <= right + tol;
-      const inY = wy >= top - tol && wy <= bottom + tol;
+      const onL = Math.abs(p.x - left) <= tol;
+      const onR = Math.abs(p.x - right) <= tol;
+      const onT = Math.abs(p.y - top) <= tol;
+      const onB = Math.abs(p.y - bottom) <= tol;
+      const inX = p.x >= left - tol && p.x <= right + tol;
+      const inY = p.y >= top - tol && p.y <= bottom + tol;
       if (!inX || !inY) continue;
       const hSide = onL ? "l" : onR ? "r" : "";
       const vSide = onT ? "t" : onB ? "b" : "";
@@ -5867,17 +5902,27 @@ body.dragging-sort {
   function selectionIndexAt(wx, wy) {
     for (let i = state.selection.length - 1; i >= 0; i--) {
       const r = state.selection[i];
-      if (wx >= r.x0 && wx <= r.x1 && wy >= r.y0 && wy <= r.y1) return i;
+      const p = nearRect(wx, wy, r);
+      if (p.x >= r.x0 && p.x <= r.x1 && p.y >= r.y0 && p.y <= r.y1) return i;
     }
     return -1;
   }
   function resizeRect(orig, edge, wx, wy) {
+    const wrap = world.edge === "wrap";
+    const W = world.width;
+    const H = world.height;
     let { x0, y0, x1, y1 } = orig;
-    if (edge.includes("l")) x0 = Math.max(0, Math.min(wx, x1));
-    if (edge.includes("r")) x1 = Math.min(world.width - 1, Math.max(wx, x0));
-    if (edge.includes("t")) y0 = Math.max(0, Math.min(wy, y1));
-    if (edge.includes("b")) y1 = Math.min(world.height - 1, Math.max(wy, y0));
-    return { x0, y0, x1, y1 };
+    const p = nearRect(wx, wy, orig);
+    if (edge.includes("l")) x0 = wrap ? Math.min(p.x, x1) : Math.max(0, Math.min(p.x, x1));
+    if (edge.includes("r")) x1 = wrap ? Math.max(p.x, x0) : Math.min(W - 1, Math.max(p.x, x0));
+    if (edge.includes("t")) y0 = wrap ? Math.min(p.y, y1) : Math.max(0, Math.min(p.y, y1));
+    if (edge.includes("b")) y1 = wrap ? Math.max(p.y, y0) : Math.min(H - 1, Math.max(p.y, y0));
+    if (!wrap) return { x0, y0, x1, y1 };
+    const w = x1 - x0 + 1;
+    const h = y1 - y0 + 1;
+    const nx = wrapCoord(x0, W);
+    const ny = wrapCoord(y0, H);
+    return { x0: nx, y0: ny, x1: nx + w - 1, y1: ny + h - 1 };
   }
   function updateSelectCursor(p) {
     if (state.tool !== "select") {
@@ -5906,7 +5951,9 @@ body.dragging-sort {
     for (const r of state.selection) {
       for (let y = r.y0; y <= r.y1; y++) {
         for (let x = r.x0; x <= r.x1; x++) {
-          if (world.get(x, y)) world.set(x, y, 0);
+          const gx = wrapCoord(x, world.width);
+          const gy = wrapCoord(y, world.height);
+          if (world.get(gx, gy)) world.set(gx, gy, 0);
         }
       }
     }
@@ -5942,9 +5989,17 @@ body.dragging-sort {
     moveState = null;
     if (!m) return;
     world.stamp(m.cells, m.w, m.h, m.x0 + m.dx, m.y0 + m.dy);
-    state.selection = m.rects.map(
-      (r) => normalizeSelection(r.x0 + m.dx, r.y0 + m.dy, r.x1 + m.dx, r.y1 + m.dy)
-    ).filter((r) => !!r);
+    if (world.edge === "wrap") {
+      state.selection = m.rects.map((r) => {
+        const w = r.x1 - r.x0 + 1;
+        const h = r.y1 - r.y0 + 1;
+        const nx = wrapCoord(r.x0 + m.dx, world.width);
+        const ny = wrapCoord(r.y0 + m.dy, world.height);
+        return { x0: nx, y0: ny, x1: nx + w - 1, y1: ny + h - 1 };
+      });
+    } else {
+      state.selection = m.rects.map((r) => normalizeSelection(r.x0 + m.dx, r.y0 + m.dy, r.x1 + m.dx, r.y1 + m.dy)).filter((r) => !!r);
+    }
     updateSelBar();
     commitEdit();
   }
@@ -6020,7 +6075,9 @@ body.dragging-sort {
     for (const r of state.selection) {
       for (let y = r.y0; y <= r.y1; y++) {
         for (let x = r.x0; x <= r.x1; x++) {
-          if (world.get(x, y)) world.set(x, y, 0);
+          const gx = wrapCoord(x, world.width);
+          const gy = wrapCoord(y, world.height);
+          if (world.get(gx, gy)) world.set(gx, gy, 0);
         }
       }
     }
