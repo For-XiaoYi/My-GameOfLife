@@ -2193,6 +2193,41 @@ function autoScrollPalette(clientY: number): void {
   else if (clientY > r.bottom - margin) list.scrollTop += 14;
 }
 
+/**
+ * 按"指针在网格里的行列"算插入序号，而不是看指针落在哪个方块、再比它的中点。
+ *
+ * 为什么必须这样：占位槽一插进网格，后面的方块会整体平移一格；
+ * 如果拿"当前方块的中点"做判断，指针下方立刻换成另一个方块，判定翻转，
+ * 槽又被插回去 —— 每帧来回跳，看起来就是快速闪烁。
+ * 网格的左上角不会随槽移动，所以用它的几何算出的序号是稳定的。
+ */
+function gridInsertIndex(
+  grid: HTMLElement,
+  clientX: number,
+  clientY: number,
+): { before: Element | null } {
+  // 排除占位槽和"被拖起来、已经 display:none"的源方块，否则它们的 0 尺寸会带歪几何计算
+  const kids = [...grid.children].filter(
+    (n) => n !== dropSlot && (n as HTMLElement).offsetWidth > 0,
+  ) as HTMLElement[];
+  if (!kids.length) return { before: null };
+  const style = getComputedStyle(grid);
+  const cols = style.gridTemplateColumns.split(' ').filter(Boolean).length || 1;
+  const gapX = parseFloat(style.columnGap) || 0;
+  const gapY = parseFloat(style.rowGap) || 0;
+  const first = kids[0].getBoundingClientRect();
+  const cellW = first.width + gapX;
+  const cellH = first.height + gapY;
+  if (cellW <= 0 || cellH <= 0) return { before: null };
+  const gr = grid.getBoundingClientRect();
+  const padL = parseFloat(style.paddingLeft) || 0;
+  const padT = parseFloat(style.paddingTop) || 0;
+  const col = Math.max(0, Math.min(cols - 1, Math.floor((clientX - gr.left - padL) / cellW)));
+  const row = Math.max(0, Math.floor((clientY - gr.top - padT) / cellH));
+  const index = Math.max(0, Math.min(kids.length, row * cols + col));
+  return { before: kids[index] ?? null };
+}
+
 /** 根据指针下的元素更新占位槽与高亮。 */
 function updateDropTarget(t: HTMLElement | null, clientX: number, clientY: number): void {
   const p = dragPayload;
@@ -2207,14 +2242,25 @@ function updateDropTarget(t: HTMLElement | null, clientX: number, clientY: numbe
     if (!block) return;
     const r = block.getBoundingClientRect();
     const ratio = r.height > 0 ? (clientY - r.top) / r.height : 0.5;
-    // 中间死区：指针停在元素中部时不动槽，避免槽与元素互相推挤造成抖动
+    // 中间死区：指针停在元素中部时不动槽
     if (ratio >= 0.35 && ratio <= 0.65) return;
     putSlot(list, ratio > 0.65 ? block.nextElementSibling : block);
     setDropMark(block);
     return;
   }
 
-  // 拖的是图案
+  // 图案：只要指针落在某个分类的网格里，就按几何算序号
+  const gridEl = t.closest<HTMLElement>('.edit-grid');
+  if (gridEl) {
+    const stash = gridEl.closest<HTMLElement>('.stash-sec');
+    if (stash) gridEl.dataset.stash = '1';
+    const { before } = gridInsertIndex(gridEl, clientX, clientY);
+    putSlot(gridEl, before);
+    setDropMark(stash ?? null);
+    return;
+  }
+
+  // 落在仓库区域但不在网格上：放到仓库网格末尾
   const stash = t.closest<HTMLElement>('.stash-sec');
   if (stash) {
     const g = gridOf(stash, '');
@@ -2224,23 +2270,10 @@ function updateDropTarget(t: HTMLElement | null, clientX: number, clientY: numbe
     return;
   }
 
-  const tile = t.closest<HTMLElement>('.edit-tile');
-  if (tile) {
-    const grid = tile.parentElement;
-    if (grid && grid.classList.contains('edit-grid')) {
-      const r = tile.getBoundingClientRect();
-      const ratio = r.width > 0 ? (clientX - r.left) / r.width : 0.5;
-      if (ratio >= 0.35 && ratio <= 0.65) return;
-      putSlot(grid as HTMLElement, ratio > 0.65 ? tile.nextElementSibling : tile);
-      setDropMark(null);
-      return;
-    }
-  }
-
-  // 落在某个分类的网格、标题或空隙上：留在**这个**分类里
+  // 落在分类标题 / 分类内空白：放在该分类末尾
   const block = t.closest<HTMLElement>('.edit-cat');
   if (block) {
-    const grid = t.closest<HTMLElement>('.edit-grid') ?? gridOf(block, block.dataset.catId ?? '');
+    const grid = gridOf(block, block.dataset.catId ?? '');
     putSlot(grid, null);
     setDropMark(block);
     return;
@@ -2249,15 +2282,10 @@ function updateDropTarget(t: HTMLElement | null, clientX: number, clientY: numbe
   // 真的落在列表末尾的空白上：放到最后一个分类的末尾
   const blocks = [...list.querySelectorAll<HTMLElement>('.edit-cat')];
   const last = blocks[blocks.length - 1];
-  if (p.kind === 'pat') {
-    const lastGrid = last?.querySelector<HTMLElement>('.edit-grid') ?? null;
-    if (!lastGrid) return;
-    putSlot(lastGrid, null);
-    setDropMark(last ?? null);
-  } else {
-    putSlot(list, last ? last.nextElementSibling : null);
-    setDropMark(last ?? null);
-  }
+  const lastGrid = last?.querySelector<HTMLElement>('.edit-grid') ?? null;
+  if (!last || !lastGrid) return;
+  putSlot(lastGrid, null);
+  setDropMark(last);
 }
 
 /** 松手：按占位槽的位置提交排序 / 归类。 */

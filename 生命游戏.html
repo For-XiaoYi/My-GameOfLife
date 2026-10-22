@@ -6273,6 +6273,27 @@ body.dragging-sort {
     if (clientY < r.top + margin) list.scrollTop -= 14;
     else if (clientY > r.bottom - margin) list.scrollTop += 14;
   }
+  function gridInsertIndex(grid, clientX, clientY) {
+    const kids = [...grid.children].filter(
+      (n) => n !== dropSlot && n.offsetWidth > 0
+    );
+    if (!kids.length) return { before: null };
+    const style = getComputedStyle(grid);
+    const cols = style.gridTemplateColumns.split(" ").filter(Boolean).length || 1;
+    const gapX = parseFloat(style.columnGap) || 0;
+    const gapY = parseFloat(style.rowGap) || 0;
+    const first = kids[0].getBoundingClientRect();
+    const cellW = first.width + gapX;
+    const cellH = first.height + gapY;
+    if (cellW <= 0 || cellH <= 0) return { before: null };
+    const gr = grid.getBoundingClientRect();
+    const padL = parseFloat(style.paddingLeft) || 0;
+    const padT = parseFloat(style.paddingTop) || 0;
+    const col = Math.max(0, Math.min(cols - 1, Math.floor((clientX - gr.left - padL) / cellW)));
+    const row = Math.max(0, Math.floor((clientY - gr.top - padT) / cellH));
+    const index = Math.max(0, Math.min(kids.length, row * cols + col));
+    return { before: kids[index] ?? null };
+  }
   function updateDropTarget(t, clientX, clientY) {
     const p = dragPayload;
     const list = el("palette-list");
@@ -6289,6 +6310,15 @@ body.dragging-sort {
       setDropMark(block2);
       return;
     }
+    const gridEl = t.closest(".edit-grid");
+    if (gridEl) {
+      const stash2 = gridEl.closest(".stash-sec");
+      if (stash2) gridEl.dataset.stash = "1";
+      const { before } = gridInsertIndex(gridEl, clientX, clientY);
+      putSlot(gridEl, before);
+      setDropMark(stash2 ?? null);
+      return;
+    }
     const stash = t.closest(".stash-sec");
     if (stash) {
       const g = gridOf(stash, "");
@@ -6297,36 +6327,19 @@ body.dragging-sort {
       setDropMark(stash);
       return;
     }
-    const tile = t.closest(".edit-tile");
-    if (tile) {
-      const grid = tile.parentElement;
-      if (grid && grid.classList.contains("edit-grid")) {
-        const r = tile.getBoundingClientRect();
-        const ratio = r.width > 0 ? (clientX - r.left) / r.width : 0.5;
-        if (ratio >= 0.35 && ratio <= 0.65) return;
-        putSlot(grid, ratio > 0.65 ? tile.nextElementSibling : tile);
-        setDropMark(null);
-        return;
-      }
-    }
     const block = t.closest(".edit-cat");
     if (block) {
-      const grid = t.closest(".edit-grid") ?? gridOf(block, block.dataset.catId ?? "");
+      const grid = gridOf(block, block.dataset.catId ?? "");
       putSlot(grid, null);
       setDropMark(block);
       return;
     }
     const blocks = [...list.querySelectorAll(".edit-cat")];
     const last = blocks[blocks.length - 1];
-    if (p.kind === "pat") {
-      const lastGrid = last?.querySelector(".edit-grid") ?? null;
-      if (!lastGrid) return;
-      putSlot(lastGrid, null);
-      setDropMark(last ?? null);
-    } else {
-      putSlot(list, last ? last.nextElementSibling : null);
-      setDropMark(last ?? null);
-    }
+    const lastGrid = last?.querySelector(".edit-grid") ?? null;
+    if (!last || !lastGrid) return;
+    putSlot(lastGrid, null);
+    setDropMark(last);
   }
   function commitPointerDrop() {
     const p = dragPayload;
