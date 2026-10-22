@@ -14,7 +14,8 @@
     "check": "node scripts/check.mjs",
     "publish:gh": "node scripts/publish-github.mjs",
     "check:gh": "node scripts/publish-github.mjs --check",
-    "check:pages": "node scripts/check-pages.mjs"
+    "check:pages": "node scripts/check-pages.mjs",
+    "check:pages:live": "node scripts/check-pages-live.mjs"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

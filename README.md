@@ -73,3 +73,21 @@ scripts/
 发布脚本的凭据放在仓库之外的 `%LOCALAPPDATA%\life-studio\credentials.json`，只有当前用户能读，
 不会被提交。想换仓库或换 token，改这个文件即可。
 
+## 在线版本
+
+**https://for-xiaoyi.github.io/My-GameOfLife/**
+
+线上跑的是 `main` 分支里 `docs/` 目录下的 `index.html`（就是那份自包含页面）：
+
+- `pnpm build` 会同时产出 `docs/index.html`
+- `pnpm publish:gh` 推上去之后，GitHub 会自动重新构建；脚本也会顺手 `POST /pages/builds` 催一次
+- `pnpm check:pages` 验证线上返回 200、体积对得上、页面里是真页面而不是开发入口
+- `pnpm check:pages:live` 用无头 Chrome 打开线上地址，真的跑几十代并截图
+
+注意别把仓库根目录的 `index.html` 当成网站入口——它只有 `<script src="/src/main.ts">`，
+浏览器解析不了 TS，指向根目录会白屏。所以 Pages 的来源固定为 `/docs`。
+
+如果哪天想改 Pages 配置，`PATCH /repos/{owner}/{repo}/pages` 和"首次创建站点"这几个接口
+需要 token 有 `Administration: write`（只给 `pages: write` 会被 403 拒绝，经实测确认），
+日常发布用不到，网页上手点更省事。
+
