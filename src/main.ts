@@ -95,6 +95,8 @@ const state = {
 let lastTs = 0;
 let uiDirty = true;
 let lastUi = 0;
+let immersive = false;
+let fsTimer = 0;
 
 const canvas = el<HTMLCanvasElement>('board');
 const stageEl = el('stage');
@@ -255,6 +257,7 @@ function flushUi(): void {
   const st = history.stats();
   el('stat-hist').textContent = nf.format(st.gens);
   updateTimeline(st.minGen, st.maxGen);
+  if (immersive) updateFsBar();
 }
 
 function updateTimeline(min: number, max: number): void {
@@ -977,6 +980,11 @@ window.addEventListener('keydown', (e) => {
   }
   if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
 
+  if (e.key === 'Escape' && immersive) {
+    e.preventDefault();
+    void exitImmersive();
+    return;
+  }
   if (e.key === 'Escape' && state.modalOpen) {
     closeModal();
     return;
@@ -1051,6 +1059,9 @@ window.addEventListener('keydown', (e) => {
       break;
     case 'g':
       toggleGrid();
+      break;
+    case 'f':
+      toggleImmersive();
       break;
     case 'p':
       setPlaying(!state.playing);
@@ -2982,6 +2993,85 @@ function openShare(): void {
 }
 
 // ──────────────────────────────────────────────────────────────────────────
+// 内容库入口（时刻 / 时段 / 分享 / 导入导出）
+// ──────────────────────────────────────────────────────────────────────────
+function openStudioBridge(): void {
+  openModal('内容库', (body) => {
+    body.innerHTML = `
+      <p class="small muted" style="margin:0 0 12px">
+        把此刻或一段演化存下来，也可以把当前画面分享出去。
+      </p>
+      <div class="btn-row">
+        <button class="btn primary" id="st-snap">时刻 · 存档</button>
+        <button class="btn" id="st-clips">时段 · 片段</button>
+        <button class="btn" id="st-share">分享当前画面</button>
+        <button class="btn" id="st-rle">导入 / 导出</button>
+      </div>`;
+    body.querySelector('#st-snap')!.addEventListener('click', () => void openSnapshots());
+    body.querySelector('#st-clips')!.addEventListener('click', () => void openClips());
+    body.querySelector('#st-share')!.addEventListener('click', openShare);
+    body.querySelector('#st-rle')!.addEventListener('click', openRle);
+  });
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 全屏 / 沉浸观察
+// ──────────────────────────────────────────────────────────────────────────
+function updateFsBar(): void {
+  el('fs-gen').textContent = `第 ${nf.format(world.gen)} 代`;
+  el('fs-pop').textContent = `人口 ${nf.format(world.population)}`;
+  el('fs-play').textContent = state.playing ? '❙❙' : '▶';
+}
+
+function pokeFsBar(): void {
+  const bar = el('fs-bar');
+  bar.classList.remove('fade');
+  window.clearTimeout(fsTimer);
+  fsTimer = window.setTimeout(() => bar.classList.add('fade'), 2500);
+}
+
+async function enterImmersive(): Promise<void> {
+  if (immersive) return;
+  immersive = true;
+  el('app').classList.add('immersive');
+  el('fs-bar').classList.remove('hidden');
+  updateFsBar();
+  pokeFsBar();
+  uiDirty = true;
+  const root = document.documentElement;
+  if (!root.requestFullscreen) {
+    toast('浏览器不支持全屏，已进入沉浸模式（Esc 退出）');
+    return;
+  }
+  try {
+    await root.requestFullscreen();
+  } catch {
+    toast('浏览器不允许全屏，已进入沉浸模式（Esc 退出）');
+  }
+}
+
+async function exitImmersive(): Promise<void> {
+  if (!immersive) return;
+  immersive = false;
+  el('app').classList.remove('immersive');
+  el('fs-bar').classList.add('hidden');
+  window.clearTimeout(fsTimer);
+  uiDirty = true;
+  if (document.fullscreenElement) {
+    try {
+      await document.exitFullscreen();
+    } catch {
+      /* 已经退出或不被允许，忽略 */
+    }
+  }
+}
+
+function toggleImmersive(): void {
+  if (immersive) void exitImmersive();
+  else void enterImmersive();
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // 帮助
 // ──────────────────────────────────────────────────────────────────────────
 function openHelp(): void {
@@ -3016,6 +3106,7 @@ function openHelp(): void {
         <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>放大 / 缩小</dd>
         <dt><kbd>Del</kbd></dt><dd>有选区时删掉选区里的细胞，没有选区时清空世界（都能撤销）</dd>
         <dt>分享</dt><dd>存成 PNG 图片、复制一条能还原当前画面的链接，或全屏观看</dd>
+        <dt><kbd>F</kbd></dt><dd>全屏观察：只留画布，鼠标静止两秒后浮层自动淡出，<kbd>Esc</kbd> 退出</dd>
         <dt>手机上</dt><dd>单指绘制、双指捏合缩放、双指拖动平移；顶栏向右滑可以看到更多按钮</dd>
       </dl>
       <p class="small muted" style="margin-top:14px">
@@ -3086,12 +3177,16 @@ function bindUi(): void {
   });
 
   el('btn-record').addEventListener('click', () => void toggleRecord());
-  el('btn-share').addEventListener('click', openShare);
-  el('btn-snapshots').addEventListener('click', () => void openSnapshots());
-  el('btn-clips').addEventListener('click', () => void openClips());
-  el('btn-rle').addEventListener('click', openRle);
+  el('btn-studio').addEventListener('click', openStudioBridge);
+  el('btn-fullscreen').addEventListener('click', toggleImmersive);
   el('btn-help').addEventListener('click', openHelp);
   el('btn-recenter').addEventListener('click', recenterView);
+  el('fs-play').addEventListener('click', () => {
+    setPlaying(!state.playing);
+    updateFsBar();
+    pokeFsBar();
+  });
+  el('fs-exit').addEventListener('click', () => void exitImmersive());
 
   el('tgl-grid').addEventListener('click', toggleGrid);
   el('btn-rotate').addEventListener('click', rotatePattern);
@@ -3339,6 +3434,15 @@ async function boot(): Promise<void> {
 
   initTooltips();
   syncRecenterButton();
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && immersive) void exitImmersive();
+  });
+  document.addEventListener('pointermove', () => {
+    if (immersive) {
+      updateFsBar();
+      pokeFsBar();
+    }
+  });
   requestAnimationFrame(loop);
 
   window.setInterval(() => void autoSaveNow(), 15000);

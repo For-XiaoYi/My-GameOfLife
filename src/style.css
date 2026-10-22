@@ -1636,3 +1636,115 @@ kbd {
     width: calc(100vw - 20px);
   }
 }
+
+/* ---------- 顶栏图标按钮 ---------- */
+.iconbtn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background-color: rgba(255, 255, 255, 0.03);
+  color: var(--text);
+  cursor: pointer;
+  flex: 0 0 auto;
+  transition:
+    background-color 0.14s,
+    border-color 0.14s,
+    color 0.14s;
+}
+
+.iconbtn:hover {
+  background-color: rgba(108, 245, 210, 0.1);
+  border-color: var(--line-strong);
+}
+
+.iconbtn.chip.on {
+  background-color: var(--accent-dim);
+  border-color: rgba(108, 245, 210, 0.5);
+  color: var(--accent);
+}
+
+.iconbtn svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ---------- 全屏 / 沉浸观察 ---------- */
+/* 全屏时顶栏/底栏是 display:none，网格里只剩 #stage 一个流内子项，
+   所以这里必须是"单行"，否则它会被塞进第一行（0 高度）而塌掉。 */
+#app.immersive {
+  grid-template-rows: minmax(0, 1fr);
+}
+
+#app.immersive #topbar,
+#app.immersive #bottombar,
+#app.immersive #palette,
+#app.immersive #toolbar,
+#app.immersive #hint,
+#app.immersive #rec-badge,
+#app.immersive #btn-recenter,
+#app.immersive #sel-bar {
+  display: none !important;
+}
+
+#fs-bar {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(9, 16, 22, 0.84);
+  border: 1px solid var(--line-strong);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.5);
+  z-index: 60;
+  transition:
+    opacity 0.28s ease,
+    transform 0.28s ease;
+}
+
+#fs-bar.fade {
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px);
+  pointer-events: none;
+}
+
+#fs-bar .fs-btn {
+  height: 28px;
+  min-width: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background-color: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+#fs-bar .fs-btn:hover {
+  background-color: rgba(108, 245, 210, 0.14);
+  border-color: var(--line-strong);
+}
+
+#fs-bar .fs-exit {
+  color: var(--dim);
+}
+
+#fs-bar .fs-stat {
+  font-size: 12px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
