@@ -1896,7 +1896,24 @@ function setPaletteMode(mode: 'browse' | 'edit'): void {
   uiDirty = true;
 }
 
+let dropMark: HTMLElement | null = null;
+
+/**
+ * 只在落点真的变化时才改 class。
+ * 原来每次 dragover 都"全部摘掉再重新加"，分类外框每帧闪一次。
+ */
+function setDropMark(target: HTMLElement | null): void {
+  if (dropMark === target) return;
+  if (dropMark) dropMark.classList.remove('drop-into', 'drop-target');
+  dropMark = target;
+  if (target) target.classList.add('drop-into');
+}
+
 function clearDropMarks(): void {
+  if (dropMark) {
+    dropMark.classList.remove('drop-into', 'drop-target');
+    dropMark = null;
+  }
   for (const n of document.querySelectorAll('.drop-target, .drop-into')) {
     n.classList.remove('drop-target', 'drop-into');
   }
@@ -1927,6 +1944,7 @@ function endDrag(): void {
   dropSlot = null;
   dragPayload = null;
   dragSourceEl = null;
+  dropMark = null;
   for (const n of document.querySelectorAll('.dragging, .drop-into, .drop-target')) {
     n.classList.remove('dragging', 'drop-into', 'drop-target');
   }
@@ -1948,11 +1966,16 @@ function onPaletteDragOver(e: DragEvent): void {
   const list = el('palette-list');
   const t = e.target as HTMLElement | null;
   if (!p || !t || !list.contains(t)) return;
+
+  // 指针落在占位槽自己身上：保持原位不动。
+  // 槽参与布局是必须的（要占出落点空间），但对指针必须透明，
+  // 否则它会成为 dragover 目标 → 落点被算成"空白处" → 槽跳走 → 下一帧跳回来。
+  if (t.closest('.drop-slot')) return;
+
   // 拖拽已经真的开始了，这时才把源项从列表里抽走
   if (dragSourceEl && !dragSourceEl.classList.contains('dragging')) {
     dragSourceEl.classList.add('dragging');
   }
-  clearDropMarks();
 
   if (p.kind === 'cat') {
     const block = t.closest<HTMLElement>('.edit-cat');
@@ -1960,7 +1983,7 @@ function onPaletteDragOver(e: DragEvent): void {
     e.preventDefault();
     const r = block.getBoundingClientRect();
     putSlot(list, e.clientY > r.top + r.height / 2 ? block.nextElementSibling : block);
-    block.classList.add('drop-into');
+    setDropMark(block);
     return;
   }
 
@@ -1971,41 +1994,45 @@ function onPaletteDragOver(e: DragEvent): void {
     const g = gridOf(stash, '');
     g.dataset.stash = '1';
     putSlot(g, null);
-    stash.classList.add('drop-into');
-    return;
-  }
-  const tile = t.closest<HTMLElement>('.edit-tile');
-  const grid = tile?.parentElement;
-  if (tile && grid && grid.classList.contains('edit-grid')) {
-    e.preventDefault();
-    const r = tile.getBoundingClientRect();
-    putSlot(grid as HTMLElement, e.clientX > r.left + r.width / 2 ? tile.nextElementSibling : tile);
-    return;
-  }
-  const head = t.closest<HTMLElement>('.edit-cat-head');
-  if (head) {
-    e.preventDefault();
-    const block = head.parentElement as HTMLElement;
-    putSlot(gridOf(block, block.dataset.catId ?? ''), null);
-    block.classList.add('drop-into');
+    setDropMark(stash);
     return;
   }
 
-  // 落在空隙、空白或「新建分类」上：松手就放到最后
+  const tile = t.closest<HTMLElement>('.edit-tile');
+  if (tile) {
+    const grid = tile.parentElement;
+    if (grid && grid.classList.contains('edit-grid')) {
+      e.preventDefault();
+      const r = tile.getBoundingClientRect();
+      putSlot(grid as HTMLElement, e.clientX > r.left + r.width / 2 ? tile.nextElementSibling : tile);
+      setDropMark(null);
+      return;
+    }
+  }
+
+  // 落在某个分类的网格、标题或空隙上：就留在**这个**分类里，
+  // 不要甩到整个列表末尾（那也会造成来回跳）。
+  const block = t.closest<HTMLElement>('.edit-cat');
+  if (block) {
+    e.preventDefault();
+    const grid = t.closest<HTMLElement>('.edit-grid') ?? gridOf(block, block.dataset.catId ?? '');
+    putSlot(grid, null);
+    setDropMark(block);
+    return;
+  }
+
+  // 真的落在列表末尾的空白上：放到最后一个分类的末尾
   e.preventDefault();
+  const blocks = [...list.querySelectorAll<HTMLElement>('.edit-cat')];
+  const last = blocks[blocks.length - 1];
   if (p.kind === 'pat') {
-    const grids = [
-      ...list.querySelectorAll<HTMLElement>('.edit-cat .edit-grid'),
-    ];
-    const last = grids[grids.length - 1];
-    if (!last) return;
-    putSlot(last, null);
-    (last.closest('.edit-cat') as HTMLElement | null)?.classList.add('drop-into');
+    const lastGrid = last?.querySelector<HTMLElement>('.edit-grid') ?? null;
+    if (!lastGrid) return;
+    putSlot(lastGrid, null);
+    setDropMark(last ?? null);
   } else {
-    const blocks = [...list.querySelectorAll<HTMLElement>('.edit-cat')];
-    const last = blocks[blocks.length - 1];
     putSlot(list, last ? last.nextElementSibling : null);
-    last?.classList.add('drop-into');
+    setDropMark(last ?? null);
   }
 }
 

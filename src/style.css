@@ -562,6 +562,10 @@ button.icon {
 
 /* 松手后的落点占位：插进去以后其它方块会被挤开，位置一目了然 */
 .drop-slot {
+  /* 关键：占位槽本身必须对指针透明。
+     否则它一插进网格就成了 dragover 的目标，落点会被算到"空白处"，
+     槽被甩到列表末尾，下一帧再跳回来 —— 看起来就是整片列表在闪。 */
+  pointer-events: none;
   border: 1px dashed rgba(108, 245, 210, 0.85);
   border-radius: 8px;
   background: rgba(108, 245, 210, 0.12);
