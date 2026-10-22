@@ -4846,18 +4846,8 @@ body.dragging-sort {
   function layoutCanvas() {
     const box = stageEl.getBoundingClientRect();
     if (box.width <= 0 || box.height <= 0) return;
-    const pad = 16;
-    const availW = Math.max(40, box.width - pad * 2);
-    const availH = Math.max(40, box.height - pad * 2);
-    const r = world.width / world.height;
-    let w = availW;
-    let h = w / r;
-    if (h > availH) {
-      h = availH;
-      w = h * r;
-    }
-    const cssW = Math.max(40, Math.round(w));
-    const cssH = Math.max(40, Math.round(h));
+    const cssW = Math.max(40, Math.round(box.width));
+    const cssH = Math.max(40, Math.round(box.height));
     if (cssW === renderer.cssW && cssH === renderer.cssH) return;
     renderer.resize(cssW, cssH);
     uiDirty = true;

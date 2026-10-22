@@ -157,22 +157,12 @@ function syncShapeFromWorld(): void {
   state.longEdge = Math.max(world.width, world.height);
 }
 
-/** 画布按世界比例居中显示（letterbox），不再铺满舞台。 */
+/** 画布铺满舞台：环绕模式下世界本来就无限平铺，letterbox 只会平白留出黑边。 */
 function layoutCanvas(): void {
   const box = stageEl.getBoundingClientRect();
   if (box.width <= 0 || box.height <= 0) return;
-  const pad = 16;
-  const availW = Math.max(40, box.width - pad * 2);
-  const availH = Math.max(40, box.height - pad * 2);
-  const r = world.width / world.height;
-  let w = availW;
-  let h = w / r;
-  if (h > availH) {
-    h = availH;
-    w = h * r;
-  }
-  const cssW = Math.max(40, Math.round(w));
-  const cssH = Math.max(40, Math.round(h));
+  const cssW = Math.max(40, Math.round(box.width));
+  const cssH = Math.max(40, Math.round(box.height));
   if (cssW === renderer.cssW && cssH === renderer.cssH) return;
   renderer.resize(cssW, cssH);
   uiDirty = true;
