@@ -12,7 +12,8 @@ export class Viewport {
   ox = 0;
   oy = 0;
 
-  readonly minScale = 0.03;
+  /** 最小缩放：环绕模式下由外部按"世界能平铺出几组"动态设定 */
+  minScale = 0.03;
   readonly maxScale = 64;
 
   screenToWorld(px: number, py: number): { x: number; y: number } {

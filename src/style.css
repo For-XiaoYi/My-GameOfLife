@@ -34,9 +34,29 @@ button,
   color-scheme: dark;
 }
 
-/* 不要给 option / optgroup 设背景或文字色：
+/* 不要给 option 设背景或文字色：
    Windows 的原生弹层仍会用系统高亮色刷选中项与悬停项，但文字沿用这里设的浅色，
    结果"浅字压浅蓝底"糊成一片。交给 color-scheme: dark 让浏览器自己画。 */
+
+/* 但 color-scheme 在部分 Windows Chromium 上不生效（弹层仍是纯白），
+   所以再补一层显式的暗色兜底；选中项单独给一个足够对比的底色。 */
+select,
+.select-input {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup,
+.select-input option {
+  background-color: #0d161d;
+  color: #e8f4f6;
+}
+
+select option:checked,
+.select-input option:checked {
+  background-color: #1d4f4c;
+  color: #ffffff;
+}
 
 select,
 input {

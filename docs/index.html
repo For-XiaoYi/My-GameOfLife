@@ -42,9 +42,29 @@ button,
   color-scheme: dark;
 }
 
-/* 不要给 option / optgroup 设背景或文字色：
+/* 不要给 option 设背景或文字色：
    Windows 的原生弹层仍会用系统高亮色刷选中项与悬停项，但文字沿用这里设的浅色，
    结果"浅字压浅蓝底"糊成一片。交给 color-scheme: dark 让浏览器自己画。 */
+
+/* 但 color-scheme 在部分 Windows Chromium 上不生效（弹层仍是纯白），
+   所以再补一层显式的暗色兜底；选中项单独给一个足够对比的底色。 */
+select,
+.select-input {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup,
+.select-input option {
+  background-color: #0d161d;
+  color: #e8f4f6;
+}
+
+select option:checked,
+.select-input option:checked {
+  background-color: #1d4f4c;
+  color: #ffffff;
+}
 
 select,
 input {
@@ -3959,6 +3979,7 @@ kbd {
     /** 世界 (0,0) 在屏幕上的位置 */
     ox = 0;
     oy = 0;
+    /** 最小缩放：环绕模式下由外部按"世界能平铺出几组"动态设定 */
     minScale = 0.03;
     maxScale = 64;
     screenToWorld(px, py) {
@@ -4483,6 +4504,7 @@ kbd {
     updateSelBar();
     if (renderer.cssW > 0) fitWorld();
     syncRecenterButton();
+    updateZoomBounds();
     uiDirty = true;
   }
   function advanceOne() {
@@ -4537,7 +4559,7 @@ kbd {
           const r = renderPattern(pat, state.rotation, state.mirror);
           const x = state.hover.x - Math.floor(r.w / 2);
           const y = state.hover.y - Math.floor(r.h / 2);
-          const ok = x >= 0 && y >= 0 && x + r.w <= world.width && y + r.h <= world.height;
+          const ok = world.edge === "wrap" || x >= 0 && y >= 0 && x + r.w <= world.width && y + r.h <= world.height;
           ghost = { cells: r.cells, w: r.w, h: r.h, x, y, ok };
         }
       } else if (state.tool === "brush" || state.tool === "erase") {
@@ -4855,6 +4877,20 @@ kbd {
   }
   function syncRecenterButton() {
     el("btn-recenter").classList.toggle("hidden", world.edge !== "wrap");
+  }
+  function updateZoomBounds() {
+    if (!world || !renderer) return;
+    if (world.edge === "wrap") {
+      const fit = Math.min(renderer.cssW / world.width, renderer.cssH / world.height);
+      view.minScale = Math.max(0.05, fit / 2);
+    } else {
+      view.minScale = 0.03;
+    }
+    const clamped = view.clampScale(view.scale);
+    if (clamped !== view.scale) {
+      view.scale = clamped;
+      uiDirty = true;
+    }
   }
   function setTool(tool) {
     if (tool !== state.tool && state.tool !== "select") state.lastTool = state.tool;
@@ -5237,7 +5273,8 @@ kbd {
       setPlaying(!state.playing);
       return;
     }
-    if (e.code === "Digit0" && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    const isZeroKey = e.code === "Digit0" || e.code === "Numpad0" || e.key === "0" || e.key === ")";
+    if (isZeroKey && (e.shiftKey || e.ctrlKey || e.metaKey) && !e.altKey) {
       e.preventDefault();
       recenterView();
       return;
@@ -6171,7 +6208,9 @@ kbd {
       if (!block2) return;
       e.preventDefault();
       const r = block2.getBoundingClientRect();
-      putSlot(list, e.clientY > r.top + r.height / 2 ? block2.nextElementSibling : block2);
+      const ratio = r.height > 0 ? (e.clientY - r.top) / r.height : 0.5;
+      if (ratio >= 0.35 && ratio <= 0.65) return;
+      putSlot(list, ratio > 0.65 ? block2.nextElementSibling : block2);
       setDropMark(block2);
       return;
     }
@@ -6190,7 +6229,9 @@ kbd {
       if (grid && grid.classList.contains("edit-grid")) {
         e.preventDefault();
         const r = tile.getBoundingClientRect();
-        putSlot(grid, e.clientX > r.left + r.width / 2 ? tile.nextElementSibling : tile);
+        const ratio = r.width > 0 ? (e.clientX - r.left) / r.width : 0.5;
+        if (ratio >= 0.35 && ratio <= 0.65) return;
+        putSlot(grid, ratio > 0.65 ? tile.nextElementSibling : tile);
         setDropMark(null);
         return;
       }
@@ -6977,6 +7018,7 @@ kbd {
   async function enterImmersive() {
     if (immersive) return;
     immersive = true;
+    setTool("pan");
     el("app").classList.add("immersive");
     el("fs-bar").classList.remove("hidden");
     updateFsBar();
@@ -7171,6 +7213,7 @@ kbd {
       world.edge = mode;
       if (mode === "dead") centerWorld();
       syncRecenterButton();
+      updateZoomBounds();
       world.recompute();
       history.reset();
       renderer.paintAll();
@@ -7360,10 +7403,12 @@ kbd {
       renderer.resize(box.width, box.height);
       const p0 = view.worldToScreen(w0.x, w0.y);
       view.panBy(box.width / 2 - p0.x, box.height / 2 - p0.y);
+      updateZoomBounds();
       uiDirty = true;
     }).observe(stageEl);
     initTooltips();
     syncRecenterButton();
+    updateZoomBounds();
     document.addEventListener("fullscreenchange", () => {
       if (!document.fullscreenElement && immersive) void exitImmersive();
     });

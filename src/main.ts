@@ -144,6 +144,7 @@ function rebuildWorld(width: number, height: number, edge: 'wrap' | 'dead', seed
   updateSelBar();
   if (renderer.cssW > 0) fitWorld();
   syncRecenterButton();
+  updateZoomBounds();
   uiDirty = true;
 }
 
@@ -214,7 +215,10 @@ function buildOverlay(): {
         const r = renderPattern(pat, state.rotation, state.mirror);
         const x = state.hover.x - Math.floor(r.w / 2);
         const y = state.hover.y - Math.floor(r.h / 2);
-        const ok = x >= 0 && y >= 0 && x + r.w <= world.width && y + r.h <= world.height;
+        // 环绕模式下任何位置都能放（stamp 会自己绕回来），不该再显示成红色禁止
+        const ok =
+          world.edge === 'wrap' ||
+          (x >= 0 && y >= 0 && x + r.w <= world.width && y + r.h <= world.height);
         ghost = { cells: r.cells, w: r.w, h: r.h, x, y, ok };
       }
     } else if (state.tool === 'brush' || state.tool === 'erase') {
@@ -603,6 +607,26 @@ function recenterView(): void {
 
 function syncRecenterButton(): void {
   el('btn-recenter').classList.toggle('hidden', world.edge !== 'wrap');
+}
+
+/**
+ * 环绕模式下的缩放下限：
+ * 缩到"世界边界刚好完全进入画面"时还能再小一点，最多看到约 2×2 组循环；
+ * 再往下只会糊成噪点，没有信息量。
+ */
+function updateZoomBounds(): void {
+  if (!world || !renderer) return;
+  if (world.edge === 'wrap') {
+    const fit = Math.min(renderer.cssW / world.width, renderer.cssH / world.height);
+    view.minScale = Math.max(0.05, fit / 2);
+  } else {
+    view.minScale = 0.03;
+  }
+  const clamped = view.clampScale(view.scale);
+  if (clamped !== view.scale) {
+    view.scale = clamped;
+    uiDirty = true;
+  }
 }
 
 function setTool(tool: ToolName): void {
@@ -1026,9 +1050,10 @@ window.addEventListener('keydown', (e) => {
     return;
   }
 
-  // 回正：与 `0` 同一个物理键。用 e.code 而不是 e.key，
-  // 这样中文输入法或非 US 布局下也能按到。
-  if (e.code === 'Digit0' && e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+  // 回正：`0` 同一个键 + 两种修饰键都支持。
+  // 必须 preventDefault，否则浏览器会把 Ctrl+0 当成"重置页面缩放"。
+  const isZeroKey = e.code === 'Digit0' || e.code === 'Numpad0' || e.key === '0' || e.key === ')';
+  if (isZeroKey && (e.shiftKey || e.ctrlKey || e.metaKey) && !e.altKey) {
     e.preventDefault();
     recenterView();
     return;
@@ -2116,7 +2141,10 @@ function onPaletteDragOver(e: DragEvent): void {
     if (!block) return;
     e.preventDefault();
     const r = block.getBoundingClientRect();
-    putSlot(list, e.clientY > r.top + r.height / 2 ? block.nextElementSibling : block);
+    const ratio = r.height > 0 ? (e.clientY - r.top) / r.height : 0.5;
+    // 中间死区：手指/鼠标停在元素中部时不动槽，避免槽与元素互相推挤造成抖动
+    if (ratio >= 0.35 && ratio <= 0.65) return;
+    putSlot(list, ratio > 0.65 ? block.nextElementSibling : block);
     setDropMark(block);
     return;
   }
@@ -2138,7 +2166,11 @@ function onPaletteDragOver(e: DragEvent): void {
     if (grid && grid.classList.contains('edit-grid')) {
       e.preventDefault();
       const r = tile.getBoundingClientRect();
-      putSlot(grid as HTMLElement, e.clientX > r.left + r.width / 2 ? tile.nextElementSibling : tile);
+      const ratio = r.width > 0 ? (e.clientX - r.left) / r.width : 0.5;
+      // 中间 30% 是死区：槽不动，元素也就不会被推来推去。
+      // 没有这个死区时，槽一插入就把方块挤开，指针落到另一侧，下一帧槽又跳回来。
+      if (ratio >= 0.35 && ratio <= 0.65) return;
+      putSlot(grid as HTMLElement, ratio > 0.65 ? tile.nextElementSibling : tile);
       setDropMark(null);
       return;
     }
@@ -3033,6 +3065,8 @@ function pokeFsBar(): void {
 async function enterImmersive(): Promise<void> {
   if (immersive) return;
   immersive = true;
+  // 全屏是为了看演化，默认切到平移：拖哪看哪，不会误画
+  setTool('pan');
   el('app').classList.add('immersive');
   el('fs-bar').classList.remove('hidden');
   updateFsBar();
@@ -3257,6 +3291,7 @@ function bindUi(): void {
     // 死亡边界没有"世界之外"，切过去时把视角收回正位，否则会站在空白里
     if (mode === 'dead') centerWorld();
     syncRecenterButton();
+    updateZoomBounds();
     world.recompute();
     history.reset();
     renderer.paintAll();
@@ -3429,11 +3464,13 @@ async function boot(): Promise<void> {
     renderer.resize(box.width, box.height);
     const p0 = view.worldToScreen(w0.x, w0.y);
     view.panBy(box.width / 2 - p0.x, box.height / 2 - p0.y);
+    updateZoomBounds();
     uiDirty = true;
   }).observe(stageEl);
 
   initTooltips();
   syncRecenterButton();
+  updateZoomBounds();
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement && immersive) void exitImmersive();
   });
