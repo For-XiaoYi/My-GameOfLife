@@ -57,6 +57,9 @@ const STORE_CLIPS = 'clips';
 const STORE_PATTERNS = 'patterns';
 const STORE_META = 'meta';
 const LS_PREFIX = 'life-studio:';
+// 记住上次用的是哪种存储：file:// 下 indexedDB 时好时坏，
+// 每次启动重新赌一次会让界面里存的东西在两种存储之间「消失」
+const MODE_KEY = LS_PREFIX + 'storage-mode';
 
 export function uid(): string {
   return Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
@@ -92,7 +95,46 @@ export class Store {
   available = true;
   private db: IDBDatabase | null = null;
 
+  /**
+   * 选定一种存储后就不再变：
+   * file:// 下 Chrome 的 indexedDB 有时秒开、有时永远不回调，
+   * 如果每次启动都重新赌一次，界面里存的东西会在两种存储之间「消失」。
+   */
+  private rememberMode(mode: 'idb' | 'local'): void {
+    try {
+      localStorage.setItem(MODE_KEY, mode);
+    } catch {
+      /* 隐私模式下可能写不了，忽略 */
+    }
+  }
+
+  private hasLocalData(): boolean {
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (!k || !k.startsWith(LS_PREFIX)) continue;
+        if (k === MODE_KEY) continue;
+        return true;
+      }
+    } catch {
+      /* 读不了就当没有 */
+    }
+    return false;
+  }
+
   async init(): Promise<void> {
+    // 1) 上次已经定过存储方式，沿用，保证前后两次读到的是同一份数据
+    let remembered: string | null = null;
+    try {
+      remembered = localStorage.getItem(MODE_KEY);
+    } catch {
+      remembered = null;
+    }
+    if (remembered === 'local') {
+      this.useLocal();
+      return;
+    }
+
     if (typeof indexedDB !== 'undefined') {
       try {
         this.db = await Promise.race([
@@ -111,21 +153,35 @@ export class Store {
           }),
           // file:// 下 Chrome 的 indexedDB 可能永远不回调，超时后直接退回 localStorage
           new Promise<IDBDatabase>((_, reject) =>
-            window.setTimeout(() => reject(new Error('indexedDB timeout')), 1200),
+            window.setTimeout(() => reject(new Error('indexedDB timeout')), 3000),
           ),
         ]);
+        // 老版本可能已经把数据写在 localStorage 里：那份数据在 idb 里看不见，
+        // 这种情况继续用 localStorage，别让人以为存档丢了
+        if (!remembered && this.hasLocalData()) {
+          this.useLocal();
+          return;
+        }
         this.mode = 'idb';
+        this.rememberMode('idb');
         return;
       } catch {
         this.db = null;
       }
     }
-    // 退回 localStorage，先做一次读写自检
+    this.useLocal();
+  }
+
+  private useLocal(): void {
+    this.db = null;
+    // 先做一次读写自检
     try {
       localStorage.setItem(LS_PREFIX + 'probe', '1');
       localStorage.removeItem(LS_PREFIX + 'probe');
       this.mode = 'local';
+      this.rememberMode('local');
     } catch {
+      this.mode = 'local';
       this.available = false;
     }
   }

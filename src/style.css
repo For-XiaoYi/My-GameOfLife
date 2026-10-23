@@ -958,7 +958,23 @@ input[type="range"]::-moz-range-thumb {
 
 .rec {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
+  gap: 10px;
+}
+
+.rec-depth {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--dim);
+  white-space: nowrap;
+  cursor: default;
+}
+
+.rec-depth select {
+  height: 28px;
 }
 
 /* ---------- 模态框 ---------- */
@@ -1040,30 +1056,15 @@ input[type="range"]::-moz-range-thumb {
   display: none !important;
 }
 
-/* 画布右下角的「回正」：只有环绕边界才有意义，死亡边界下由 JS 隐藏 */
-#btn-recenter {
-  position: absolute;
-  right: 14px;
-  bottom: 14px;
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  font-size: 16px;
-  line-height: 1;
-  background: rgba(9, 16, 22, 0.82);
-  border: 1px solid var(--line-strong);
-  color: var(--text);
-  cursor: pointer;
-  z-index: 4;
-  backdrop-filter: blur(6px);
+/* 「回正视角」只有环绕边界才有意义，死亡边界下由 JS 隐藏 */
+#btn-recenter.hidden {
+  display: none;
 }
 
-#btn-recenter:hover {
-  background-color: rgba(108, 245, 210, 0.14);
-  color: var(--accent);
-  border-color: rgba(108, 245, 210, 0.5);
+.tool-sep {
+  height: 1px;
+  margin: 3px 4px;
+  background: var(--line);
 }
 
 /* 全局悬浮提示层：position:fixed 挂在 body 末尾，
@@ -1286,18 +1287,334 @@ kbd {
   color: var(--text);
 }
 
-.help-list {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 7px 14px;
-  font-size: 12px;
+/* ---------- 内容库：一级页签 ---------- */
+.studio {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.help-list dt {
+.studio-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--line);
+}
+
+.studio-tab {
+  flex: 1 1 0;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--dim);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s;
+}
+
+.studio-tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.studio-tab.active {
+  color: #04120f;
+  background: var(--accent);
+  border-color: var(--accent);
+  font-weight: 600;
+  box-shadow: 0 4px 14px rgba(108, 245, 210, 0.22);
+}
+
+.studio-panel {
+  min-height: 250px;
+  max-height: min(56vh, 470px);
+  overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(108, 245, 210, 0.3) transparent;
+}
+
+/* ---------- 操作说明：左侧分区 + 按键列对齐 ---------- */
+.help {
+  display: flex;
+  gap: 18px;
+  height: min(58vh, 520px);
+}
+
+.help-nav {
+  flex: 0 0 116px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.help-tab {
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--dim);
+  font-size: 12.5px;
+  cursor: pointer;
+}
+
+.help-tab:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.help-tab.active {
+  color: var(--accent);
+  background: rgba(108, 245, 210, 0.1);
+  border-color: rgba(108, 245, 210, 0.28);
+}
+
+.help-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-y: auto;
+  padding-right: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(108, 245, 210, 0.32) transparent;
+}
+
+.help-rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.help-row {
+  display: grid;
+  grid-template-columns: 152px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  padding: 11px 0;
+  border-top: 1px solid var(--line);
+}
+
+.help-row:first-child {
+  border-top: none;
+  padding-top: 2px;
+}
+
+.help-keys {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.help-keys kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 21px;
+  padding: 2px 7px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.help-row p {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.7;
   color: var(--dim);
 }
 
+.help-note {
+  margin: 16px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(108, 245, 210, 0.06);
+  border: 1px solid rgba(108, 245, 210, 0.16);
+  color: var(--dim);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+/* 弹窗里的滚动条统一改成细的 accent 风格，别用系统原生的亮条 */
+#modal-body {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(108, 245, 210, 0.3) transparent;
+}
+
+#modal-body::-webkit-scrollbar,
+.help-main::-webkit-scrollbar,
+.studio-panel::-webkit-scrollbar,
+#palette-list::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+#modal-body::-webkit-scrollbar-track,
+.help-main::-webkit-scrollbar-track,
+.studio-panel::-webkit-scrollbar-track,
+#palette-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+#modal-body::-webkit-scrollbar-thumb,
+.help-main::-webkit-scrollbar-thumb,
+.studio-panel::-webkit-scrollbar-thumb,
+#palette-list::-webkit-scrollbar-thumb {
+  background: rgba(108, 245, 210, 0.26);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+#modal-body::-webkit-scrollbar-thumb:hover,
+.help-main::-webkit-scrollbar-thumb:hover,
+.studio-panel::-webkit-scrollbar-thumb:hover,
+#palette-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(108, 245, 210, 0.45);
+  background-clip: padding-box;
+}
+
+@media (max-width: 760px) {
+  .help {
+    flex-direction: column;
+    height: auto;
+  }
+
+  .help-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .help-main {
+    max-height: 52vh;
+  }
+
+  .help-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .studio-tab {
+    font-size: 11.5px;
+    padding: 7px 6px;
+  }
+}
+
 /* 片段播放器 */
+/* ---------- 可缩放的小画布（快照预览 / 片段播放器） ---------- */
+.modal-card.wide {
+  width: min(1080px, calc(100vw - 40px));
+  max-height: min(90vh, 800px);
+}
+
+#modal-body.no-scroll {
+  overflow: hidden;
+  padding: 12px 14px 14px;
+}
+
+.pane {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #05080c;
+  cursor: grab;
+  touch-action: none;
+}
+
+.pane.grabbing {
+  cursor: grabbing;
+}
+
+.pane canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.pane-hint {
+  position: absolute;
+  left: 10px;
+  bottom: 8px;
+  font-size: 11px;
+  color: var(--dim);
+  pointer-events: none;
+  opacity: 0.75;
+}
+
+.pane-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 10px;
+  flex: 0 0 auto;
+}
+
+#snap-view {
+  height: min(54vh, 430px);
+}
+
+.clip-player {
+  display: flex;
+  flex-direction: column;
+  height: min(64vh, 560px);
+}
+
+.clip-player.bare {
+  height: min(74vh, 660px);
+}
+
+.clip-player.bare .pane-bar {
+  display: none;
+}
+
+.clip-badge {
+  position: absolute;
+  right: 10px;
+  top: 8px;
+  font-size: 11px;
+  color: var(--dim);
+  background: rgba(6, 12, 16, 0.62);
+  padding: 2px 7px;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.clip-showbar {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(108, 245, 210, 0.34);
+  background: rgba(8, 16, 20, 0.86);
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.clip-showbar:hover {
+  background: rgba(12, 26, 30, 0.95);
+}
+
+.clip-player:fullscreen {
+  height: 100%;
+  width: 100%;
+  padding: 10px;
+  background: #05080c;
+}
+
+.clip-player:fullscreen .pane {
+  border-radius: 0;
+  border-color: transparent;
+}
+
+/* 旧的片段舞台规则（保留给其它地方用） */
 .clip-stage {
   position: relative;
   border-radius: 10px;
@@ -1930,6 +2247,14 @@ body.dragging-sort {
   color: var(--dim);
   letter-spacing: 0.05em;
   margin-top: 4px;
+}
+
+.set-note {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--dim);
+  opacity: 0.85;
+  max-width: 34ch;
 }
 
 .set-aspects {

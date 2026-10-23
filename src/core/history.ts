@@ -265,6 +265,13 @@ export class History {
     return best;
   }
 
+  /** 调整可回溯的代数和内存上限，立刻按新限制淘汰旧记录。 */
+  setDepth(gens: number, bytes?: number): void {
+    this.limitGens = Math.max(64, Math.floor(gens));
+    if (typeof bytes === 'number') this.limitBytes = Math.max(4 * 1024 * 1024, Math.floor(bytes));
+    this.evict();
+  }
+
   private evict(): void {
     if (this.protectedRange) return;
     let guard = 0;

@@ -64,7 +64,7 @@
           <button class="tool" data-tool="select" title="选择框 (K)">
             <svg viewBox="0 0 24 24" stroke-dasharray="3 2.4"><rect x="4.5" y="4.5" width="15" height="15" rx="1.2"/></svg>
           </button>
-          <button class="tool active" data-tool="pan" title="平移 (H / 右键拖拽)">
+          <button class="tool active" data-tool="pan" title="平移 (H / 右键拖拽)；画面转远了按 Shift+0 回正">
             <svg viewBox="0 0 24 24"><path d="M12 3.4v17.2M3.4 12h17.2"/><path d="M9.6 5.8L12 3.4l2.4 2.4M9.6 18.2L12 20.6l2.4-2.4M5.8 9.6L3.4 12l2.4 2.4M18.2 9.6L20.6 12l-2.4 2.4"/></svg>
           </button>
         </div>
@@ -96,8 +96,6 @@
         </div>
 
         <div id="rec-badge" class="hidden">● 录制中 <b id="rec-count">0</b> 代</div>
-
-        <button id="btn-recenter" class="hidden" data-tip="回正视角 (Shift+0)">⌖</button>
       </main>
 
       <footer id="bottombar">
@@ -124,6 +122,10 @@
         </div>
 
         <div class="rec">
+          <label class="rec-depth" title="往回可以看多少代（超出内存上限会先丢最早的记录）">
+            <span>回溯</span>
+            <select id="depth-select" class="select-input"></select>
+          </label>
           <button id="btn-record" class="btn danger">● 录制片段</button>
         </div>
       </footer>

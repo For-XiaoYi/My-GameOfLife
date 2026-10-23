@@ -96,7 +96,9 @@ async function main() {
 
     // E RLE 导入
     const rle = await page.evaluate(`(async () => {
-      document.getElementById('btn-rle').click();
+      document.getElementById('btn-studio').click();
+      await new Promise(r => setTimeout(r, 150));
+      document.getElementById('st-rle').click();
       await new Promise(r => setTimeout(r, 80));
       const L = window.__life;
       L.world.clear(); L.commit();
@@ -116,26 +118,40 @@ async function main() {
       const popBefore = L.world.population;
       document.getElementById('modal-close').click();
       await new Promise(r => setTimeout(r, 80));
-      document.getElementById('btn-snapshots').click();
+      document.getElementById('btn-studio').click();
+      await new Promise(r => setTimeout(r, 150));
+      document.getElementById('st-snap').click();
       await new Promise(r => setTimeout(r, 120));
       document.getElementById('snap-name').value = 'CDP 存档';
       document.getElementById('snap-save').click();
-      await new Promise(r => setTimeout(r, 250));
+      // idb 是异步落盘，等它真的写进去再看列表
+      for (let i = 0; i < 40; i++) {
+        if ((await L.store.listSnapshots()).length) break;
+        await new Promise(r => setTimeout(r, 50));
+      }
+      await new Promise(r => setTimeout(r, 200));
       const cards = document.querySelectorAll('.snap-card').length;
       document.getElementById('modal-close').click();
       await new Promise(r => setTimeout(r, 80));
       L.world.clear(); L.commit();
-      document.getElementById('btn-snapshots').click();
+      document.getElementById('btn-studio').click();
+      await new Promise(r => setTimeout(r, 150));
+      document.getElementById('st-snap').click();
       await new Promise(r => setTimeout(r, 200));
       const card = document.querySelector('.snap-card [data-act=load]');
       if (card) card.click();
       await new Promise(r => setTimeout(r, 250));
+      // 载入要过一道游戏内确认
+      document.getElementById('confirm-ok').click();
+      await new Promise(r => setTimeout(r, 300));
       const popAfter = L.world.population;
-      document.getElementById('modal-close').click();
-      return { cards, popBefore, popAfter, mode: L.store.mode };
+      const modalOpen = !document.getElementById('modal').classList.contains('hidden');
+      if (modalOpen) document.getElementById('modal-close').click();
+      return { cards, popBefore, popAfter, mode: L.store.mode, modalOpen };
     })()`);
     record('保存快照并出现在列表', snap.cards >= 1, `${snap.cards} 张（${snap.mode}）`);
     record('载入快照恢复世界', snap.popAfter === snap.popBefore, `人口 ${snap.popAfter}/${snap.popBefore}`);
+    record('载入后自动关闭内容库', snap.modalOpen === false, `modalOpen=${snap.modalOpen}`);
 
     // G 片段录制
     const clip = await page.evaluate(`(async () => {
@@ -148,7 +164,9 @@ async function main() {
       await new Promise(r => setTimeout(r, 60));
       document.getElementById('btn-record').click();
       await new Promise(r => setTimeout(r, 400));
-      document.getElementById('btn-clips').click();
+      document.getElementById('btn-studio').click();
+      await new Promise(r => setTimeout(r, 150));
+      document.getElementById('st-clips').click();
       await new Promise(r => setTimeout(r, 300));
       const cards = document.querySelectorAll('.card-grid .snap-card').length;
       const play = document.querySelector('.card-grid .snap-card [data-act=play]');
@@ -300,6 +318,16 @@ async function main() {
       `${hiddenCount.pats} 个 · 仓库 ${hiddenCount.hidden}`);
 
     // M 刷新后自定义图案与改名都还在
+    // 先等存储落盘（idb 是异步的，直接刷新会读到旧状态）
+    await page.evaluate(`(async () => {
+      for (let i = 0; i < 40; i++) {
+        const n = await window.__life.store.listCustomPatterns();
+        if (n.length >= 1) return true;
+        await new Promise((r) => setTimeout(r, 50));
+      }
+      return false;
+    })()`);
+    await sleep(120);
     await page.navigate(FILE);
     await page.waitFor('!!window.__life', 20000);
     await sleep(600);
@@ -701,63 +729,114 @@ async function main() {
       `仓库 ${side.stashRows} 行（原 ${side.hiddenBefore}）`);
     record('仓库里的图案能取回', side.backCat === 'oscillator', `回到 ${side.backCat}`);
 
-    // 真拖拽：把「滑翔机」那一行拖到「枪」分类标题上
-    const dnd = await page.evaluate(`(async () => {
+    // 指针拖拽：把「滑翔机」拖进「枪」分类（真实鼠标输入）
+    const dndPos = await page.evaluate(`(async () => {
       const L = window.__life;
       L.setPaletteMode('edit');
-      await new Promise((r) => setTimeout(r, 260));
+      await new Promise((r) => setTimeout(r, 340));
       const rows = [...document.querySelectorAll('#palette-list .edit-tile')];
       const glider = rows.find((r) => r.querySelector('.tile-name')?.textContent === '滑翔机');
       const heads = [...document.querySelectorAll('#palette-list .edit-cat-head')];
       const gunHead = heads.find((h) => h.querySelector('.text-input')?.value === '枪');
-      const dt = new DataTransfer();
-      glider.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
-      gunHead.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
-      const slot = document.querySelector('#palette-list .drop-slot');
-      const slotBefore = slot ? [...slot.parentElement.children].indexOf(slot) : -1;
-      const highlighted = gunHead.parentElement.classList.contains('drop-into');
-      gunHead.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
-      await new Promise((r) => setTimeout(r, 200));
-      const cat = L.library.byId('glider').catId;
-      const gunCount = L.library.patternsIn('gun').length;
-      const slotGone = !document.querySelector('#palette-list .drop-slot');
+      const grid = gunHead.parentElement.querySelector('.edit-grid').getBoundingClientRect();
+      const r0 = glider.getBoundingClientRect();
+      return {
+        from: { x: r0.x + r0.width / 2, y: r0.y + r0.height / 2 },
+        to: { x: grid.left + 10, y: grid.top + 10 },
+      };
+    })()`);
+    const mouse = (type, p, buttons) => page.send('Input.dispatchMouseEvent', {
+      type, x: Math.round(p.x), y: Math.round(p.y), button: 'left', buttons,
+      clickCount: type === 'mouseMoved' ? 0 : 1,
+    });
+    await mouse('mouseMoved', dndPos.from, 0);
+    await mouse('mousePressed', dndPos.from, 1);
+    await mouse('mouseMoved', { x: dndPos.from.x + 8, y: dndPos.from.y + 8 }, 1);
+    await mouse('mouseMoved', { x: dndPos.from.x + 40, y: dndPos.from.y + 30 }, 1);
+    await sleep(120);
+    const dndMid = await page.evaluate(`(() => {
+      const rows = [...document.querySelectorAll('#palette-list .edit-tile')];
+      const glider = rows.find((r) => r.querySelector('.tile-name')?.textContent === '滑翔机');
+      return {
+        ghosted: !!glider && getComputedStyle(glider).display === 'none',
+        floating: !!document.querySelector('.drag-ghost'),
+      };
+    })()`);
+    await mouse('mouseMoved', dndPos.to, 1);
+    await sleep(160);
+    const dndSlot = await page.evaluate(
+      `(() => ({ hasSlot: !!document.querySelector('#palette-list .drop-slot') }))()`);
+    await mouse('mouseReleased', dndPos.to, 0);
+    await sleep(260);
+    const dndEnd = await page.evaluate(`(async () => {
+      const L = window.__life;
+      const out = {
+        cat: L.library.byId('glider').catId,
+        gunCount: L.library.patternsIn('gun').length,
+        slotGone: !document.querySelector('#palette-list .drop-slot'),
+        ghostGone: !document.querySelector('.drag-ghost'),
+        backCount: document.querySelectorAll('#palette-list .edit-tile').length,
+      };
       L.movePattern('glider', 'ship');
       L.setPaletteMode('browse');
       await new Promise((r) => setTimeout(r, 260));
-      return { cat, gunCount, highlighted, hasSlot: slotBefore >= 0, slotGone };
+      return out;
     })()`);
-    record('真拖拽能换分类（HTML5 DnD）', dnd.cat === 'gun' && dnd.gunCount === 2,
-      `拖到「枪」→ ${dnd.cat}`);
-    record('拖动时出现落点占位槽', dnd.hasSlot && dnd.highlighted,
-      `占位槽 ${dnd.hasSlot ? '有' : '无'} · 目标高亮 ${dnd.highlighted}`);
-    record('松手后占位槽收起', dnd.slotGone);
+    record('指针拖拽能换分类', dndEnd.cat === 'gun' && dndEnd.gunCount === 2, `拖进「枪」→ ${dndEnd.cat}`);
+    record('拖动时源方块收起、只留跟手的浮动预览', dndMid.ghosted && dndMid.floating,
+      `源 display=${dndMid.ghosted ? 'none' : '可见'} · 浮动预览 ${dndMid.floating ? '有' : '无'}`);
+    record('拖动时出现落点占位槽', dndSlot.hasSlot, `占位槽 ${dndSlot.hasSlot ? '有' : '无'}`);
+    record('松手后占位槽与浮动预览都收起', dndEnd.slotGone && dndEnd.ghostGone && dndEnd.backCount > 0,
+      `占位槽 ${dndEnd.slotGone ? '没了' : '还在'} · 预览 ${dndEnd.ghostGone ? '没了' : '还在'}`);
 
-    // 拖到「没有具体目标」的空隙上，dragover 也必须被 preventDefault，
-    // 否则浏览器会判定这里不接受放置，松手根本不产生 drop（之前"拖不动"就是这个）
-    const gap = await page.evaluate(`(async () => {
+    // 拖到列表末尾（「+ 新建分类」那一带）也应该有落点，且落在最后一个分类
+    const gapPos = await page.evaluate(`(async () => {
       const L = window.__life;
       L.setPaletteMode('edit');
-      await new Promise((r) => setTimeout(r, 320));
-      const tile = document.querySelector('#palette-list .edit-tile');
-      const dt = new DataTransfer();
-      tile.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+      await new Promise((r) => setTimeout(r, 340));
       const list = document.getElementById('palette-list');
-      const blank = document.querySelector('#palette-list .add-cat') || list;
-      const ev = new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt });
-      blank.dispatchEvent(ev);
-      const hasSlot = !!document.querySelector('#palette-list .drop-slot');
-      const dropEv = new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt });
-      blank.dispatchEvent(dropEv);
-      await new Promise((r) => setTimeout(r, 200));
-      const moved = L.library.patternsIn(L.library.categories[L.library.categories.length - 1].id).length;
-      L.setPaletteMode('browse');
-      await new Promise((r) => setTimeout(r, 240));
-      return { prevented: ev.defaultPrevented, dropPrevented: dropEv.defaultPrevented, hasSlot, moved };
+      list.scrollTop = list.scrollHeight;
+      await new Promise((r) => setTimeout(r, 180));
+      const lr = list.getBoundingClientRect();
+      const tiles = [...list.querySelectorAll('.edit-tile')].filter((t) => !t.closest('.stash-sec'));
+      const visible = tiles.find((t) => {
+        const r = t.getBoundingClientRect();
+        return r.top > lr.top + 8 && r.bottom < lr.bottom - 8 && r.height > 10;
+      });
+      if (!visible) return null;
+      const tr = visible.getBoundingClientRect();
+      const add = list.querySelector('.add-cat')?.getBoundingClientRect();
+      return {
+        id: visible.dataset.patId,
+        from: { x: tr.x + tr.width / 2, y: tr.y + tr.height / 2 },
+        to: add ? { x: add.x + add.width / 2, y: add.y + add.height / 2 } : null,
+        lastId: L.library.categories[L.library.categories.length - 1].id,
+      };
     })()`);
-    record('拖到空白处也接受放置（不会"拖不动"）', gap.prevented && gap.hasSlot,
-      `preventDefault ${gap.prevented ? '有' : '无'} · 占位槽 ${gap.hasSlot ? '有' : '无'}`);
-    record('空白处松手落到最后一个分类', gap.dropPrevented && gap.moved > 0,
-      `最后一个分类现有 ${gap.moved} 个图案`);
+    let gapRes = { hasSlot: false, movedCat: null, lastId: null };
+    if (gapPos && gapPos.to) {
+      await mouse('mouseMoved', gapPos.from, 0);
+      await mouse('mousePressed', gapPos.from, 1);
+      await mouse('mouseMoved', { x: gapPos.from.x + 10, y: gapPos.from.y - 10 }, 1);
+      await mouse('mouseMoved', gapPos.to, 1);
+      await sleep(170);
+      const gSlot = await page.evaluate(
+        `(() => ({ hasSlot: !!document.querySelector('#palette-list .drop-slot') }))()`);
+      await mouse('mouseReleased', gapPos.to, 0);
+      await sleep(260);
+      const movedCat = await page.evaluate(
+        `(() => window.__life.library.byId(${JSON.stringify(gapPos.id)})?.catId ?? null)()`);
+      await page.evaluate(`(async () => {
+        const L = window.__life;
+        L.movePattern(${JSON.stringify(gapPos.id)}, ${JSON.stringify(gapPos.lastId)});
+        L.setPaletteMode('browse');
+        await new Promise((r) => setTimeout(r, 240));
+      })()`);
+      gapRes = { hasSlot: gSlot.hasSlot, movedCat, lastId: gapPos.lastId };
+    }
+    record('拖到空白处也有落点', gapRes.hasSlot, `占位槽 ${gapRes.hasSlot ? '有' : '无'}`);
+    record('空白处松手落到最后一个分类', !!gapRes.movedCat && gapRes.movedCat === gapRes.lastId,
+      `落在 ${gapRes.movedCat}（最后一个分类 ${gapRes.lastId}）`);
 
     const collapse = await page.evaluate(`(async () => {
       document.getElementById('btn-palette-collapse').click();
@@ -818,41 +897,62 @@ async function main() {
     record('拖左边缘能加宽图案库', widen.after > widen.before + 60,
       `${widen.before}px → ${widen.after}px`);
 
+    // 真实鼠标：图案方块与分类头拖起来后源项要抽走
+    const dragRects = await page.evaluate(`(async () => {
+      const L = window.__life;
+      L.setPaletteMode('edit');
+      await new Promise((r) => setTimeout(r, 340));
+      const tile = document.querySelector('#palette-list .edit-tile');
+      const tr = tile.getBoundingClientRect();
+      const grip = document.querySelector('#palette-list .edit-cat-head .grip').getBoundingClientRect();
+      return {
+        tile: { x: tr.x + tr.width / 2, y: tr.y + tr.height / 2 },
+        grip: { x: grip.x + grip.width / 2, y: grip.y + grip.height / 2 },
+      };
+    })()`);
+    await mouse('mouseMoved', dragRects.tile, 0);
+    await mouse('mousePressed', dragRects.tile, 1);
+    await mouse('mouseMoved', { x: dragRects.tile.x + 40, y: dragRects.tile.y + 30 }, 1);
+    await sleep(130);
+    await page.evaluate(`(() => {
+      const tile = document.querySelector('#palette-list .edit-tile');
+      window.__dragProbe = {
+        tileHidden: !tile || getComputedStyle(tile).display === 'none',
+        tileGhosted: !!document.querySelector('.drag-ghost'),
+        dbg: 'display=' + (tile ? getComputedStyle(tile).display : 'gone')
+          + ' · ghost=' + document.querySelectorAll('.drag-ghost').length
+          + ' · pdrag=' + JSON.stringify(window.__life.dragging),
+      };
+    })()`);
+    await mouse('mouseReleased', { x: dragRects.tile.x + 40, y: dragRects.tile.y + 30 }, 0);
+    await sleep(220);
+    await page.evaluate(`(() => {
+      window.__dragProbe.tileBack = document.querySelectorAll('#palette-list .edit-tile').length > 0;
+    })()`);
+    await mouse('mouseMoved', dragRects.grip, 0);
+    await mouse('mousePressed', dragRects.grip, 1);
+    await mouse('mouseMoved', { x: dragRects.grip.x + 6, y: dragRects.grip.y + 46 }, 1);
+    await sleep(130);
+    await page.evaluate(`(() => {
+      const cats = [...document.querySelectorAll('#palette-list .edit-cat')];
+      window.__dragProbe.catHidden = !!cats[0] && getComputedStyle(cats[0]).display === 'none';
+    })()`);
+    await mouse('mouseReleased', { x: dragRects.grip.x + 6, y: dragRects.grip.y + 46 }, 0);
+    await sleep(220);
+    await page.evaluate(`(() => {
+      window.__dragProbe.catBack = document.querySelectorAll('#palette-list .edit-cat').length > 0;
+      window.__life.setPaletteMode('browse');
+    })()`);
+    await sleep(240);
+
     // X 拖拽时源项抽走、分类头布局、一键展开/收起、删分类要确认
     const edit2 = await page.evaluate(`(async () => {
       const L = window.__life;
       L.setPaletteMode('edit');
       await new Promise((r) => setTimeout(r, 320));
 
-      const tiles = [...document.querySelectorAll('#palette-list .edit-tile')];
-      const tile = tiles[0];
-      const dt = new DataTransfer();
-      const over = (el) => {
-        const r = el.getBoundingClientRect();
-        document.getElementById('palette-list').dispatchEvent(new DragEvent('dragover', {
-          bubbles: true, cancelable: true, dataTransfer: dt,
-          clientX: r.left + 4, clientY: r.top + 4,
-        }));
-      };
-      tile.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
-      over(tile);
-      const tileName = tile.querySelector('.tile-name');
-      const tileHidden = !!tileName && getComputedStyle(tileName).visibility === 'hidden';
-      const tileGhosted = tile.classList.contains('dragging');
-      tile.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }));
-      await new Promise((r) => setTimeout(r, 140));
-      const tileBack = !!tileName && getComputedStyle(tileName).visibility !== 'hidden';
-
-      const head = document.querySelector('#palette-list .edit-cat-head');
-      const cat = head.parentElement;
-      const headInput = head.querySelector('input');
-      head.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() }));
-      over(head);
-      const catHidden = getComputedStyle(headInput).visibility === 'hidden'
-        && getComputedStyle(cat.querySelector('.edit-grid')).visibility === 'hidden';
-      head.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: new DataTransfer() }));
-      await new Promise((r) => setTimeout(r, 140));
-      const catBack = getComputedStyle(headInput).visibility !== 'hidden';
+      const probe = window.__dragProbe || {};
+      const { tileHidden, tileGhosted, tileBack, catHidden, catBack, dbg } = probe;
 
       const head2 = document.querySelector('#palette-list .edit-cat-head');
       const kids = [...head2.children];
@@ -908,11 +1008,11 @@ async function main() {
 
       L.setPaletteMode('browse');
       await new Promise((r) => setTimeout(r, 260));
-      return { tileHidden, tileGhosted, tileBack, catHidden, catBack, layout, openA, openB, openC, labelB,
+      return { tileHidden, tileGhosted, dbg, tileBack, catHidden, catBack, layout, openA, openB, openC, labelB,
         base, withTemp, afterCancel, afterOk, confirmShown, centered, title, closedAfterCancel };
     })()`);
     record('拖拽中的图案不参与排序', edit2.tileHidden && edit2.tileGhosted && edit2.tileBack,
-      `拖动时内容隐藏=${edit2.tileHidden}，松手恢复=${edit2.tileBack}`);
+      `拖动时内容隐藏=${edit2.tileHidden}，松手恢复=${edit2.tileBack}（${edit2.dbg}）`);
     record('拖拽中的分类不参与排序', edit2.catHidden && edit2.catBack,
       `拖动时隐藏=${edit2.catHidden}，松手恢复=${edit2.catBack}`);
     record('分类头布局：三角在最左、拖拽区在名称右边',
@@ -930,6 +1030,329 @@ async function main() {
       edit2.confirmShown && edit2.centered && edit2.title.includes('删除')
         && edit2.closedAfterCancel,
       `标题「${edit2.title}」· 居中 ${edit2.centered}`);
+
+    // Y 打开遮挡画布的界面会暂停演化
+    const pauseOnModal = await page.evaluate(`(async () => {
+      const L = window.__life;
+      if (!L.playing) document.getElementById('btn-play').click();
+      await new Promise(r => setTimeout(r, 120));
+      const before = L.playing;
+      document.getElementById('btn-studio').click();
+      await new Promise(r => setTimeout(r, 150));
+      const afterStudio = L.playing;
+      document.getElementById('modal-close').click();
+      await new Promise(r => setTimeout(r, 100));
+      document.getElementById('btn-help').click();
+      await new Promise(r => setTimeout(r, 150));
+      const afterHelp = L.playing;
+      document.getElementById('modal-close').click();
+      await new Promise(r => setTimeout(r, 100));
+      return { before, afterStudio, afterHelp };
+    })()`);
+    record(
+      '打开内容库 / 帮助会自动暂停演化',
+      pauseOnModal.before && !pauseOnModal.afterStudio && !pauseOnModal.afterHelp,
+      `播放 ${pauseOnModal.before} → 内容库 ${pauseOnModal.afterStudio} → 帮助 ${pauseOnModal.afterHelp}`,
+    );
+
+    // Z 回溯深度可调（在底栏右侧）
+    const depth = await page.evaluate(`(async () => {
+      const L = window.__life;
+      const before = L.history.limitGens;
+      const sel = document.getElementById('depth-select');
+      const opts = sel ? [...sel.options].map(o => o.value) : [];
+      sel.value = '500';
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 150));
+      const after = L.history.limitGens;
+      const note = sel.title;
+      sel.value = '3000';
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 120));
+      const restored = L.history.limitGens;
+      return { before, after, restored, note, opts };
+    })()`);
+    record(
+      '回溯深度可以在底栏调整',
+      depth.after === 500 && depth.restored === 3000 && depth.opts.length >= 5,
+      `${depth.before} → ${depth.after} → ${depth.restored}，档位 ${depth.opts.join('/')}`,
+    );
+    record(
+      '回溯深度的说明里有已用代数与内存上限',
+      /回溯深度/.test(depth.note) && /上限/.test(depth.note),
+      depth.note,
+    );
+
+    // AA 快照：点卡片进预览，不直接覆盖世界
+    const preview = await page.evaluate(`(async () => {
+      const L = window.__life;
+      L.world.clear(); L.commit();
+      L.place('glider', 300, 300);
+      const popSnap = L.world.population;
+      document.getElementById('btn-studio').click();
+      await new Promise(r => setTimeout(r, 150));
+      document.getElementById('st-snap').click();
+      await new Promise(r => setTimeout(r, 200));
+      document.getElementById('snap-name').value = '预览用快照';
+      document.getElementById('snap-save').click();
+      for (let i = 0; i < 40; i++) {
+        if (document.querySelectorAll('.snap-card').length) break;
+        await new Promise(r => setTimeout(r, 50));
+      }
+      await new Promise(r => setTimeout(r, 250));
+      document.getElementById('modal-close').click();
+      await new Promise(r => setTimeout(r, 120));
+
+      L.world.clear(); L.commit();
+      L.place('pulsar', 400, 400);
+      const popNow = L.world.population;
+
+      document.getElementById('btn-studio').click();
+      await new Promise(r => setTimeout(r, 150));
+      document.getElementById('st-snap').click();
+      await new Promise(r => setTimeout(r, 250));
+      const card = document.querySelector('.card-grid .snap-card');
+      card.click();
+      await new Promise(r => setTimeout(r, 350));
+      const inPreview = !!document.getElementById('snap-canvas');
+      const popInPreview = L.world.population;
+      const hasLoad = !!document.getElementById('snap-load');
+      const hasBack = !!document.getElementById('snap-back');
+      // 预览里滚轮缩放不应该报错
+      const pane = document.getElementById('snap-view');
+      const pr = pane.getBoundingClientRect();
+      pane.dispatchEvent(new WheelEvent('wheel', {
+        deltaY: -240, clientX: pr.left + pr.width / 2, clientY: pr.top + pr.height / 2,
+        bubbles: true, cancelable: true,
+      }));
+      await new Promise(r => setTimeout(r, 120));
+      document.getElementById('snap-load').click();
+      await new Promise(r => setTimeout(r, 200));
+      const confirmShown = !document.getElementById('confirm').classList.contains('hidden');
+      document.getElementById('confirm-ok').click();
+      await new Promise(r => setTimeout(r, 350));
+      const popAfter = L.world.population;
+      return { popSnap, popNow, popInPreview, inPreview, hasLoad, hasBack, confirmShown, popAfter };
+    })()`);
+    record(
+      '点快照卡片先进预览、不覆盖当前世界',
+      preview.inPreview && preview.popInPreview === preview.popNow && preview.popNow !== preview.popSnap,
+      `预览时人口 ${preview.popInPreview}（当前 ${preview.popNow}，快照 ${preview.popSnap}）`,
+    );
+    record(
+      '快照预览里有「载入到画布」且载入要确认',
+      preview.hasLoad && preview.confirmShown && preview.popAfter === preview.popSnap,
+      `确认 ${preview.confirmShown} · 载入后人口 ${preview.popAfter}`,
+    );
+
+    // AB 片段播放器：一屏放得下、操作栏可收起、能全屏
+    const player = await page.evaluate(`(async () => {
+      document.getElementById('btn-studio').click();
+      await new Promise(r => setTimeout(r, 150));
+      document.getElementById('st-clips').click();
+      await new Promise(r => setTimeout(r, 300));
+      const card = document.querySelector('.card-grid .snap-card');
+      if (!card) return { none: true };
+      card.click();
+      await new Promise(r => setTimeout(r, 450));
+      const body = document.getElementById('modal-body');
+      const bar = document.getElementById('clip-bar');
+      const stage = document.getElementById('clip-stage');
+      const scrollable = body.scrollHeight > body.clientHeight + 2;
+      const barVisible = !!bar && getComputedStyle(bar).display !== 'none';
+      const hasFs = !!document.getElementById('clip-fs');
+      document.getElementById('clip-dock').click();
+      await new Promise(r => setTimeout(r, 150));
+      const bareHidden = getComputedStyle(bar).display === 'none';
+      const showBtn = document.getElementById('clip-showbar');
+      const showVisible = !showBtn.classList.contains('hidden');
+      showBtn.click();
+      await new Promise(r => setTimeout(r, 150));
+      const barBack = getComputedStyle(bar).display !== 'none';
+      const sr = stage.getBoundingClientRect();
+      stage.dispatchEvent(new WheelEvent('wheel', {
+        deltaY: -240, clientX: sr.left + sr.width / 2, clientY: sr.top + sr.height / 2,
+        bubbles: true, cancelable: true,
+      }));
+      await new Promise(r => setTimeout(r, 150));
+      const stageH = Math.round(sr.height);
+      document.getElementById('modal-close').click();
+      await new Promise(r => setTimeout(r, 200));
+      return { none: false, scrollable, barVisible, hasFs, bareHidden, showVisible, barBack, stageH };
+    })()`);
+    record(
+      '片段播放器一屏放得下（不出滚动条）',
+      !player.none && !player.scrollable && player.stageH > 200,
+      player.none ? '没有片段' : `舞台高 ${player.stageH}`,
+    );
+    record(
+      '片段播放器操作栏能收起 / 展开',
+      !player.none && player.barVisible && player.bareHidden && player.showVisible && player.barBack,
+      player.none ? '没有片段' : `收起 ${player.bareHidden} · 展开 ${player.barBack}`,
+    );
+    record('片段播放器有全屏按钮', !player.none && player.hasFs, `hasFs=${player.hasFs}`);
+
+    // AD 回溯深度：挪到底栏右侧，改完立刻生效
+    const depthBar = await page.evaluate(`(async () => {
+      const sel = document.getElementById('depth-select');
+      const bar = document.getElementById('bottombar');
+      const inBar = !!sel && bar.contains(sel);
+      const opts = sel ? [...sel.options].map((o) => o.value) : [];
+      sel.value = '500';
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 150));
+      let saved = '';
+      try { saved = localStorage.getItem('life-studio:history-depth') || ''; } catch (e) {}
+      const stillInSettings = !!document.getElementById('set-depth');
+      // 还原，别影响后面的用例
+      sel.value = '3000';
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+      await new Promise(r => setTimeout(r, 100));
+      return { inBar, opts, saved, stillInSettings };
+    })()`);
+    record(
+      '回溯深度在底栏右侧、六档可选、改完立刻记住',
+      depthBar.inBar && depthBar.opts.length === 6 && depthBar.saved === '500' && !depthBar.stillInSettings,
+      `?inBar=${depthBar.inBar} · ${depthBar.opts.join('/')} · 存了 ${depthBar.saved}`,
+    );
+
+    // AE 遮挡界面：打开时暂停，关掉后恢复原来的播放状态
+    const pauseRun = await page.evaluate(`(async () => {
+      const L = window.__life;
+      L.world.clear(); L.commit(); L.place('glider', 300, 300);
+      if (!L.playing) document.getElementById('btn-play').click();
+      await new Promise(r => setTimeout(r, 150));
+      const before = L.playing;
+      document.getElementById('btn-studio').click();
+      await new Promise(r => setTimeout(r, 220));
+      const pausedOnOpen = L.playing;
+      document.getElementById('modal-close').click();
+      await new Promise(r => setTimeout(r, 260));
+      const resumed = L.playing;
+      // 本来就没在跑的时候，关掉之后也不该自己跑起来
+      if (L.playing) document.getElementById('btn-play').click();
+      await new Promise(r => setTimeout(r, 150));
+      const idleBefore = L.playing;
+      document.getElementById('btn-help').click();
+      await new Promise(r => setTimeout(r, 220));
+      const idlePaused = L.playing;
+      document.getElementById('modal-close').click();
+      await new Promise(r => setTimeout(r, 260));
+      const idleAfter = L.playing;
+      return { before, pausedOnOpen, resumed, idleBefore, idlePaused, idleAfter };
+    })()`);
+    record(
+      '弹窗遮挡时暂停，关掉后恢复原来的播放状态',
+      pauseRun.before &&
+        !pauseRun.pausedOnOpen &&
+        pauseRun.resumed &&
+        !pauseRun.idleBefore &&
+        !pauseRun.idlePaused &&
+        !pauseRun.idleAfter,
+      `播放中开弹窗 ${pauseRun.pausedOnOpen} → 关掉 ${pauseRun.resumed}；暂停中开弹窗 ${pauseRun.idlePaused} → 关掉 ${pauseRun.idleAfter}`,
+    );
+
+    // AF 片段播放器：真鼠标点「▴ 操作栏」；关掉后回到内容库片段页签
+    const dockPos = await page.evaluate(`(async () => {
+      document.getElementById('btn-studio').click();
+      await new Promise(r => setTimeout(r, 180));
+      document.getElementById('st-clips').click();
+      await new Promise(r => setTimeout(r, 280));
+      const card = document.querySelector('.card-grid .snap-card');
+      if (!card) return { none: true };
+      card.click();
+      await new Promise(r => setTimeout(r, 450));
+      document.getElementById('clip-dock').click();
+      await new Promise(r => setTimeout(r, 160));
+      const btn = document.getElementById('clip-showbar');
+      const r = btn.getBoundingClientRect();
+      const bar = document.getElementById('clip-bar');
+      return {
+        none: false,
+        bare: getComputedStyle(bar).display === 'none',
+        at: { x: r.left + r.width / 2, y: r.top + r.height / 2 },
+      };
+    })()`);
+    let dockBack = { visible: false, studio: false, active: '' };
+    if (!dockPos.none) {
+      const realMouse = (type, buttons) => page.send('Input.dispatchMouseEvent', {
+        type,
+        x: Math.round(dockPos.at.x),
+        y: Math.round(dockPos.at.y),
+        button: 'left',
+        buttons,
+        clickCount: type === 'mouseMoved' ? 0 : 1,
+      });
+      await realMouse('mouseMoved', 0);
+      await realMouse('mousePressed', 1);
+      await realMouse('mouseReleased', 0);
+      await sleep(220);
+      dockBack = await page.evaluate(`(async () => {
+        const bar = document.getElementById('clip-bar');
+        const visible = !!bar && getComputedStyle(bar).display !== 'none';
+        document.getElementById('modal-close').click();
+        await new Promise(r => setTimeout(r, 280));
+        const tabs = document.querySelector('.studio-tabs');
+        const active = document.querySelector('.studio-tab.active');
+        const out = { visible, studio: !!tabs, active: active ? active.textContent.trim() : '' };
+        document.getElementById('modal-close').click();
+        await new Promise(r => setTimeout(r, 200));
+        return out;
+      })()`);
+    }
+    record(
+      '播放器「▴ 操作栏」用真鼠标点得动',
+      !dockPos.none && dockPos.bare && dockBack.visible,
+      dockPos.none ? '没有片段' : `收起后 ${dockPos.bare} · 点回来 ${dockBack.visible}`,
+    );
+    record(
+      '关掉播放器回到内容库的片段页签',
+      !dockPos.none && dockBack.studio && dockBack.active.includes('片段'),
+      dockPos.none ? '没有片段' : `回到 ${dockBack.studio ? '内容库' : '画布'} · 页签「${dockBack.active}」`,
+    );
+
+    // AG 快照预览关掉后也回内容库，而不是直接掉回画布
+    const snapBack = await page.evaluate(`(async () => {
+      document.getElementById('btn-studio').click();
+      await new Promise(r => setTimeout(r, 200));
+      const card = document.querySelector('.snap-card');
+      if (!card) return { none: true };
+      card.click();
+      await new Promise(r => setTimeout(r, 420));
+      const opened = !!document.getElementById('snap-view');
+      document.getElementById('modal-close').click();
+      await new Promise(r => setTimeout(r, 280));
+      const active = document.querySelector('.studio-tab.active');
+      const out = { none: false, opened, studio: !!document.querySelector('.studio-tabs'), active: active ? active.textContent.trim() : '' };
+      document.getElementById('modal-close').click();
+      await new Promise(r => setTimeout(r, 220));
+      return out;
+    })()`);
+    record(
+      '关掉快照预览回到内容库「时刻 · 存档」',
+      !snapBack.none && snapBack.opened && snapBack.studio && snapBack.active.includes('时刻'),
+      snapBack.none ? '没有快照' : `页签「${snapBack.active}」`,
+    );
+
+    // AC 清空世界要确认
+    const clearAsk = await page.evaluate(`(async () => {
+      const L = window.__life;
+      L.world.clear(); L.commit();
+      L.place('block', 300, 300);
+      const pop = L.world.population;
+      document.getElementById('btn-clear').click();
+      await new Promise(r => setTimeout(r, 220));
+      const asked = !document.getElementById('confirm').classList.contains('hidden');
+      const untouched = L.world.population === pop;
+      document.getElementById('confirm-cancel').click();
+      await new Promise(r => setTimeout(r, 150));
+      return { asked, untouched, afterCancel: L.world.population === pop };
+    })()`);
+    record(
+      '清空世界要先确认，取消后不动',
+      clearAsk.asked && clearAsk.untouched && clearAsk.afterCancel,
+      `弹窗 ${clearAsk.asked} · 取消后保留 ${clearAsk.afterCancel}`,
+    );
 
     // J 收尾：布置一个漂亮场景并截图
     await page.evaluate(`(async () => {

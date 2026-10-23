@@ -95,6 +95,8 @@ const state = {
   pinch: null as null | { dist: number; cx: number; cy: number },
   modalOpen: false,
   paletteMode: 'browse' as 'browse' | 'edit',
+  /** 可回溯多少代（0 = 只受内存上限约束） */
+  historyDepth: 3000,
 };
 
 let lastTs = 0;
@@ -102,6 +104,43 @@ let uiDirty = true;
 let lastUi = 0;
 let immersive = false;
 let fsTimer = 0;
+
+// ──────────────────────────────────────────────────────────────────────────
+// 回溯深度：代数上限（内存上限固定 32MB，两者先到先算）
+// ──────────────────────────────────────────────────────────────────────────
+const HISTORY_DEPTH_KEY = 'life-studio:history-depth';
+/** 0 表示不限代数，只受内存上限约束。 */
+const HISTORY_DEPTHS = [0, 500, 1000, 3000, 10000, 20000];
+const HISTORY_BYTES = 32 * 1024 * 1024;
+
+function readHistoryDepth(): number {
+  try {
+    const raw = localStorage.getItem(HISTORY_DEPTH_KEY);
+    if (raw !== null) {
+      const n = Number(raw);
+      if (HISTORY_DEPTHS.includes(n)) return n;
+    }
+  } catch {
+    /* 读不到就用默认值 */
+  }
+  return 3000;
+}
+
+/** 把当前设置套到 history 上（新建 History 之后也要调一次）。 */
+function applyHistoryDepth(): void {
+  const gens = state.historyDepth === 0 ? 1e9 : state.historyDepth;
+  history.setDepth(gens, HISTORY_BYTES);
+}
+
+function depthLabel(v: number): string {
+  return v === 0 ? '只受内存上限' : `${nf.format(v)} 代`;
+}
+
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
 
 const canvas = el<HTMLCanvasElement>('board');
 const stageEl = el('stage');
@@ -191,12 +230,12 @@ function applyWorldShape(w: number, h: number, edge: EdgeMode): void {
   nw.recompute();
   world = nw;
   history = new History(world);
+  applyHistoryDepth();
   renderer.attach(world);
   state.selection = [];
   updateSelBar();
   layoutCanvas();
   view.fit(world.width, world.height, renderer.cssW, renderer.cssH);
-  syncRecenterButton();
   updateZoomBounds();
   uiDirty = true;
 }
@@ -906,15 +945,44 @@ function centerWorld(): void {
   uiDirty = true;
 }
 
-/** 「回正」：只有环面有这个概念，死亡边界下按钮不显示。 */
+/** 视角回正：只有环面有这个概念（快捷键 Shift+0）。 */
 function recenterView(): void {
   if (world.edge !== 'wrap') return;
   centerWorld();
   toast('视角已回正');
 }
 
-function syncRecenterButton(): void {
-  el('btn-recenter').classList.toggle('hidden', world.edge !== 'wrap');
+// ──────────────────────────────────────────────────────────────────────────
+// 回到底部的「回溯」选择器（选择后立刻生效并记住）
+// ──────────────────────────────────────────────────────────────────────────
+function buildDepthSelect(): void {
+  const sel = el<HTMLSelectElement>('depth-select');
+  sel.innerHTML = '';
+  for (const v of HISTORY_DEPTHS) {
+    const opt = document.createElement('option');
+    opt.value = String(v);
+    opt.textContent = v === 0 ? '不限' : `${v >= 10000 ? `${v / 10000} 万` : nf.format(v)} 代`;
+    sel.append(opt);
+  }
+  sel.value = String(state.historyDepth);
+  sel.title =
+    `回溯深度：往回可以看多少代（上限 ${state.historyDepth === 0 ? fmtBytes(HISTORY_BYTES) : `${depthLabel(state.historyDepth)} / ${fmtBytes(HISTORY_BYTES)}`}，` +
+    '超出后丢弃最早的关键帧）';
+  sel.addEventListener('change', () => {
+    state.historyDepth = Number(sel.value);
+    applyHistoryDepth();
+    try {
+      localStorage.setItem(HISTORY_DEPTH_KEY, String(state.historyDepth));
+    } catch {
+      /* 存不了就算了，下次退回默认 */
+    }
+    const st = history.stats();
+    sel.title =
+      `回溯深度：往回可以看多少代（当前已记录 ${nf.format(st.gens)} 代 · 占用 ${fmtBytes(st.bytes)}；` +
+      `上限 ${state.historyDepth === 0 ? fmtBytes(HISTORY_BYTES) : `${depthLabel(state.historyDepth)} / ${fmtBytes(HISTORY_BYTES)}`}，超出后丢弃最早的关键帧）`;
+    uiDirty = true;
+    toast(`回溯深度：${depthLabel(state.historyDepth)}`);
+  });
 }
 
 /**
@@ -1311,6 +1379,8 @@ window.addEventListener('keydown', (e) => {
     return;
   }
   if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+  // 弹窗开着时键盘只服务于弹窗（Esc 关闭），别让 Space / P 之类漏到画布上
+  if (state.modalOpen && e.key !== 'Escape') return;
 
   if (e.key === 'Escape' && immersive) {
     e.preventDefault();
@@ -1500,20 +1570,30 @@ function fitContent(pad = 28): void {
 }
 
 function clearWorld(): void {
-  if (state.playing) setPlaying(false);
-  beginEdit('清空世界');
-  world.clear();
-  commitEdit();
-  toast('世界已清空');
+  if (world.population === 0) {
+    toast('世界已经是空的');
+    return;
+  }
+  void askConfirm('清空世界', '清空后这一代的图案就没了，只能靠回溯或撤销找回。确定清空？', '清空').then((ok) => {
+    if (!ok) return;
+    if (state.playing) setPlaying(false);
+    beginEdit('清空世界');
+    world.clear();
+    commitEdit();
+    toast('世界已清空');
+  });
 }
 
 function randomWorld(): void {
-  if (state.playing) setPlaying(false);
-  beginEdit('随机播种');
-  world.clear();
-  world.randomize(0.28);
-  commitEdit();
-  toast('随机播种完成');
+  void askConfirm('随机播种', '会覆盖当前画面里的图案（可以撤销）。确定重新随机？', '随机').then((ok) => {
+    if (!ok) return;
+    if (state.playing) setPlaying(false);
+    beginEdit('随机播种');
+    world.clear();
+    world.randomize(0.28);
+    commitEdit();
+    toast('随机播种完成');
+  });
 }
 
 function toggleDisplay(): void {
@@ -2868,8 +2948,25 @@ function buildEditPanel(): void {
 // ──────────────────────────────────────────────────────────────────────────
 let modalCleanup: (() => void) | null = null;
 
+/** 打开遮挡界面前是否在播放（关掉后要恢复）；用栈的深度来记，因为会一层层叠 */
+let pausedByOverlay = false;
+/** 关掉这一层后要回到哪一层界面（比如预览 → 内容库） */
+let modalReturn: (() => void) | null = null;
+
 function openModal(title: string, build: (body: HTMLElement) => void): void {
+  // 只要弹出遮挡画布的界面就暂停演化，关掉后如果本来在跑就接着跑
+  if (state.playing) {
+    pausedByOverlay = true;
+    setPlaying(false);
+  }
+  // 上一个界面的清理钩子先跑掉，别把播放器、全屏、宽卡片的状态带过来
+  if (modalCleanup) {
+    modalCleanup();
+    modalCleanup = null;
+  }
   const body = el('modal-body');
+  body.classList.remove('no-scroll');
+  setWideModal(false);
   el('modal-title').textContent = title;
   body.innerHTML = '';
   build(body);
@@ -2884,7 +2981,22 @@ function closeModal(): void {
     modalCleanup();
     modalCleanup = null;
   }
-  el('modal-body').innerHTML = '';
+  const body = el('modal-body');
+  body.innerHTML = '';
+  body.classList.remove('no-scroll');
+  setWideModal(false);
+  // 有「上一层」就回去（比如从快照预览退回内容库），此时不算真正离开遮挡界面
+  if (modalReturn) {
+    const back = modalReturn;
+    modalReturn = null;
+    back();
+    return;
+  }
+  // 真正回到画布：刚才是因为打开界面才暂停的，那就接着跑
+  if (pausedByOverlay) {
+    pausedByOverlay = false;
+    if (!state.playing) setPlaying(true);
+  }
 }
 
 el('modal-close').addEventListener('click', closeModal);
@@ -2951,8 +3063,7 @@ function makeSnapshot(name: string): SnapshotRecord {
   };
 }
 
-async function openSnapshots(): Promise<void> {
-  openModal('存档', (body) => {
+function buildSnapshots(body: HTMLElement): void {
     const head = document.createElement('div');
     head.className = 'row';
     head.style.marginBottom = '12px';
@@ -2993,6 +3104,152 @@ async function openSnapshots(): Promise<void> {
     });
 
     void refresh();
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 可缩放 / 平移的小画布（快照预览、片段播放器共用）
+// ──────────────────────────────────────────────────────────────────────────
+function attachCamera(box: HTMLElement, view: Viewport, onChange: () => void): () => void {
+  const onWheel = (e: WheelEvent): void => {
+    e.preventDefault();
+    const r = box.getBoundingClientRect();
+    const f = Math.exp(-e.deltaY * (e.deltaMode === 1 ? 0.06 : 0.0016));
+    view.zoomAt(e.clientX - r.left, e.clientY - r.top, f);
+    onChange();
+  };
+  let drag: { x: number; y: number } | null = null;
+  const onDown = (e: PointerEvent): void => {
+    if (e.button !== 0) return;
+    // 舞台上的按钮（比如「▴ 操作栏」）不能被当成拖动起点，否则 click 会被吃掉
+    const target = e.target as Element | null;
+    if (target?.closest('button, input, select, a')) return;
+    drag = { x: e.clientX, y: e.clientY };
+    box.classList.add('grabbing');
+    try {
+      box.setPointerCapture(e.pointerId);
+    } catch {
+      /* 合成事件没有活动指针 */
+    }
+    e.preventDefault();
+  };
+  const onMove = (e: PointerEvent): void => {
+    if (!drag) return;
+    view.panBy(e.clientX - drag.x, e.clientY - drag.y);
+    drag = { x: e.clientX, y: e.clientY };
+    onChange();
+  };
+  const onUp = (): void => {
+    drag = null;
+    box.classList.remove('grabbing');
+  };
+  box.addEventListener('wheel', onWheel, { passive: false });
+  box.addEventListener('pointerdown', onDown);
+  box.addEventListener('pointermove', onMove);
+  box.addEventListener('pointerup', onUp);
+  box.addEventListener('pointercancel', onUp);
+  return () => {
+    box.removeEventListener('wheel', onWheel);
+    box.removeEventListener('pointerdown', onDown);
+    box.removeEventListener('pointermove', onMove);
+    box.removeEventListener('pointerup', onUp);
+    box.removeEventListener('pointercancel', onUp);
+  };
+}
+
+/** 让模态卡片临时变宽（播放器、预览用）。 */
+function setWideModal(wide: boolean): void {
+  document.querySelector('.modal-card')?.classList.toggle('wide', wide);
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// 快照预览
+// ──────────────────────────────────────────────────────────────────────────
+function openSnapshotPreview(rec: SnapshotRecord): void {
+  // 关掉预览要回到内容库，而不是直接掉回画布
+  modalReturn = () => openStudioBridge(0);
+  openModal(`快照 · ${rec.name}`, (body) => {
+    body.innerHTML = `
+      <div class="pane" id="snap-view">
+        <canvas id="snap-canvas"></canvas>
+        <div class="pane-hint">滚轮缩放 · 拖动平移</div>
+      </div>
+      <div class="pane-bar">
+        <span class="small muted">
+          第 ${nf.format(rec.gen)} 代 · 人口 ${nf.format(rec.population)} · ${rec.width}×${rec.height}
+          · ${rec.edge === 'wrap' ? '环绕' : '死亡'}边界 · ${fmtTime(rec.created)}
+        </span>
+        <div class="btn-row" style="margin-left:auto">
+          <button type="button" class="btn" id="snap-back">返回列表</button>
+          <button type="button" class="btn" id="snap-del">删除</button>
+          <button type="button" class="btn primary" id="snap-load">载入到画布</button>
+        </div>
+      </div>`;
+
+    const pane = body.querySelector<HTMLElement>('#snap-view')!;
+    const cvs = body.querySelector<HTMLCanvasElement>('#snap-canvas')!;
+    // 先把卡片变宽再量尺寸，否则画布比可视区域小一圈
+    setWideModal(true);
+    const w = new World(rec.width, rec.height);
+    w.edge = rec.edge;
+    w.loadPacked(rec.packed, rec.population, rec.gen);
+    const r = new Renderer(cvs);
+    r.attach(w);
+    const rect = pane.getBoundingClientRect();
+    r.resize(rect.width || 640, rect.height || 360);
+    const v = new Viewport();
+    // 快照里存的镜头可能早就跑偏了，优先框住活细胞
+    const bb = w.liveBBox();
+    if (bb.x1 > bb.x0 && bb.y1 > bb.y0) {
+      const s = v.clampScale(Math.min((r.cssW - 40) / (bb.x1 - bb.x0), (r.cssH - 40) / (bb.y1 - bb.y0), 24));
+      v.scale = s;
+      v.ox = (r.cssW - (bb.x1 - bb.x0) * s) / 2 - bb.x0 * s;
+      v.oy = (r.cssH - (bb.y1 - bb.y0) * s) / 2 - bb.y0 * s;
+    } else {
+      v.fit(rec.width, rec.height, r.cssW, r.cssH, 24);
+    }
+    const paint = (): void => {
+      r.sync();
+      r.render(v, { grid: state.display > 0 && v.scale >= 6, bounds: false });
+    };
+    // 预览里不要缩成一个小点：最多缩到刚好框住内容的三分之一那么大
+    v.minScale = Math.max(0.35, v.scale / 3);
+    paint();
+    const detach = attachCamera(pane, v, paint);
+    const ro = new ResizeObserver(() => {
+      const b = pane.getBoundingClientRect();
+      if (b.width < 8 || b.height < 8) return;
+      r.resize(b.width, b.height);
+      paint();
+    });
+    ro.observe(pane);
+
+    body.querySelector('#snap-back')!.addEventListener('click', () => closeModal());
+    body.querySelector('#snap-del')!.addEventListener('click', () => {
+      void askConfirm('删除快照', `删除「${rec.name}」？删掉就找不回来了。`, '删除').then(async (ok) => {
+        if (!ok) return;
+        await store.deleteSnapshot(rec.id);
+        toast('已删除');
+        closeModal();
+      });
+    });
+    body.querySelector('#snap-load')!.addEventListener('click', () => {
+      void askConfirm(
+        '载入快照',
+        `载入「${rec.name}」会覆盖当前的画面，并把回溯历史重置到第 ${nf.format(rec.gen)} 代。继续？`,
+        '载入',
+      ).then((ok) => {
+        if (!ok) return;
+        loadSnapshot(rec);
+        modalReturn = null; // 载入后要回画布，不再退回内容库
+        closeModal();
+      });
+    });
+
+    modalCleanup = () => {
+      detach();
+      ro.disconnect();
+      setWideModal(false);
+    };
   });
 }
 
@@ -3012,18 +3269,20 @@ function snapshotCard(rec: SnapshotRecord, refresh: () => Promise<void>): HTMLEl
   card.querySelector('.m2')!.textContent = `${rec.width}² · ${fmtTime(rec.created)}`;
   card.querySelector('[data-act="load"]')!.addEventListener('click', (e) => {
     e.stopPropagation();
-    loadSnapshot(rec);
-    closeModal();
+    void askConfirm('载入快照', `载入「${rec.name}」会覆盖当前画面并重置回溯历史。继续？`, '载入').then((ok) => {
+      if (!ok) return;
+      loadSnapshot(rec);
+      closeModal();
+    });
   });
   card.querySelector('[data-act="del"]')!.addEventListener('click', async (e) => {
     e.stopPropagation();
+    const ok = await askConfirm('删除快照', `删除「${rec.name}」？删掉就找不回来了。`, '删除');
+    if (!ok) return;
     await store.deleteSnapshot(rec.id);
     await refresh();
   });
-  card.addEventListener('click', () => {
-    loadSnapshot(rec);
-    closeModal();
-  });
+  card.addEventListener('click', () => openSnapshotPreview(rec));
   return card;
 }
 
@@ -3035,6 +3294,7 @@ function loadSnapshot(rec: SnapshotRecord): void {
     world.edge = rec.edge;
     world.loadPacked(rec.packed, rec.population, rec.gen);
     history = new History(world);
+    applyHistoryDepth();
     renderer.attach(world);
   } else {
     world.edge = rec.edge;
@@ -3095,8 +3355,11 @@ async function toggleRecord(): Promise<void> {
   void openClips();
 }
 
-async function openClips(): Promise<void> {
-  openModal('片段库', (body) => {
+function openClips(): void {
+  openModal('片段库', buildClips);
+}
+
+function buildClips(body: HTMLElement): void {
     const grid = document.createElement('div');
     grid.className = 'card-grid';
     body.append(grid);
@@ -3116,7 +3379,6 @@ async function openClips(): Promise<void> {
       for (const rec of list) grid.append(clipCard(rec, refresh));
     };
     void refresh();
-  });
 }
 
 function clipCard(rec: ClipRecord, refresh: () => Promise<void>): HTMLElement {
@@ -3138,35 +3400,54 @@ function clipCard(rec: ClipRecord, refresh: () => Promise<void>): HTMLElement {
   });
   card.querySelector('[data-act="del"]')!.addEventListener('click', async (e) => {
     e.stopPropagation();
+    const ok = await askConfirm('删除片段', `删除「${rec.name}」？删掉就找不回来了。`, '删除');
+    if (!ok) return;
     await store.deleteClip(rec.id);
     await refresh();
   });
+  card.addEventListener('click', () => openClipPlayer(rec));
   return card;
 }
 
 function openClipPlayer(rec: ClipRecord): void {
+  // 关掉播放器要回到内容库的「时段 · 片段」页签
+  modalReturn = () => openStudioBridge(1);
   openModal(`片段 · ${rec.name}`, (body) => {
     body.innerHTML = `
-      <div class="clip-stage"><canvas id="clip-canvas"></canvas></div>
-      <div class="row" style="margin-top:10px">
-        <button class="btn primary" id="clip-play">▶ 播放</button>
-        <input id="clip-seek" type="range" class="grow" min="0" max="${rec.deltas.length}" value="0" />
-        <span class="small muted" id="clip-label" style="min-width:96px;text-align:right"></span>
+      <div class="clip-player" id="clip-player">
+        <div class="pane" id="clip-stage">
+          <canvas id="clip-canvas"></canvas>
+          <div class="pane-hint">滚轮缩放 · 拖动平移 · 双击适应</div>
+          <div class="clip-badge" id="clip-badge"></div>
+          <button type="button" class="clip-showbar hidden" id="clip-showbar" title="显示操作栏">▴ 操作栏</button>
+        </div>
+        <div class="pane-bar" id="clip-bar">
+          <button type="button" class="btn primary" id="clip-play">▶ 播放</button>
+          <input id="clip-seek" type="range" class="grow" min="0" max="${rec.deltas.length}" value="0" />
+          <span class="small muted" id="clip-label" style="min-width:80px;text-align:right"></span>
+          <button type="button" class="btn tiny" id="clip-fit" title="适应画面">适应</button>
+          <button type="button" class="btn tiny" id="clip-dock" title="收起操作栏，只看画面">收起</button>
+          <button type="button" class="btn tiny" id="clip-fs" title="全屏预览">全屏</button>
+        </div>
       </div>`;
 
+    const player = body.querySelector<HTMLElement>('#clip-player')!;
+    const stage = body.querySelector<HTMLElement>('#clip-stage')!;
     const cvs = body.querySelector<HTMLCanvasElement>('#clip-canvas')!;
     const seekEl = body.querySelector<HTMLInputElement>('#clip-seek')!;
     const playEl = body.querySelector<HTMLButtonElement>('#clip-play')!;
     const labelEl = body.querySelector('#clip-label')!;
+    const badgeEl = body.querySelector<HTMLElement>('#clip-badge')!;
+    const showBarEl = body.querySelector<HTMLButtonElement>('#clip-showbar')!;
+    // 先变宽再量舞台，否则画布会按窄卡片算
+    setWideModal(true);
+    body.classList.add('no-scroll');
 
     const w = new World(rec.width, rec.height);
     w.loadPacked(rec.startPacked, rec.startPopulation, rec.startGen);
     const r = new Renderer(cvs);
     r.attach(w);
     const v = new Viewport();
-    const box = body.querySelector<HTMLElement>('.clip-stage')!;
-    const rect = box.getBoundingClientRect();
-    r.resize(rect.width || 640, rect.height || 400);
 
     // 扫一遍片段，算出整段活动的包围盒，让画面框住真正在动的部分，
     // 而不是把 1024² 的整个世界缩成一小块。
@@ -3193,16 +3474,21 @@ function openClipPlayer(rec: ClipRecord): void {
       w.revertDelta(rec.deltas[i]);
       w.gen--;
     }
-    if (bx0 < Infinity) {
-      const bw = Math.max(8, bx1 - bx0);
-      const bh = Math.max(8, by1 - by0);
-      const s = v.clampScale(Math.min((r.cssW - 28) / bw, (r.cssH - 28) / bh, 26));
-      v.scale = s;
-      v.ox = (r.cssW - bw * s) / 2 - bx0 * s;
-      v.oy = (r.cssH - bh * s) / 2 - by0 * s;
-    } else {
-      v.fit(rec.width, rec.height, r.cssW, r.cssH, 16);
-    }
+
+    const fitView = (): void => {
+      if (bx0 < Infinity) {
+        const bw = Math.max(8, bx1 - bx0);
+        const bh = Math.max(8, by1 - by0);
+        const s = v.clampScale(Math.min((r.cssW - 28) / bw, (r.cssH - 28) / bh, 26));
+        v.scale = s;
+        v.ox = (r.cssW - bw * s) / 2 - bx0 * s;
+        v.oy = (r.cssH - bh * s) / 2 - by0 * s;
+      } else {
+        v.fit(rec.width, rec.height, r.cssW, r.cssH, 16);
+      }
+      // 别让人把画面缩成一个点：最多缩到刚好看清全貌的三分之一
+      v.minScale = Math.max(0.3, v.scale / 3);
+    };
 
     let idx = 0;
     let playing = false;
@@ -3214,6 +3500,7 @@ function openClipPlayer(rec: ClipRecord): void {
       r.sync();
       r.render(v, { grid: false, bounds: false });
       labelEl.textContent = `第 ${nf.format(rec.startGen + idx)} 代`;
+      badgeEl.textContent = `${idx} / ${rec.deltas.length}`;
     };
 
     const goTo = (target: number): void => {
@@ -3232,6 +3519,16 @@ function openClipPlayer(rec: ClipRecord): void {
       paint();
     };
 
+    const setClipPlaying = (on: boolean): void => {
+      playing = on;
+      playEl.textContent = on ? '❙❙ 暂停' : '▶ 播放';
+      if (!on) return;
+      if (idx >= rec.deltas.length) goTo(0);
+      last = 0;
+      acc = 0;
+      raf = requestAnimationFrame(tick);
+    };
+
     const tick = (ts: number): void => {
       if (!playing) return;
       const dt = last ? ts - last : 16;
@@ -3240,35 +3537,77 @@ function openClipPlayer(rec: ClipRecord): void {
       if (acc >= 70) {
         acc = 0;
         goTo(idx + 1);
-        if (idx >= rec.deltas.length) {
-          playing = false;
-          playEl.textContent = '▶ 播放';
-        }
+        if (idx >= rec.deltas.length) setClipPlaying(false);
       }
       raf = requestAnimationFrame(tick);
     };
 
-    playEl.addEventListener('click', () => {
-      playing = !playing;
-      playEl.textContent = playing ? '❙❙ 暂停' : '▶ 播放';
-      if (playing) {
-        if (idx >= rec.deltas.length) goTo(0);
-        last = 0;
-        acc = 0;
-        raf = requestAnimationFrame(tick);
-      }
+    // 舞台尺寸跟着窗口和全屏变化，重新量一次再画
+    const relayout = (): void => {
+      const rect = stage.getBoundingClientRect();
+      if (rect.width < 8 || rect.height < 8) return;
+      r.resize(rect.width, rect.height);
+      paint();
+    };
+    const ro = new ResizeObserver(relayout);
+    ro.observe(stage);
+    relayout();
+    fitView();
+    paint();
+
+    const detachCam = attachCamera(stage, v, paint);
+    stage.addEventListener('dblclick', () => {
+      fitView();
+      paint();
     });
 
+    playEl.addEventListener('click', () => setClipPlaying(!playing));
     seekEl.addEventListener('input', () => {
-      playing = false;
-      playEl.textContent = '▶ 播放';
+      setClipPlaying(false);
       goTo(Number(seekEl.value));
     });
+    body.querySelector('#clip-fit')!.addEventListener('click', () => {
+      fitView();
+      paint();
+    });
 
-    paint();
+    // 收起 / 展开操作栏
+    const setBare = (bare: boolean): void => {
+      player.classList.toggle('bare', bare);
+      showBarEl.classList.toggle('hidden', !bare);
+      relayout();
+    };
+    body.querySelector('#clip-dock')!.addEventListener('click', () => setBare(true));
+    showBarEl.addEventListener('click', () => setBare(false));
+
+    // 全屏：只留画面，Esc 由浏览器处理
+    const fsEl = body.querySelector('#clip-fs') as HTMLButtonElement;
+    const onFsChange = (): void => {
+      const on = document.fullscreenElement === player;
+      fsEl.textContent = on ? '退出全屏' : '全屏';
+      window.setTimeout(relayout, 60);
+    };
+    document.addEventListener('fullscreenchange', onFsChange);
+    fsEl.addEventListener('click', () => {
+      if (document.fullscreenElement === player) {
+        void document.exitFullscreen();
+        return;
+      }
+      const req = player.requestFullscreen?.();
+      if (req) void req.catch(() => toast('这个环境不允许全屏'));
+    });
+
+    setWideModal(true);
+    body.classList.add('no-scroll');
+
     modalCleanup = () => {
       playing = false;
       cancelAnimationFrame(raf);
+      ro.disconnect();
+      detachCam();
+      document.removeEventListener('fullscreenchange', onFsChange);
+      body.classList.remove('no-scroll');
+      setWideModal(false);      if (document.fullscreenElement === player) void document.exitFullscreen();
     };
   });
 }
@@ -3276,8 +3615,7 @@ function openClipPlayer(rec: ClipRecord): void {
 // ──────────────────────────────────────────────────────────────────────────
 // RLE
 // ──────────────────────────────────────────────────────────────────────────
-function openRle(): void {
-  openModal('RLE 导入 / 导出', (body) => {
+function buildRle(body: HTMLElement): void {
     body.innerHTML = `
       <p class="small muted" style="margin:0 0 8px">
         粘贴 LifeWiki 上的 RLE 或纯文本图案，导入到当前视图中心；也可以把整个世界导出成 RLE。
@@ -3330,7 +3668,6 @@ function openRle(): void {
       a.click();
       setTimeout(() => URL.revokeObjectURL(a.href), 4000);
     });
-  });
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -3400,7 +3737,10 @@ function applyShareFromHash(): boolean {
 }
 
 function openShare(): void {
-  openModal('分享这个画面', (body) => {
+  openModal('分享这个画面', buildShare);
+}
+
+function buildShare(body: HTMLElement): void {
     body.innerHTML = `
       <p class="small muted" style="margin:0 0 14px">
         把当前画面存成图片，或者生成一个带着这个图案的链接发给别人。
@@ -3452,28 +3792,48 @@ function openShare(): void {
         });
       }
     });
-  });
 }
 
 // ──────────────────────────────────────────────────────────────────────────
 // 内容库入口（时刻 / 时段 / 分享 / 导入导出）
 // ──────────────────────────────────────────────────────────────────────────
-function openStudioBridge(): void {
+function openStudioBridge(initial = 0): void {
+  const tabs: Array<{ id: string; label: string; build: (b: HTMLElement) => void }> = [
+    { id: 'st-snap', label: '时刻 · 存档', build: buildSnapshots },
+    { id: 'st-clips', label: '时段 · 片段', build: buildClips },
+    { id: 'st-share', label: '分享画面', build: buildShare },
+    { id: 'st-rle', label: '导入 / 导出', build: buildRle },
+  ];
   openModal('内容库', (body) => {
     body.innerHTML = `
-      <p class="small muted" style="margin:0 0 12px">
-        把此刻或一段演化存下来，也可以把当前画面分享出去。
-      </p>
-      <div class="btn-row">
-        <button class="btn primary" id="st-snap">时刻 · 存档</button>
-        <button class="btn" id="st-clips">时段 · 片段</button>
-        <button class="btn" id="st-share">分享当前画面</button>
-        <button class="btn" id="st-rle">导入 / 导出</button>
+      <div class="studio">
+        <div class="studio-tabs" role="tablist">
+          ${tabs
+            .map(
+              (t, i) =>
+                `<button type="button" role="tab" id="${t.id}" class="studio-tab${
+                  i === 0 ? ' active' : ''
+                }" data-tab="${i}">${t.label}</button>`,
+            )
+            .join('')}
+        </div>
+        <div class="studio-panel" id="studio-panel"></div>
       </div>`;
-    body.querySelector('#st-snap')!.addEventListener('click', () => void openSnapshots());
-    body.querySelector('#st-clips')!.addEventListener('click', () => void openClips());
-    body.querySelector('#st-share')!.addEventListener('click', openShare);
-    body.querySelector('#st-rle')!.addEventListener('click', openRle);
+    const panel = body.querySelector<HTMLElement>('#studio-panel')!;
+    const btns = [...body.querySelectorAll<HTMLElement>('.studio-tab')];
+    const show = (i: number): void => {
+      // 切换页签前先把上一页的清理钩子跑掉（片段播放器的 rAF 之类）
+      if (modalCleanup) {
+        modalCleanup();
+        modalCleanup = null;
+      }
+      panel.innerHTML = '';
+      btns.forEach((b, k) => b.classList.toggle('active', k === i));
+      tabs[i].build(panel);
+      panel.scrollTop = 0;
+    };
+    btns.forEach((b, i) => b.addEventListener('click', () => show(i)));
+    show(Math.max(0, Math.min(tabs.length - 1, initial)));
   });
 }
 
@@ -3602,12 +3962,26 @@ function openCanvasSettings(): void {
     body.querySelector('#set-cancel')!.addEventListener('click', () => closeModal());
     body.querySelector('#set-apply')!.addEventListener('click', () => {
       const d = dimsFor(draft.aspect, draft.longEdge);
-      state.aspect = draft.aspect;
-      state.longEdge = draft.longEdge;
-      saveCanvasShape();
-      applyWorldShape(d.w, d.h, draft.edge);
-      closeModal();
-      toast(`世界 ${d.w} × ${d.h} · ${draft.edge === 'wrap' ? '环绕' : '死亡'}边界`);
+      const apply = (): void => {
+        state.aspect = draft.aspect;
+        state.longEdge = draft.longEdge;
+        saveCanvasShape();
+        applyWorldShape(d.w, d.h, draft.edge);
+        closeModal();
+        toast(`世界 ${d.w} × ${d.h} · ${draft.edge === 'wrap' ? '环绕' : '死亡'}边界`);
+      };
+      // 有内容时重建世界是不可逆的（回溯历史会重置），先问一句
+      if (world.population === 0) {
+        apply();
+        return;
+      }
+      void askConfirm(
+        '应用画布设置',
+        `世界会重建为 ${d.w} × ${d.h}，当前图案保留并居中放入，超出部分裁切，回溯历史会重置。继续？`,
+        '应用',
+      ).then((ok) => {
+        if (ok) apply();
+      });
     });
 
     paint();
@@ -3677,45 +4051,184 @@ function toggleImmersive(): void {
 // ──────────────────────────────────────────────────────────────────────────
 // 帮助
 // ──────────────────────────────────────────────────────────────────────────
+interface HelpRow {
+  keys: string[];
+  text: string;
+}
+
+interface HelpSection {
+  title: string;
+  rows: HelpRow[];
+  note?: string;
+}
+
+const HELP_SECTIONS: HelpSection[] = [
+  {
+    title: '画布',
+    rows: [
+      {
+        keys: ['拖拽'],
+        text: '默认就是平移：按住左键拖哪看哪。左侧竖条可以换成画笔 / 橡皮 / 直线 / 矩形 / 贴图 / 选择框',
+      },
+      { keys: ['右键拖拽'], text: '任何工具下都能临时平移画布' },
+      {
+        keys: ['滚轮', '双指'],
+        text: '以光标为中心缩放（0.03× – 64×）；画笔和橡皮下 <kbd>Ctrl</kbd> + 滚轮改成调笔刷大小',
+      },
+      { keys: ['G'], text: '网格开关' },
+      { keys: ['0'], text: '缩放到整幅世界' },
+      {
+        keys: ['Shift', '0'],
+        text: '回正视角：保持当前缩放，把世界中心拉回画面中央。环绕边界下画面能无限平移，转远了用它找回来（平移工具旁边也写着这条）',
+      },
+      { keys: ['↑', '↓'], text: '放大 / 缩小' },
+      {
+        keys: ['F'],
+        text: '全屏观察：只留画布，鼠标静止两秒后浮层自动淡出，<kbd>Esc</kbd> 退出',
+      },
+      {
+        keys: ['手机'],
+        text: '单指绘制、双指捏合缩放、双指拖动平移；顶栏可以横向滑动看更多按钮',
+      },
+    ],
+  },
+  {
+    title: '演化',
+    rows: [
+      { keys: ['Space'], text: '播放 / 暂停（同 <kbd>P</kbd>）' },
+      { keys: ['←', '→'], text: '上一代 / 下一代，按住可以连发' },
+      {
+        keys: ['Del'],
+        text: '有选区时删掉选区里的细胞，没有选区时清空世界（都能撤销）',
+      },
+      {
+        keys: ['底栏'],
+        text: '速度 0.1 – 120 代/秒，<kbd>∞</kbd> 是不限速；拖进度条能回到任意一代',
+      },
+      {
+        keys: ['画布设置'],
+        text: '里面有「回溯深度」：500 / 1000 / 3000 / 10000 / 20000 代，或者不限代数只受内存上限约束，调完立刻生效',
+      },
+    ],
+    note: '回溯原理：程序记录每一代被翻转的格子（增量），并按固定间隔保存关键帧，所以拖动底栏进度条可以瞬时回到过去的任意一代。默认保留最近 3000 代，另外还有 32 MB 内存上限，谁先到就丢最早的记录；打开内容库、帮助这类会盖住画布的界面时会自动暂停演化。',
+  },
+  {
+    title: '创造',
+    rows: [
+      {
+        keys: ['B', 'E', 'I', 'U', 'S', 'K', 'H'],
+        text: '画笔 / 橡皮 / 直线 / 矩形 / 贴图 / 选择框 / 平移',
+      },
+      {
+        keys: ['Ctrl', '滚轮'],
+        text: '画笔和橡皮下调整笔刷大小（也可以用 <kbd>[</kbd> <kbd>]</kbd>），最大 31×31；涂抹过程中也会显示范围框',
+      },
+      { keys: ['R', 'M'], text: '旋转 90°、左右镜像（贴图前）' },
+      {
+        keys: ['Ctrl', 'Z'],
+        text: '撤销上一步编辑，<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> 重做；框选、改框大小、挪框也能撤销',
+      },
+      {
+        keys: ['拖框内'],
+        text: '把框住的内容整块搬走；<kbd>Shift</kbd> 拖动才是重新框选，<kbd>Esc</kbd> 放回原处',
+      },
+      { keys: ['拖边', '拖角'], text: '改选择框的大小' },
+      { keys: ['Alt', '拖框内'], text: '只挪这个框，不动里面的细胞' },
+      { keys: ['Ctrl', '拖拽'], text: '加框，几块一起可以存成一张复杂图案' },
+      {
+        keys: ['存为图案'],
+        text: '把框住的内容存成自定义图案，之后能反复摆放；默认存进「自定义」分组，没有这个分组会自动建一个',
+      },
+      {
+        keys: ['Del', 'Esc'],
+        text: '<kbd>Del</kbd> 删掉框里的细胞，<kbd>Esc</kbd> 退出选择框',
+      },
+      {
+        keys: ['贴图 S'],
+        text: '先在图案库点一个图案，光标下才会出现预览；没选图案时点画布会提醒你挑一个。点图案库的空白处可以取消选中',
+      },
+    ],
+  },
+  {
+    title: '图案库',
+    rows: [
+      {
+        keys: ['⚙'],
+        text: '侧栏原地进入编辑模式（再点 <kbd>✓</kbd> 退出）：图案变方块网格，一屏能看到更多',
+      },
+      { keys: ['拖分类标题'], text: '调整分组的先后顺序' },
+      {
+        keys: ['拖图案方块'],
+        text: '落点会出现一个闪烁的虚线占位框，它插在哪里、松手后就落在哪里',
+      },
+      {
+        keys: ['⇱ 全部收起'],
+        text: '一键折叠 / 展开所有分组；单个分组点标题左边的三角',
+      },
+      {
+        keys: ['↓', '↑'],
+        text: '<kbd>↓</kbd> 收进下面的「仓库」，仓库里的点 <kbd>↑</kbd> 或双击就放回来',
+      },
+      { keys: ['拖左边缘'], text: '调宽侧栏，浏览和编辑模式都能拖，宽度会记住' },
+      { keys: ['›'], text: '收起侧栏，只留一个小图标，画布更大' },
+    ],
+  },
+  {
+    title: '内容库',
+    rows: [
+      {
+        keys: ['时刻 · 存档'],
+        text: '把此刻存成快照（位图 + 镜头）。点卡片会先打开预览，可以在预览里缩放、平移，确认后再「载入到画布」——载入和删除都会先问一句',
+      },
+      {
+        keys: ['时段 · 片段'],
+        text: '录制一段演化，存下来当小电影播放：拖进度条、滚轮缩放、拖动平移；「收起」把操作栏藏起来只看画面，还可以全屏',
+      },
+      { keys: ['分享画面'], text: '存成 PNG、复制一条能还原当前画面的链接，或全屏观看' },
+      {
+        keys: ['导入 / 导出'],
+        text: '粘贴 LifeWiki 上的 RLE 或纯文本图案导入；也可以把世界导出成 RLE 或下载 .rle',
+      },
+    ],
+    note: '清空世界、随机播种、重建画布这些会盖掉当前画面的操作，都会先弹一个确认框，按 <kbd>Enter</kbd> 确定、<kbd>Esc</kbd> 取消。',
+  },
+];
+
 function openHelp(): void {
   openModal('操作说明', (body) => {
     body.innerHTML = `
-      <dl class="help-list">
-        <dt>拖拽</dt><dd>默认是平移：拖哪看哪。左侧工具条可以换成画笔 / 橡皮 / 直线 / 矩形 / 贴图 / 选择框</dd>
-        <dt>右键拖拽</dt><dd>任何工具下都能临时平移画布</dd>
-        <dt>滚轮 / 双指</dt><dd>以光标为中心缩放（0.03× – 64×）；画笔和橡皮下 <kbd>Ctrl</kbd> + 滚轮改成调笔刷大小</dd>
-        <dt><kbd>B</kbd> <kbd>E</kbd> <kbd>I</kbd> <kbd>U</kbd> <kbd>S</kbd> <kbd>K</kbd> <kbd>H</kbd></dt>
-        <dd>画笔 / 橡皮 / 直线 / 矩形 / 贴图 / 选择框 / 平移</dd>
-        <dt>橡皮大小</dt><dd><kbd>Ctrl</kbd> + 滚轮或 <kbd>[</kbd> <kbd>]</kbd> 调，最大 31×31，一次能擦一大片；涂抹时也会显示范围框</dd>
-        <dt>选择框后</dt><dd>把框住的内容存成自定义图案，之后就能反复摆放（默认存进「自定义」分组，没有这个分组会自动建一个）；
-          按住框内拖动可以整块搬走（<kbd>Shift</kbd> 拖动才是重新框选，<kbd>Esc</kbd> 放回原处）；
-          拖框的边或角可以改大小；<kbd>Alt</kbd> + 拖框内只挪这个框、不动里面的细胞；
-          按住 <kbd>Ctrl</kbd> 再拖可以加框，几块一起存成一张复杂图案；<kbd>Del</kbd> 删掉框里的细胞，<kbd>Esc</kbd> 退出选择框</dd>
-        <dt>贴图 <kbd>S</kbd></dt><dd>先在图案库点一个图案，光标下才会出现预览；没选图案时点画布会提醒你挑一个。
-          点图案库的空白处可以取消选中</dd>
-        <dt>图案库 <kbd>⚙</kbd></dt><dd>点 ⚙ 侧栏原地变成编辑模式（再点 ✓ 退出）：图案变成方块网格，拖左边缘可以调宽；
-          拖动分类标题可以排序，拖动图案方块时会出现一个闪烁的虚线占位框，它插在哪里、松手后就落在哪里；
-          顶部的「全部收起 / 全部展开」可以一键折叠所有分组；
-          <kbd>↓</kbd> 把图案收进下面的「仓库」，仓库里的点「↑」（或双击）就放回来；分类名直接改，删分类会先确认</dd>
-        <dt>侧栏 <kbd>›</kbd></dt><dd>点右上角的小箭头可以收起图案库，只留一个 <kbd>▦</kbd> 小图标，画布更大；
-          展开时拖侧栏左边缘可以调宽（浏览和编辑模式都行，宽度会记住）</dd>
-        <dt><kbd>R</kbd> <kbd>M</kbd></dt><dd>旋转 90°、左右镜像（贴图前）</dd>
-        <dt><kbd>Ctrl</kbd> + <kbd>Z</kbd></dt><dd>撤销上一步编辑（<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Z</kbd> 重做）；框选、改框大小、挪框也能撤销</dd>
-        <dt><kbd>Space</kbd></dt><dd>播放 / 暂停（同 <kbd>P</kbd>）</dd>
-        <dt><kbd>←</kbd> <kbd>→</kbd></dt><dd>上一代 / 下一代（可以按住连发）</dd>
-        <dt><kbd>G</kbd></dt><dd>网格开关</dd>
-        <dt><kbd>0</kbd></dt><dd>缩放到整幅世界</dd>
-        <dt><kbd>Shift</kbd> + <kbd>0</kbd></dt><dd>回正视角：保持当前缩放，把世界中心拖回画面中央（环绕边界下画面可以无限平移，转远了用它找回来）</dd>
-        <dt><kbd>↑</kbd> <kbd>↓</kbd></dt><dd>放大 / 缩小</dd>
-        <dt><kbd>Del</kbd></dt><dd>有选区时删掉选区里的细胞，没有选区时清空世界（都能撤销）</dd>
-        <dt>分享</dt><dd>存成 PNG 图片、复制一条能还原当前画面的链接，或全屏观看</dd>
-        <dt><kbd>F</kbd></dt><dd>全屏观察：只留画布，鼠标静止两秒后浮层自动淡出，<kbd>Esc</kbd> 退出</dd>
-        <dt>手机上</dt><dd>单指绘制、双指捏合缩放、双指拖动平移；顶栏向右滑可以看到更多按钮</dd>
-      </dl>
-      <p class="small muted" style="margin-top:14px">
-        回溯原理：程序记录每一代被翻转的格子（增量），并按固定间隔保存关键帧，
-        所以拖动底栏进度条可以瞬时回到过去的任意一代。历史默认保留最近 3000 代。
-      </p>`;
+      <div class="help">
+        <nav class="help-nav" id="help-nav"></nav>
+        <div class="help-main" id="help-main"></div>
+      </div>`;
+    const nav = body.querySelector<HTMLElement>('#help-nav')!;
+    const main = body.querySelector<HTMLElement>('#help-main')!;
+    const show = (i: number): void => {
+      const s = HELP_SECTIONS[i];
+      [...nav.children].forEach((b, k) => b.classList.toggle('active', k === i));
+      main.innerHTML = `
+        <div class="help-rows">
+          ${s.rows
+            .map(
+              (r) => `<div class="help-row">
+                <div class="help-keys">${r.keys.map((k) => `<kbd>${k}</kbd>`).join('')}</div>
+                <p>${r.text}</p>
+              </div>`,
+            )
+            .join('')}
+        </div>
+        ${s.note ? `<p class="help-note">${s.note}</p>` : ''}`;
+      main.scrollTop = 0;
+    };
+    HELP_SECTIONS.forEach((s, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'help-tab';
+      b.textContent = s.title;
+      b.addEventListener('click', () => show(i));
+      nav.append(b);
+    });
+    show(0);
   });
 }
 
@@ -3780,11 +4293,11 @@ function bindUi(): void {
   });
 
   el('btn-record').addEventListener('click', () => void toggleRecord());
-  el('btn-studio').addEventListener('click', openStudioBridge);
+  el('btn-studio').addEventListener('click', () => openStudioBridge(0));
   el('btn-fullscreen').addEventListener('click', toggleImmersive);
   el('btn-help').addEventListener('click', openHelp);
   el('btn-settings').addEventListener('click', openCanvasSettings);
-  el('btn-recenter').addEventListener('click', recenterView);
+  buildDepthSelect();
   el('fs-play').addEventListener('click', () => {
     setPlaying(!state.playing);
     updateFsBar();
@@ -3876,6 +4389,8 @@ async function boot(): Promise<void> {
   }
 
   history = new History(world);
+  state.historyDepth = readHistoryDepth();
+  applyHistoryDepth();
   renderer.attach(world);
   buildPalette();
 
@@ -3932,6 +4447,11 @@ async function boot(): Promise<void> {
       openShare: () => openShare(),
       get undoDepth() { return undoStack.length; },
       get redoDepth() { return redoStack.length; },
+      get dragging() {
+        return pdrag
+          ? { kind: pdrag.kind, id: pdrag.id, active: pdrag.active, pointerId: pdrag.pointerId }
+          : null;
+      },
       get selection() { return state.selection; },
       get selectionBBox() { return selectionBBox(state.selection); },
       get paletteMode() { return state.paletteMode; },
@@ -3993,7 +4513,6 @@ async function boot(): Promise<void> {
   }).observe(stageEl);
 
   initTooltips();
-  syncRecenterButton();
   updateZoomBounds();
   document.addEventListener('fullscreenchange', () => {
     if (!document.fullscreenElement && immersive) void exitImmersive();

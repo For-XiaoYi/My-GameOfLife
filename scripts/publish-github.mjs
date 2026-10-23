@@ -1,21 +1,36 @@
 // 把当前项目发布成一个 GitHub 仓库（不依赖 git，直接走 Git Data API）。
 // 用法：
-//   GITHUB_TOKEN=<pat> node scripts/publish-github.mjs            # 新建或更新仓库
-//   GITHUB_TOKEN=<pat> node scripts/publish-github.mjs --check    # 只验证 token 与仓库访问
+//   node scripts/publish-github.mjs            # 用保存的凭据更新仓库
+//   node scripts/publish-github.mjs --check    # 只验证 token 与仓库访问
 //
-// token 需要目标仓库的 Contents 读写权限（仅新建仓库时还要 Administration 权限以外的常规创建权）。
-// 可选环境变量：REPO_NAME（默认 My-GameOfLife）、REPO_PRIVATE=false（建公开仓库）。
+// 凭据查找顺序：环境变量 GITHUB_TOKEN → %LOCALAPPDATA%\life-studio\credentials.json
+// （里面放 { "githubToken": "...", "repo": "My-GameOfLife", "owner": "..." }，不进仓库）
+// token 需要目标仓库的 Contents 读写权限，想顺手触发 Pages 重新部署还需要 Pages 读写权限。
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
-const TOKEN = process.env.GITHUB_TOKEN;
+function loadCredentials() {
+  const env = process.env.LOCALAPPDATA;
+  if (!env) return null;
+  try {
+    const raw = readFileSync(join(env, 'life-studio', 'credentials.json'), 'utf8').replace(/^\uFEFF/, '');
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+const cred = loadCredentials();
+const TOKEN = process.env.GITHUB_TOKEN || (cred && cred.githubToken) || '';
 if (!TOKEN) {
-  console.error('缺少 GITHUB_TOKEN 环境变量：需要一个有 Contents 读写权限的 PAT。');
+  console.error(
+    '缺少 token：设置环境变量 GITHUB_TOKEN，或把它存到 %LOCALAPPDATA%\\life-studio\\credentials.json',
+  );
   process.exit(1);
 }
 
 const CHECK_ONLY = process.argv.includes('--check');
-const REPO = process.env.REPO_NAME || 'My-GameOfLife';
+const REPO = process.env.REPO_NAME || (cred && cred.repo) || 'My-GameOfLife';
 const PRIVATE = (process.env.REPO_PRIVATE ?? 'true') !== 'false';
 const ROOT = resolve('.');
 const SKIP_DIRS = new Set(['node_modules', 'build', 'dist', '.pnpm-store', '.git', '.tools']);
