@@ -1056,11 +1056,6 @@ input[type="range"]::-moz-range-thumb {
   display: none !important;
 }
 
-/* 「回正视角」只有环绕边界才有意义，死亡边界下由 JS 隐藏 */
-#btn-recenter.hidden {
-  display: none;
-}
-
 .tool-sep {
   height: 1px;
   margin: 3px 4px;
@@ -2142,7 +2137,6 @@ kbd {
 #app.immersive #toolbar,
 #app.immersive #hint,
 #app.immersive #rec-badge,
-#app.immersive #btn-recenter,
 #app.immersive #sel-bar {
   display: none !important;
 }
