@@ -34,7 +34,12 @@ try {
   ok('应用已启动（不是白屏）', info.population > 0, `人口 ${info.population}，第 ${info.gen} 代`);
   ok('画布尺寸正常', info.canvasW > 500 && info.canvasH > 300, `${info.canvasW}×${info.canvasH}`);
   ok('图案库已加载', info.patterns >= 20, `${info.patterns} 个图案`);
-  ok('世界尺寸 1024²', info.width === 1024 && info.height === 1024);
+  // 世界尺寸跟着「画布比例」走（默认 16:9 → 1024×576），所以只校验量级
+  ok(
+    '世界尺寸合理',
+    info.width >= 512 && info.height >= 512,
+    `${info.width}×${info.height}`,
+  );
   console.log(`ℹ 存储模式：${info.storeMode}（https 下应为 idb，file:// 下会退回 local）`);
 
   // 真跑几代，确认演化在动
