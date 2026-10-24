@@ -407,7 +407,14 @@ function updateTimeline(min: number, max: number): void {
   tl.min = String(min);
   tl.max = String(max);
   if (document.activeElement !== tl) tl.value = String(world.gen);
-  el('timeline-label').textContent = `第 ${nf.format(world.gen)} 代`;
+  // 滑块永远停在"当前代"（通常就是最右端），只改深度时位置不会动，
+  // 所以把"能回溯多少代"写进标签，否则看不出设置有没有生效。
+  const span = Math.max(0, max - min);
+  el('timeline-label').textContent =
+    span > 0
+      ? `第 ${nf.format(world.gen)} 代 · 可回溯 ${nf.format(span)} 代`
+      : `第 ${nf.format(world.gen)} 代 · 暂无回溯历史`;
+  tl.title = span > 0 ? `可回溯 ${nf.format(span)} 代（第 ${nf.format(min)}–${nf.format(max)} 代）` : '还没有可回溯的历史';
 }
 
 function updateRecordBadge(): void {
@@ -956,33 +963,36 @@ function recenterView(): void {
 // 回到底部的「回溯」选择器（选择后立刻生效并记住）
 // ──────────────────────────────────────────────────────────────────────────
 function buildDepthSelect(): void {
-  const sel = el<HTMLSelectElement>('depth-select');
-  sel.innerHTML = '';
-  for (const v of HISTORY_DEPTHS) {
-    const opt = document.createElement('option');
-    opt.value = String(v);
-    opt.textContent = v === 0 ? '不限' : `${v >= 10000 ? `${v / 10000} 万` : nf.format(v)} 代`;
-    sel.append(opt);
-  }
-  sel.value = String(state.historyDepth);
-  sel.title =
-    `回溯深度：往回可以看多少代（上限 ${state.historyDepth === 0 ? fmtBytes(HISTORY_BYTES) : `${depthLabel(state.historyDepth)} / ${fmtBytes(HISTORY_BYTES)}`}，` +
-    '超出后丢弃最早的关键帧）';
-  sel.addEventListener('change', () => {
-    state.historyDepth = Number(sel.value);
-    applyHistoryDepth();
-    try {
-      localStorage.setItem(HISTORY_DEPTH_KEY, String(state.historyDepth));
-    } catch {
-      /* 存不了就算了，下次退回默认 */
-    }
+  const btn = el('depth-select');
+  const describe = (): string => {
     const st = history.stats();
-    sel.title =
-      `回溯深度：往回可以看多少代（当前已记录 ${nf.format(st.gens)} 代 · 占用 ${fmtBytes(st.bytes)}；` +
-      `上限 ${state.historyDepth === 0 ? fmtBytes(HISTORY_BYTES) : `${depthLabel(state.historyDepth)} / ${fmtBytes(HISTORY_BYTES)}`}，超出后丢弃最早的关键帧）`;
-    uiDirty = true;
-    toast(`回溯深度：${depthLabel(state.historyDepth)}`);
+    return (
+      `回溯深度：当前已记录 ${nf.format(st.gens)} 代 · 占用 ${fmtBytes(st.bytes)}；` +
+      `上限 ${state.historyDepth === 0 ? fmtBytes(HISTORY_BYTES) : `${depthLabel(state.historyDepth)} / ${fmtBytes(HISTORY_BYTES)}`}，` +
+      '超出后丢弃最早的关键帧'
+    );
+  };
+  makeMenu(btn, {
+    options: HISTORY_DEPTHS.map((v) => ({
+      value: String(v),
+      label: v === 0 ? '不限' : `${v >= 10000 ? `${v / 10000} 万` : nf.format(v)} 代`,
+    })),
+    value: String(state.historyDepth),
+    onChange: (v) => {
+      state.historyDepth = Number(v);
+      applyHistoryDepth();
+      try {
+        localStorage.setItem(HISTORY_DEPTH_KEY, String(state.historyDepth));
+      } catch {
+        /* 存不了就算了，下次退回默认 */
+      }
+      btn.title = describe();
+      toast(`回溯深度：${depthLabel(state.historyDepth)}`);
+      // 立刻刷新进度条，不等循环的节流，免得看起来像没生效
+      flushUi();
+    },
   });
+  btn.title = describe();
 }
 
 /**

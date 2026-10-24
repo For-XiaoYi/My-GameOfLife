@@ -2461,7 +2461,7 @@ body.dragging-sort {
         <div class="rec">
           <label class="rec-depth" title="往回可以看多少代（超出内存上限会先丢最早的记录）">
             <span>回溯</span>
-            <select id="depth-select" class="select-input"></select>
+            <button class="menubtn" id="depth-select" title="回溯深度"><span class="menubtn-label">3,000 代</span><i class="menubtn-caret"></i></button>
           </label>
           <button id="btn-record" class="btn danger">● 录制片段</button>
         </div>
@@ -5406,7 +5406,9 @@ body.dragging-sort {
     tl.min = String(min);
     tl.max = String(max);
     if (document.activeElement !== tl) tl.value = String(world.gen);
-    el("timeline-label").textContent = `第 ${nf.format(world.gen)} 代`;
+    const span = Math.max(0, max - min);
+    el("timeline-label").textContent = span > 0 ? `第 ${nf.format(world.gen)} 代 · 可回溯 ${nf.format(span)} 代` : `第 ${nf.format(world.gen)} 代 · 暂无回溯历史`;
+    tl.title = span > 0 ? `可回溯 ${nf.format(span)} 代（第 ${nf.format(min)}–${nf.format(max)} 代）` : "还没有可回溯的历史";
   }
   function updateRecordBadge() {
     const badge = el("rec-badge");
@@ -5830,28 +5832,30 @@ body.dragging-sort {
     toast("视角已回正");
   }
   function buildDepthSelect() {
-    const sel = el("depth-select");
-    sel.innerHTML = "";
-    for (const v of HISTORY_DEPTHS) {
-      const opt = document.createElement("option");
-      opt.value = String(v);
-      opt.textContent = v === 0 ? "不限" : `${v >= 1e4 ? `${v / 1e4} 万` : nf.format(v)} 代`;
-      sel.append(opt);
-    }
-    sel.value = String(state.historyDepth);
-    sel.title = `回溯深度：往回可以看多少代（上限 ${state.historyDepth === 0 ? fmtBytes(HISTORY_BYTES) : `${depthLabel(state.historyDepth)} / ${fmtBytes(HISTORY_BYTES)}`}，超出后丢弃最早的关键帧）`;
-    sel.addEventListener("change", () => {
-      state.historyDepth = Number(sel.value);
-      applyHistoryDepth();
-      try {
-        localStorage.setItem(HISTORY_DEPTH_KEY, String(state.historyDepth));
-      } catch {
-      }
+    const btn = el("depth-select");
+    const describe = () => {
       const st = history.stats();
-      sel.title = `回溯深度：往回可以看多少代（当前已记录 ${nf.format(st.gens)} 代 · 占用 ${fmtBytes(st.bytes)}；上限 ${state.historyDepth === 0 ? fmtBytes(HISTORY_BYTES) : `${depthLabel(state.historyDepth)} / ${fmtBytes(HISTORY_BYTES)}`}，超出后丢弃最早的关键帧）`;
-      uiDirty = true;
-      toast(`回溯深度：${depthLabel(state.historyDepth)}`);
+      return `回溯深度：当前已记录 ${nf.format(st.gens)} 代 · 占用 ${fmtBytes(st.bytes)}；上限 ${state.historyDepth === 0 ? fmtBytes(HISTORY_BYTES) : `${depthLabel(state.historyDepth)} / ${fmtBytes(HISTORY_BYTES)}`}，超出后丢弃最早的关键帧`;
+    };
+    makeMenu(btn, {
+      options: HISTORY_DEPTHS.map((v) => ({
+        value: String(v),
+        label: v === 0 ? "不限" : `${v >= 1e4 ? `${v / 1e4} 万` : nf.format(v)} 代`
+      })),
+      value: String(state.historyDepth),
+      onChange: (v) => {
+        state.historyDepth = Number(v);
+        applyHistoryDepth();
+        try {
+          localStorage.setItem(HISTORY_DEPTH_KEY, String(state.historyDepth));
+        } catch {
+        }
+        btn.title = describe();
+        toast(`回溯深度：${depthLabel(state.historyDepth)}`);
+        flushUi();
+      }
     });
+    btn.title = describe();
   }
   function updateZoomBounds() {
     if (!world || !renderer) return;
