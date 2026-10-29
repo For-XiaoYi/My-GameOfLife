@@ -1,4 +1,4 @@
-// 把当前项目发布成一个 GitHub 仓库（不依赖 git，直接走 Git Data API）。
+﻿// 把当前项目发布成一个 GitHub 仓库（不依赖 git，直接走 Git Data API）。
 // 用法：
 //   node scripts/publish-github.mjs            # 用保存的凭据更新仓库
 //   node scripts/publish-github.mjs --check    # 只验证 token 与仓库访问
@@ -39,7 +39,7 @@ const SKIP_DIRS = new Set(['node_modules', 'build', 'dist', '.pnpm-store', '.git
 const SKIP_PATHS = new Set(['promo/out']);
 // 单个 blob 走 REST 上传时，超过这个体积会被挡（实测 20 MB 的 mp4 直接 401），
 // 这类文件改走 Release 资产（上传接口 201，支持 2 GB）。
-const MAX_BLOB = 8 * 1024 * 1024;
+const MAX_BLOB = 12 * 1024 * 1024;
 const RELEASE_TAG = 'promo-v1';
 const RELEASE_FILES = ['assets/promo.mp4'];
 const API = 'https://api.github.com';
@@ -254,23 +254,39 @@ if (releaseTargets.length) {
       console.log(`  · ${f} 已在 release 里（${(buf.length / 1048576).toFixed(1)} MB），跳过`);
       continue;
     }
-    const up = await fetch(
-      `https://uploads.github.com/repos/${me.login}/${REPO}/releases/${rel.id}/assets?name=${encodeURIComponent(fileName)}`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${TOKEN}`,
-          Accept: 'application/vnd.github+json',
-          'User-Agent': 'game-of-life-publisher',
-          'Content-Type': 'application/octet-stream',
-          'Content-Length': String(buf.length),
-        },
-        body: buf,
-      },
-    );
-    const txt = await up.text();
-    if (up.status !== 201) throw new Error(`上传 ${f} → ${up.status} ${txt.slice(0, 200)}`);
-    console.log(`  · ${f} → release ${RELEASE_TAG}（${(buf.length / 1048576).toFixed(1)} MB）`);
+    // 20 MB 级别的上传偶尔会被对端掐断（UND_ERR_SOCKET），所以重试几次
+    let ok = false;
+    for (let attempt = 1; attempt <= 3 && !ok; attempt++) {
+      try {
+        const up = await fetch(
+          `https://uploads.github.com/repos/${me.login}/${REPO}/releases/${rel.id}/assets?name=${encodeURIComponent(fileName)}`,
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${TOKEN}`,
+              Accept: 'application/vnd.github+json',
+              'User-Agent': 'game-of-life-publisher',
+              'Content-Type': 'application/octet-stream',
+              'Content-Length': String(buf.length),
+            },
+            body: buf,
+          },
+        );
+        const txt = await up.text();
+        if (up.status === 201) {
+          ok = true;
+          console.log(`  · ${f} → release ${RELEASE_TAG}（${(buf.length / 1048576).toFixed(1)} MB）`);
+        } else if (attempt === 3) {
+          throw new Error(`上传 ${f} → ${up.status} ${txt.slice(0, 200)}`);
+        } else {
+          console.log(`  · 第 ${attempt} 次上传失败（${up.status}），重试…`);
+        }
+      } catch (e) {
+        if (attempt === 3) throw e;
+        console.log(`  · 第 ${attempt} 次上传异常（${e.message}），重试…`);
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+    }
   }
   if (bigFiles.length > releaseTargets.length) {
     console.log(`（其余大文件未上传：${bigFiles.filter((f) => !releaseTargets.includes(f)).join(', ')}）`);

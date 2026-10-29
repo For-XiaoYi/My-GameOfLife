@@ -169,28 +169,47 @@ Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`
 高斯帕滑翔机枪真在跑）、这个模拟器能干什么（画布、图案库、可改的库、时刻与时段、帮助）、
 以及「演化不可逆，所以每一步都记下来了」的时间回溯。
 
-**声音**：有一条自己合成的配乐，没有旁白——`build/make-music.mjs` 用纯代码做加法合成：
+**声音**：有一条自己合成的配乐，没有旁白——`scripts/make-music.mjs` 用纯代码做加法合成：
 暗色 pad 铺底、随段落逐渐加快的琶音、功能段进鼓、转场呼啸与上扬 riser，最后收在一个大三和弦上。
-没用任何采样库，想调节奏、换和弦、改音量，改脚本再跑一次就行：
+没用任何采样库，想调节奏、换和弦、改音量，改脚本再跑一次就行（随机数有固定种子，跑出来的结果每次都一样）：
 
 ```bash
-node build/make-music.mjs       # 重新生成 promo/public/music/score.wav
+node scripts/make-music.mjs       # 重新生成 promo/public/music/score.wav
 ```
 
 配乐由 `src/Promo.tsx` 里的 `<Audio src={staticFile('music/score.wav')} />` 挂到整条时间线上。
 
-工程在 `promo/`，用 [Remotion](https://www.remotion.dev/) 把 React 组件渲染成视频：
+## 在自己电脑上改这支片子
 
 ```bash
+git clone https://github.com/For-XiaoYi/My-GameOfLife.git
+cd My-GameOfLife
+git lfs pull                        # 只有用 LFS 时才有这一步，见下
+
 cd promo
-node <pnpm> install            # 只装这个工程自己的依赖
-node node_modules/@remotion/cli/remotion-cli.js studio src/index.tsx   # 实时预览，可拖动时间轴
-node node_modules/@remotion/cli/remotion-cli.js render src/index.tsx Promo out/promo.mp4
-node node_modules/@remotion/cli/remotion-cli.js still  src/index.tsx Promo out/poster.png --frame=95
+pnpm install                        # 需要 Node 20+；依赖包括 remotion 4.0.539 / react 19
+pnpm studio                         # 打开实时预览：拖时间轴、改代码即时重渲
+pnpm render                         # 直接出 out/promo.mp4
 ```
 
-- `src/scenes/` 是六个场景（标题 / 规则 / 涌现 / 功能 / 回溯 / 结尾），`src/Promo.tsx` 用
-  `Sequence` 把它们串起来，场景交界处各自淡入淡出。
+想改成竖屏（发抖音/朋友圈）：把 `src/Root.tsx`（或 `src/index.tsx` 里注册组合的地方）
+`1920×1080` 改成 `1080×1920`，场景里的两栏布局会挤，`width` 记得一起改小。
+
+工程里都齐了，clone 下来就能直接渲：
+
+| 目录 | 内容 |
+| --- | --- |
+| `promo/src/scenes/` | 六个场景：标题 / 规则 / 涌现 / 功能 / 回溯 / 结尾 |
+| `promo/src/lib/life.ts` | 真的生命游戏规则（视频里所有细胞演化都是现场算的） |
+| `promo/src/assets/patterns.json` | 20 个预设图案的位图，由 `scripts/dump-patterns.mjs` 从主程序里导出 |
+| `promo/public/` | 界面截图、背景汤、`music/score.wav`（8.6 MB，已进仓库） |
+| `scripts/make-music.mjs` | 生成配乐 |
+| `scripts/dump-patterns.mjs` | 重新从 `生命游戏.html` 里导出图案数据 |
+| `scripts/make-storyboard.mjs` | 把关键帧拼成 `assets/promo-storyboard.png` |
+
+渲染会用到浏览器：`promo/remotion.config.ts` 会自动在常见路径里找 Chrome / Edge，
+找不到就让 Remotion 自己下载 headless shell，**不用手改路径**。想指定自己的浏览器，
+设环境变量 `CHROME_PATH` 即可。
+
 - 界面镜头是脚本用 CDP 拍下的真实界面（`scripts/shoot-promo*.mjs`），存在 `promo/public/`；
   图案动画则由 `src/lib/life.ts` 现算每一代的位图，所以视频里的演化是真的。
-- 渲染配置里写死了本机 Chrome 的路径（`remotion.config.ts`），换机器要改那一行。
