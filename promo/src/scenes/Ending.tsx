@@ -147,7 +147,7 @@ export const OutroScene: React.FC = () => {
         </div>
 
         <div style={{ marginTop: 26, fontSize: 32, color: C.text, letterSpacing: 4 }}>
-          三条规则，一个可以玩很久的宇宙
+          四条规则，一个可以玩很久的宇宙
         </div>
 
         <div style={{ marginTop: 54, display: 'flex', gap: 14 }}>

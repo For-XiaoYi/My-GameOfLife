@@ -1,7 +1,7 @@
-import { AbsoluteFill, Img, staticFile, interpolate, useCurrentFrame } from 'remotion';
+import { AbsoluteFill, OffthreadVideo, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { LifeGrid } from '../components/LifeGrid';
 import { Backdrop, Eyebrow, Heading, Rise } from '../components/ui';
-import { C } from '../theme';
+import { C, FONT } from '../theme';
 import { framesOf, getPattern, padBitmap, placeBitmap } from '../lib/life';
 
 /** 三个图案并排：滑翔机 / 脉冲星 / 高斯帕滑翔机枪 */
@@ -124,99 +124,130 @@ export const PatternsScene: React.FC = () => {
   );
 };
 
-/** 功能一览：真实界面截图轮播（zoom 用来把注意力拉到界面的某一侧） */
-const SHOTS = [
+/**
+ * 功能演示：三段真实界面操作录像（scripts/record-promo.mjs 录制），
+ * 不再是静态截图 —— 光标移动、点选、面板弹出都是真的。
+ */
+const CLIPS = [
   {
-    file: 'shot-main.png',
-    title: '一百万格的画布',
-    desc: '1024×1024 的环形世界，滚轮缩放、拖拽平移，随时适应全图',
-    zoom: 1.05,
-    origin: '50% 50%',
+    file: 'clip-pan.mp4',
+    eyebrow: '一百万格的画布',
+    title: '拖拽、缩放，视线想去哪儿就去哪儿',
+    desc: '1024×1024 的环形世界，滚轮缩放、拖拽平移，一千万格也不掉帧',
+    rate: 1.15,
+    startFrom: 0,
   },
   {
-    file: 'ui-library.png',
-    title: '图案库',
-    desc: '静态、振荡、飞船、枪、长寿者，二十种预设随手就摆，摆之前还能先看预览',
-    zoom: 1.16,
-    origin: '82% 46%',
+    file: 'clip-library.mp4',
+    eyebrow: '图案库',
+    title: '选中、预览、一点就摆上去',
+    desc: '二十种预设按类别排好，摆之前先看幽灵预览，落下去就能自己跑',
+    rate: 1.25,
+    startFrom: 6,
   },
   {
-    file: 'shot-edit.png',
-    title: '图案库可以自己改',
-    desc: '分组拖拽排序、框选存图案，把喜欢的形状收进自己的库',
-    zoom: 1.22,
-    origin: '84% 40%',
-  },
-  {
-    file: 'ui-studio.png',
-    title: '时刻与时段',
-    desc: '把某一代存成快照，或者把一段演化录成可回放的片段',
-    zoom: 1.5,
-    origin: '50% 50%',
-  },
-  {
-    file: 'ui-help.png',
-    title: '全都写在帮助里',
-    desc: '按 ← → 单步、Shift+0 回正、Ctrl+Z 撤销，快捷键一览无余',
-    zoom: 1.3,
-    origin: '50% 50%',
+    file: 'clip-snapshot.mp4',
+    eyebrow: '时刻 · 存档',
+    title: '把当前这一代，收进库里',
+    desc: '一键存成快照，随时载入；也可以把一段演化录成可回放的片段',
+    rate: 1.25,
+    startFrom: 8,
   },
 ] as const;
 
+const SEG = 180;
+
 export const FeaturesScene: React.FC = () => {
   const frame = useCurrentFrame();
-  const per = 74;
-  const idx = Math.min(SHOTS.length - 1, Math.floor(frame / per));
-  const local = frame - idx * per;
-  const shot = SHOTS[idx];
+  const { fps } = useVideoConfig();
+  const idx = Math.min(CLIPS.length - 1, Math.floor(frame / SEG));
+  const local = frame - idx * SEG;
+  const clip = CLIPS[idx];
 
-  const imgIn = interpolate(local, [0, 14], [0, 1], { extrapolateRight: 'clamp' });
-  const imgOut = interpolate(local, [per - 12, per - 2], [1, 0.15], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
-  const scale = interpolate(local, [0, per], [1.03, 1.005]);
+  const fadeIn = interpolate(local, [0, 11], [0, 1], { extrapolateRight: 'clamp' });
+  const fadeOut = interpolate(local, [SEG - 11, SEG], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const opacity = Math.min(fadeIn, fadeOut);
+  const textIn = spring({ frame: local - 5, fps, config: { damping: 200, mass: 0.7 } });
 
   return (
-    <Backdrop grid={false}>
-      <AbsoluteFill style={{ padding: '76px 90px 0' }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
-          <div>
-            <Eyebrow style={{ marginBottom: 12 }}>能做什么</Eyebrow>
-            <Heading size={54}>{shot.title}</Heading>
-          </div>
-          <div style={{ fontSize: 22, color: C.dim }}>
-            {String(idx + 1).padStart(2, '0')} / {String(SHOTS.length).padStart(2, '0')}
-          </div>
-        </div>
+    <AbsoluteFill style={{ background: '#05080c', color: C.text, fontFamily: FONT }}>
+      <AbsoluteFill style={{ opacity }}>
+        <OffthreadVideo
+          src={staticFile(clip.file)}
+          muted
+          startFrom={clip.startFrom}
+          playbackRate={clip.rate}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            filter: 'brightness(1.18) contrast(1.05) saturate(1.06)',
+          }}
+        />
+      </AbsoluteFill>
 
+      {/* 顶部 + 左侧压暗：文字可读，同时不挡住画面中央的弹窗 */}
+      <AbsoluteFill
+        style={{
+          background:
+            'linear-gradient(180deg, rgba(5,8,12,0.96) 0%, rgba(5,8,12,0.82) 16%, rgba(5,8,12,0.34) 30%, rgba(5,8,12,0) 42%)',
+        }}
+      />
+      <AbsoluteFill
+        style={{
+          background:
+            'linear-gradient(90deg, rgba(5,8,12,0.92) 0%, rgba(5,8,12,0.66) 16%, rgba(5,8,12,0.18) 30%, rgba(5,8,12,0) 40%)',
+        }}
+      />
+      <AbsoluteFill
+        style={{
+          background: 'linear-gradient(0deg, rgba(5,8,12,0.86) 0%, rgba(5,8,12,0) 24%)',
+        }}
+      />
+
+      <AbsoluteFill style={{ padding: '92px 104px', justifyContent: 'space-between' }}>
         <div
           style={{
-            marginTop: 34,
-            opacity: imgIn * imgOut,
-            transform: `scale(${scale})`,
-            borderRadius: 16,
-            overflow: 'hidden',
-            border: `1px solid ${C.line}`,
-            boxShadow: '0 40px 120px rgba(0,0,0,0.6)',
-            height: 700,
+            maxWidth: 900,
+            opacity: textIn,
+            transform: `translateX(${(1 - textIn) * -28}px)`,
           }}
         >
-          <Img
-            src={staticFile(shot.file)}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              transform: `scale(${shot.zoom})`,
-              transformOrigin: shot.origin,
-              filter: 'brightness(1.16) contrast(1.03) saturate(1.05)',
-            }}
-          />
+          <Eyebrow>{clip.eyebrow}</Eyebrow>
+          <Heading size={50}>{clip.title}</Heading>
+          <div style={{ marginTop: 22, fontSize: 24, color: C.text, lineHeight: 1.65, opacity: 0.9, maxWidth: 760 }}>
+            {clip.desc}
+          </div>
         </div>
 
-        <div style={{ marginTop: 26, fontSize: 26, color: C.dim, opacity: imgIn }}>{shot.desc}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {CLIPS.map((c2, i) => (
+            <div
+              key={c2.file}
+              style={{
+                width: i === idx ? 46 : 12,
+                height: 12,
+                borderRadius: 999,
+                background: i === idx ? C.accent : 'rgba(255,255,255,0.22)',
+                boxShadow: i === idx ? `0 0 18px ${C.accentSoft}` : 'none',
+              }}
+            />
+          ))}
+          <div
+            style={{
+              marginLeft: 14,
+              fontSize: 19,
+              letterSpacing: 2,
+              color: C.dim,
+              border: `1px solid ${C.line}`,
+              borderRadius: 999,
+              padding: '6px 16px',
+            }}
+          >
+            真实界面操作
+          </div>
+        </div>
       </AbsoluteFill>
-    </Backdrop>
+    </AbsoluteFill>
   );
 };
