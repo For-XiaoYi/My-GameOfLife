@@ -30,10 +30,18 @@ if (!TOKEN) {
 }
 
 const CHECK_ONLY = process.argv.includes('--check');
+const DRY = process.argv.includes('--dry');
 const REPO = process.env.REPO_NAME || (cred && cred.repo) || 'My-GameOfLife';
 const PRIVATE = (process.env.REPO_PRIVATE ?? 'true') !== 'false';
 const ROOT = resolve('.');
 const SKIP_DIRS = new Set(['node_modules', 'build', 'dist', '.pnpm-store', '.git', '.tools']);
+// 整目录跳过：渲染中间产物和工程内依赖
+const SKIP_PATHS = new Set(['promo/out']);
+// 单个 blob 走 REST 上传时，超过这个体积会被挡（实测 20 MB 的 mp4 直接 401），
+// 这类文件改走 Release 资产（上传接口 201，支持 2 GB）。
+const MAX_BLOB = 8 * 1024 * 1024;
+const RELEASE_TAG = 'promo-v1';
+const RELEASE_FILES = ['assets/promo.mp4'];
 const API = 'https://api.github.com';
 
 async function api(path, init = {}) {
@@ -66,13 +74,21 @@ function collect(dir, out = []) {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     if (e.isDirectory()) {
       if (SKIP_DIRS.has(e.name)) continue;
-      collect(join(dir, e.name), out);
+      const child = join(dir, e.name);
+      if (SKIP_PATHS.has(relative(ROOT, child).split('\\').join('/'))) continue;
+      collect(child, out);
     } else if (e.isFile()) {
-      out.push(relative(ROOT, join(dir, e.name)).split('\\').join('/'));
+      const rel = relative(ROOT, join(dir, e.name)).split('\\').join('/');
+      if (statSync(join(dir, e.name)).size > MAX_BLOB) {
+        bigFiles.push(rel);
+        continue;
+      }
+      out.push(rel);
     }
   }
   return out;
 }
+const bigFiles = [];
 
 const files = collect(ROOT).sort();
 const totalBytes = files.reduce((n, f) => n + statSync(join(ROOT, f)).size, 0);
@@ -94,6 +110,13 @@ if (CHECK_ONLY) {
 
 console.log(`准备发布 ${files.length} 个文件，共 ${(totalBytes / 1024).toFixed(0)} KB`);
 console.log(`账号：${me.login}`);
+
+if (DRY) {
+  for (const f of files) {
+    console.log(`  · ${(statSync(join(ROOT, f)).size / 1024).toFixed(1).padStart(9)} KB  ${f}`);
+  }
+  process.exit(0);
+}
 
 let repo = null;
 try {
@@ -184,6 +207,61 @@ try {
   console.log(`（可选）设置默认分支跳过：${e.message}`);
 }
 
+// 大文件走 Release 资产：视频这类几十 MB 的东西塞不进 git tree（REST blob 会 401）
+async function ensureRelease(tag, name, body) {
+  let res = await fetch(`${API}/repos/${me.login}/${REPO}/releases/tags/${tag}`, {
+    headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github+json', 'User-Agent': 'game-of-life-publisher' },
+  });
+  if (res.status === 200) return res.json();
+  res = await fetch(`${API}/repos/${me.login}/${REPO}/releases`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${TOKEN}`,
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      'User-Agent': 'game-of-life-publisher',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ tag_name: tag, name, body, draft: false, prerelease: false }),
+  });
+  const text = await res.text();
+  if (res.status !== 201) throw new Error(`创建 release ${tag} → ${res.status} ${text.slice(0, 200)}`);
+  return JSON.parse(text);
+}
+
+const releaseTargets = bigFiles.filter((f) => RELEASE_FILES.includes(f));
+if (releaseTargets.length) {
+  const rel = await ensureRelease(RELEASE_TAG, '宣传片 v1', '生命游戏宣传片成片（1920×1080 / 30fps / 51.5 秒）');
+  for (const f of releaseTargets) {
+    const buf = readFileSync(join(ROOT, f));
+    const fileName = f.split('/').pop();
+    const exists = (rel.assets || []).find((a) => a.name === fileName && a.size === buf.length);
+    if (exists) {
+      console.log(`  · ${f} 已在 release 里（${(buf.length / 1048576).toFixed(1)} MB），跳过`);
+      continue;
+    }
+    const up = await fetch(
+      `https://uploads.github.com/repos/${me.login}/${REPO}/releases/${rel.id}/assets?name=${encodeURIComponent(fileName)}`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${TOKEN}`,
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'game-of-life-publisher',
+          'Content-Type': 'application/octet-stream',
+          'Content-Length': String(buf.length),
+        },
+        body: buf,
+      },
+    );
+    const txt = await up.text();
+    if (up.status !== 201) throw new Error(`上传 ${f} → ${up.status} ${txt.slice(0, 200)}`);
+    console.log(`  · ${f} → release ${RELEASE_TAG}（${(buf.length / 1048576).toFixed(1)} MB）`);
+  }
+  if (bigFiles.length > releaseTargets.length) {
+    console.log(`（其余大文件未上传：${bigFiles.filter((f) => !releaseTargets.includes(f)).join(', ')}）`);
+  }
+}
 // 如果仓库已经开过 Pages，顺便触发一次重新构建，省得等自动那几分钟。
 try {
   const builds = await api(`/repos/${me.login}/${REPO}/pages/builds`, { method: 'POST' });

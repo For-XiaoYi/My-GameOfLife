@@ -415,6 +415,15 @@ function updateTimeline(min: number, max: number): void {
       ? `第 ${nf.format(world.gen)} 代 · 可回溯 ${nf.format(span)} 代`
       : `第 ${nf.format(world.gen)} 代 · 暂无回溯历史`;
   tl.title = span > 0 ? `可回溯 ${nf.format(span)} 代（第 ${nf.format(min)}–${nf.format(max)} 代）` : '还没有可回溯的历史';
+  // 顺手把「已记录多少代 / 占了多大」同步到回溯深度的按钮上，避免看到过期数字
+  const depthBtn = document.getElementById('depth-select');
+  if (depthBtn && history) {
+    const st = history.stats();
+    depthBtn.title =
+      `回溯深度：当前已记录 ${nf.format(st.gens)} 代 · 占用 ${fmtBytes(st.bytes)}；` +
+      `上限 ${state.historyDepth === 0 ? fmtBytes(HISTORY_BYTES) : `${depthLabel(state.historyDepth)} / ${fmtBytes(HISTORY_BYTES)}`}，` +
+      '超出后丢弃最早的关键帧';
+  }
 }
 
 function updateRecordBadge(): void {

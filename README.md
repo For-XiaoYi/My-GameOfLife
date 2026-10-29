@@ -154,3 +154,29 @@ node scripts/bench.mjs      # 性能基准
 
 `scripts/` 里还有图案生成（`gen-patterns.mjs`，从 `tools/patterns/*.rle` 生成图案库）、
 Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`）。
+
+## 宣传片
+
+**成片：** [`assets/promo.mp4`](assets/promo.mp4)（1920×1080，30fps，51 秒，20 MB）
+　·　首帧海报：[`assets/promo-poster.png`](assets/promo-poster.png)
+　·　一图看全片：[`assets/promo-storyboard.png`](assets/promo-storyboard.png)（12 个关键帧，带时间点）
+
+它讲了四件事：生命游戏是什么（三条规则 + 5×5 邻居演示）、为什么好看（滑翔机 / 脉冲星 /
+高斯帕滑翔机枪真在跑）、这个模拟器能干什么（画布、图案库、可改的库、时刻与时段、帮助）、
+以及「演化不可逆，所以每一步都记下来了」的时间回溯。
+
+工程在 `promo/`，用 [Remotion](https://www.remotion.dev/) 把 React 组件渲染成视频：
+
+```bash
+cd promo
+node <pnpm> install            # 只装这个工程自己的依赖
+node node_modules/@remotion/cli/remotion-cli.js studio src/index.tsx   # 实时预览，可拖动时间轴
+node node_modules/@remotion/cli/remotion-cli.js render src/index.tsx Promo out/promo.mp4
+node node_modules/@remotion/cli/remotion-cli.js still  src/index.tsx Promo out/poster.png --frame=95
+```
+
+- `src/scenes/` 是六个场景（标题 / 规则 / 涌现 / 功能 / 回溯 / 结尾），`src/Promo.tsx` 用
+  `Sequence` 把它们串起来，场景交界处各自淡入淡出。
+- 界面镜头是脚本用 CDP 拍下的真实界面（`scripts/shoot-promo*.mjs`），存在 `promo/public/`；
+  图案动画则由 `src/lib/life.ts` 现算每一代的位图，所以视频里的演化是真的。
+- 渲染配置里写死了本机 Chrome 的路径（`remotion.config.ts`），换机器要改那一行。

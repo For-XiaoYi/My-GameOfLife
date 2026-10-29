@@ -1055,20 +1055,38 @@ async function main() {
       `播放 ${pauseOnModal.before} → 内容库 ${pauseOnModal.afterStudio} → 帮助 ${pauseOnModal.afterHelp}`,
     );
 
-    // Z 回溯深度可调（在底栏右侧）
+    // Z 回溯深度可调（在底栏右侧，自绘下拉）
     const depth = await page.evaluate(`(async () => {
       const L = window.__life;
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
       const before = L.history.limitGens;
-      const sel = document.getElementById('depth-select');
-      const opts = sel ? [...sel.options].map(o => o.value) : [];
-      sel.value = '500';
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-      await new Promise(r => setTimeout(r, 150));
+      const btn = document.getElementById('depth-select');
+      const openMenu = async () => {
+        for (let i = 0; i < 3; i++) {
+          const p = document.querySelector('.menu-pop');
+          if (p) return p;
+          btn.click();
+          await sleep(110);
+        }
+        return document.querySelector('.menu-pop');
+      };
+      const pick = async (v) => {
+        const p = await openMenu();
+        const item = p && p.querySelector('.menu-item[data-value="' + v + '"]');
+        if (!item) return false;
+        item.click();
+        await sleep(170);
+        return true;
+      };
+      const p = await openMenu();
+      const opts = p ? [...p.querySelectorAll('.menu-item')].map(n => n.dataset.value) : [];
+      // 点当前选中项 = 只关闭，不改动
+      const cur = p && p.querySelector('.menu-item.on');
+      if (cur) { cur.click(); await sleep(120); }
+      await pick('500');
       const after = L.history.limitGens;
-      const note = sel.title;
-      sel.value = '3000';
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-      await new Promise(r => setTimeout(r, 120));
+      const note = btn.title;
+      await pick('3000');
       const restored = L.history.limitGens;
       return { before, after, restored, note, opts };
     })()`);
@@ -1192,28 +1210,71 @@ async function main() {
     );
     record('片段播放器有全屏按钮', !player.none && player.hasFs, `hasFs=${player.hasFs}`);
 
-    // AD 回溯深度：挪到底栏右侧，改完立刻生效
+    // AD 回溯深度：挪到底栏右侧，改完立刻生效（自绘下拉，不是原生 select）
     const depthBar = await page.evaluate(`(async () => {
-      const sel = document.getElementById('depth-select');
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      const btn = document.getElementById('depth-select');
       const bar = document.getElementById('bottombar');
-      const inBar = !!sel && bar.contains(sel);
-      const opts = sel ? [...sel.options].map((o) => o.value) : [];
-      sel.value = '500';
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-      await new Promise(r => setTimeout(r, 150));
+      const inBar = !!btn && bar.contains(btn);
+      const openMenu = async () => {
+        for (let i = 0; i < 3; i++) {
+          const p = document.querySelector('.menu-pop');
+          if (p) return p;
+          btn.click();
+          await sleep(110);
+        }
+        return document.querySelector('.menu-pop');
+      };
+      const pick = async (v) => {
+        const p = await openMenu();
+        const item = p && p.querySelector('.menu-item[data-value="' + v + '"]');
+        if (!item) return false;
+        item.click();
+        await sleep(170);
+        return true;
+      };
+      const p = await openMenu();
+      const opts = p ? [...p.querySelectorAll('.menu-item')].map((n) => n.dataset.value) : [];
+      const popVisible = p ? p.getBoundingClientRect().height > 40 : false;
+      const cur = p && p.querySelector('.menu-item.on');
+      if (cur) { cur.click(); await sleep(120); }
+      const ok500 = await pick('500');
+      const lim500 = window.__life.history.limitGens;
       let saved = '';
       try { saved = localStorage.getItem('life-studio:history-depth') || ''; } catch (e) {}
       const stillInSettings = !!document.getElementById('set-depth');
-      // 还原，别影响后面的用例
-      sel.value = '3000';
-      sel.dispatchEvent(new Event('change', { bubbles: true }));
-      await new Promise(r => setTimeout(r, 100));
-      return { inBar, opts, saved, stillInSettings };
+      const ok3000 = await pick('3000');
+      const lim3000 = window.__life.history.limitGens;
+      return { inBar, opts, popVisible, ok500, lim500, saved, stillInSettings, ok3000, lim3000 };
     })()`);
     record(
       '回溯深度在底栏右侧、六档可选、改完立刻记住',
-      depthBar.inBar && depthBar.opts.length === 6 && depthBar.saved === '500' && !depthBar.stillInSettings,
-      `?inBar=${depthBar.inBar} · ${depthBar.opts.join('/')} · 存了 ${depthBar.saved}`,
+      depthBar.inBar &&
+        depthBar.popVisible &&
+        depthBar.opts.length === 6 &&
+        depthBar.ok500 &&
+        depthBar.lim500 === 500 &&
+        depthBar.saved === '500' &&
+        !depthBar.stillInSettings &&
+        depthBar.ok3000 &&
+        depthBar.lim3000 === 3000,
+      `inBar=${depthBar.inBar} · 弹出=${depthBar.popVisible} · ${depthBar.opts.join('/')} · 生效 ${depthBar.lim500}→${depthBar.lim3000} · 存了 ${depthBar.saved}`,
+    );
+
+    // 时间轴标签要写清"还能回溯多少代"，否则改深度看不出效果
+    const tlLabel = await page.evaluate(`(async () => {
+      const L = window.__life;
+      L.world.clear(); L.commit(); L.place('glider', 300, 300);
+      for (let i = 0; i < 6; i++) L.step(1);
+      await new Promise(r => setTimeout(r, 260));
+      const label = document.getElementById('timeline-label').textContent || '';
+      const title = document.getElementById('timeline').title || '';
+      return { label, title };
+    })()`);
+    record(
+      '时间轴会写出"可回溯多少代"',
+      /可回溯|暂无回溯/.test(tlLabel.label) && /回溯|历史/.test(tlLabel.title),
+      `${tlLabel.label.trim()} · title="${tlLabel.title}"`,
     );
 
     // AE 遮挡界面：打开时暂停，关掉后恢复原来的播放状态

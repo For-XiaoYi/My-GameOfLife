@@ -6,6 +6,10 @@ node_modules/
 build/
 dist/
 
+# 宣传片工程：源码留着，依赖与渲染输出不进仓库（成品在 assets/promo.mp4）
+promo/node_modules/
+promo/out/
+
 # 编辑器 / 系统
 .vscode/
 .idea/
