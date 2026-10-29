@@ -235,6 +235,20 @@ if (releaseTargets.length) {
   for (const f of releaseTargets) {
     const buf = readFileSync(join(ROOT, f));
     const fileName = f.split('/').pop();
+    // 同名旧资产先删掉再传，否则上传接口会 422 already_exists
+    const stale = (rel.assets || []).find((a) => a.name === fileName && a.size !== buf.length);
+    if (stale) {
+      await fetch(`${API}/repos/${me.login}/${REPO}/releases/assets/${stale.id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${TOKEN}`,
+          Accept: 'application/vnd.github+json',
+          'User-Agent': 'game-of-life-publisher',
+        },
+      });
+      rel.assets = (rel.assets || []).filter((a) => a.id !== stale.id);
+      console.log(`  · 旧资产 ${fileName}（${(stale.size / 1048576).toFixed(1)} MB）已删除，准备重传`);
+    }
     const exists = (rel.assets || []).find((a) => a.name === fileName && a.size === buf.length);
     if (exists) {
       console.log(`  · ${f} 已在 release 里（${(buf.length / 1048576).toFixed(1)} MB），跳过`);

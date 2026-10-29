@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { AbsoluteFill, Sequence, useCurrentFrame } from 'remotion';
+import { AbsoluteFill, Audio, Sequence, staticFile, useCurrentFrame } from 'remotion';
 import { TitleScene, RulesScene } from './scenes/Intro';
 import { PatternsScene, FeaturesScene } from './scenes/Showcase';
 import { TimeTravelScene, OutroScene } from './scenes/Ending';
@@ -29,6 +29,8 @@ export const Promo: React.FC = () => {
   let at = 0;
   return (
     <AbsoluteFill style={{ background: '#05080c' }}>
+      {/* 整片配乐：build/make-music.mjs 合成，含段落推进与音效，无旁白 */}
+      <Audio src={staticFile('music/score.wav')} volume={1} />
       {SCENES.map((s) => {
         const from = at;
         at += s.dur;

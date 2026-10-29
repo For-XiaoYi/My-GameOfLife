@@ -169,6 +169,16 @@ Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`
 高斯帕滑翔机枪真在跑）、这个模拟器能干什么（画布、图案库、可改的库、时刻与时段、帮助）、
 以及「演化不可逆，所以每一步都记下来了」的时间回溯。
 
+**声音**：有一条自己合成的配乐，没有旁白——`build/make-music.mjs` 用纯代码做加法合成：
+暗色 pad 铺底、随段落逐渐加快的琶音、功能段进鼓、转场呼啸与上扬 riser，最后收在一个大三和弦上。
+没用任何采样库，想调节奏、换和弦、改音量，改脚本再跑一次就行：
+
+```bash
+node build/make-music.mjs       # 重新生成 promo/public/music/score.wav
+```
+
+配乐由 `src/Promo.tsx` 里的 `<Audio src={staticFile('music/score.wav')} />` 挂到整条时间线上。
+
 工程在 `promo/`，用 [Remotion](https://www.remotion.dev/) 把 React 组件渲染成视频：
 
 ```bash
