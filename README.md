@@ -157,9 +157,13 @@ Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`
 
 ## 宣传片
 
-**成片：** [`assets/promo.mp4`](assets/promo.mp4)（1920×1080，30fps，51 秒，20 MB）
+**成片：** [Releases · 宣传片 v1](https://github.com/For-XiaoYi/My-GameOfLife/releases/download/promo-v1/promo.mp4)
+（1920×1080，30fps，51 秒，20 MB）
 　·　首帧海报：[`assets/promo-poster.png`](assets/promo-poster.png)
 　·　一图看全片：[`assets/promo-storyboard.png`](assets/promo-storyboard.png)（12 个关键帧，带时间点）
+
+> 视频没放进仓库：几十 MB 的二进制塞进 git 会让每次 clone 都变慢，所以走 Release 附件，
+> 上面那个链接点开就能直接下载。`assets/` 里的海报和分镜图是普通文件，clone 下来就有。
 
 它讲了四件事：生命游戏是什么（三条规则 + 5×5 邻居演示）、为什么好看（滑翔机 / 脉冲星 /
 高斯帕滑翔机枪真在跑）、这个模拟器能干什么（画布、图案库、可改的库、时刻与时段、帮助）、
