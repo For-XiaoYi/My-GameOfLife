@@ -156,12 +156,6 @@ for (const f of files) {
   process.stdout.write(`  · ${f}\n`);
 }
 
-// 之前误传进仓库树的大文件要显式删掉（base_tree 会把它们保留下来）
-for (const p of DELETED_PATHS) {
-  tree.push({ path: p, mode: '100644', type: 'blob', sha: null });
-  console.log(`  × 从仓库删除 ${p}`);
-}
-
 // 有历史就接在最新提交后面，否则作为首个提交
 const BRANCH = repo.default_branch || 'main';
 let parents = [];
@@ -173,6 +167,19 @@ try {
   baseTree = parent.tree.sha;
 } catch {
   /* 空仓库 */
+}
+
+// 之前误传进仓库树的大文件要显式删掉（base_tree 会把它们保留下来）；
+// 已经不存在的路径不能再传 sha:null，否则会 422 GitRPC::BadObjectState
+let existingPaths = new Set();
+if (baseTree) {
+  const t = await api(`/repos/${me.login}/${REPO}/git/trees/${baseTree}?recursive=1`);
+  existingPaths = new Set(t.tree.map((n) => n.path));
+}
+for (const p of DELETED_PATHS) {
+  if (!existingPaths.has(p)) continue;
+  tree.push({ path: p, mode: '100644', type: 'blob', sha: null });
+  console.log(`  × 从仓库删除 ${p}`);
 }
 
 const newTree = await api(`/repos/${me.login}/${REPO}/git/trees`, {

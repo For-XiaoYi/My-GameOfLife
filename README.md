@@ -158,16 +158,16 @@ Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`
 ## 宣传片
 
 **成片：** [Releases · 宣传片 v1](https://github.com/For-XiaoYi/My-GameOfLife/releases/download/promo-v1/promo.mp4)
-（1920×1080，30fps，51 秒，20 MB）
+（1920×1080，30fps，61.5 秒，8.9 MB，带配乐）
 　·　首帧海报：[`assets/promo-poster.png`](assets/promo-poster.png)
 　·　一图看全片：[`assets/promo-storyboard.png`](assets/promo-storyboard.png)（12 个关键帧，带时间点）
 
 > 视频没放进仓库：几十 MB 的二进制塞进 git 会让每次 clone 都变慢，所以走 Release 附件，
 > 上面那个链接点开就能直接下载。`assets/` 里的海报和分镜图是普通文件，clone 下来就有。
 
-它讲了四件事：生命游戏是什么（三条规则 + 5×5 邻居演示）、为什么好看（滑翔机 / 脉冲星 /
-高斯帕滑翔机枪真在跑）、这个模拟器能干什么（画布、图案库、可改的库、时刻与时段、帮助）、
-以及「演化不可逆，所以每一步都记下来了」的时间回溯。
+片子的结构是「先讲规则，再拆组件」：标题 → 四条规则 → 静物 → 振荡子 → 滑翔机（定格）→
+滑翔机（实机录像）→ 滑翔枪 → 逻辑电路 → 结尾。功能演示不是单独一段，而是以真实操作短片的
+形式穿插在组件之间，所以看到的是「这个东西真的能在那个界面里摆出来」。
 
 **声音**：有一条自己合成的配乐，没有旁白——`scripts/make-music.mjs` 用纯代码做加法合成：
 暗色 pad 铺底、随段落逐渐加快的琶音、功能段进鼓、转场呼啸与上扬 riser，最后收在一个大三和弦上。
