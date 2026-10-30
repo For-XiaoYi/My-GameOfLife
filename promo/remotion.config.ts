@@ -23,7 +23,7 @@ const CHROME_CANDIDATES = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/usr/bin/google-chrome',
   '/usr/bin/chromium',
-].filter(Boolean);
+].filter((p): p is string => typeof p === 'string' && p.length > 0);
 
 const chrome = CHROME_CANDIDATES.find((p) => {
   try {

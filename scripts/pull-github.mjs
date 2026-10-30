@@ -22,6 +22,35 @@ const api = async (path) => {
   return res.json();
 };
 
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// 大文件（比如 8 MB 的 score.wav）偶尔会被对端中途掐断，重试几次再放弃
+const blob = async (sha) => {
+  let lastErr;
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    try {
+      const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/blobs/${sha}`, {
+        headers: {
+          Authorization: `Bearer ${TOKEN}`,
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+          'User-Agent': 'life-studio',
+        },
+      });
+      if (!res.ok) throw new Error(`blob ${sha.slice(0, 7)} → HTTP ${res.status}`);
+      const j = await res.json();
+      return Buffer.from(j.content, j.encoding === 'base64' ? 'base64' : 'utf8');
+    } catch (err) {
+      lastErr = err;
+      if (attempt < 4) {
+        console.log(`   重试 ${attempt}/3：${sha.slice(0, 7)} ${err.message}`);
+        await sleep(600 * attempt);
+      }
+    }
+  }
+  throw lastErr;
+};
+
 const repo = await api(`/repos/${OWNER}/${REPO}`);
 const branch = repo.default_branch;
 const commits = await api(`/repos/${OWNER}/${REPO}/commits?sha=${branch}&per_page=5`);
@@ -59,11 +88,7 @@ void walk;
 for (const r of rows) {
   if (r.status === 'same-size') {
     // 再按内容确认（大小相同不代表内容相同）
-    const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/blobs/${r.sha}`, {
-      headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github+json', 'User-Agent': 'life-studio' },
-    });
-    const j = await res.json();
-    const buf = Buffer.from(j.content, j.encoding === 'base64' ? 'base64' : 'utf8');
+    const buf = await blob(r.sha);
     const localBuf = readFileSync(join(root, r.path));
     r.status = buf.equals(localBuf) ? 'same' : 'content-diff';
     if (r.status === 'content-diff') {
@@ -72,11 +97,7 @@ for (const r of rows) {
       writeFileSync(p, buf);
     }
   } else if (r.status === 'size-diff' || r.status === 'only-remote') {
-    const res = await fetch(`https://api.github.com/repos/${OWNER}/${REPO}/git/blobs/${r.sha}`, {
-      headers: { Authorization: `Bearer ${TOKEN}`, Accept: 'application/vnd.github+json', 'User-Agent': 'life-studio' },
-    });
-    const j = await res.json();
-    const buf = Buffer.from(j.content, j.encoding === 'base64' ? 'base64' : 'utf8');
+    const buf = await blob(r.sha);
     const p = join(outRoot, r.path);
     mkdirSync(dirname(p), { recursive: true });
     writeFileSync(p, buf);
