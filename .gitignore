@@ -10,6 +10,10 @@ dist/
 promo/node_modules/
 promo/out/
 
+# 本机 AI 协作约定：只给本地会话读，不进仓库
+AGENTS.md
+CLAUDE.md
+
 # 编辑器 / 系统
 .vscode/
 .idea/

@@ -36,7 +36,7 @@ const PRIVATE = (process.env.REPO_PRIVATE ?? 'true') !== 'false';
 const ROOT = resolve('.');
 const SKIP_DIRS = new Set(['node_modules', 'build', 'dist', '.pnpm-store', '.git', '.tools']);
 // 整目录跳过：渲染中间产物和工程内依赖
-const SKIP_PATHS = new Set(['promo/out']);
+const SKIP_PATHS = new Set(['promo/out', 'AGENTS.md', 'CLAUDE.md']);
 // 单个 blob 走 REST 上传时，超过这个体积会被挡（实测 20 MB 的 mp4 直接 401），
 // 这类文件改走 Release 资产（上传接口 201，支持 2 GB）。
 const MAX_BLOB = 12 * 1024 * 1024;
@@ -81,6 +81,8 @@ function collect(dir, out = []) {
       collect(child, out);
     } else if (e.isFile()) {
       const rel = relative(ROOT, join(dir, e.name)).split('\\').join('/');
+      // 本机 AI 协作约定文件，只给本地会话读，不进仓库
+      if (SKIP_PATHS.has(rel)) continue;
       // 成片永远走 Release，不进仓库树——哪怕它压到 12 MB 以下
       if (RELEASE_FILES.includes(rel) || statSync(join(dir, e.name)).size > MAX_BLOB) {
         bigFiles.push(rel);
