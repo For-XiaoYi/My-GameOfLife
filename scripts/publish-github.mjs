@@ -1,4 +1,4 @@
-﻿// 把当前项目发布成一个 GitHub 仓库（不依赖 git，直接走 Git Data API）。
+// 把当前项目发布成一个 GitHub 仓库（不依赖 git，直接走 Git Data API）。
 // 用法：
 //   node scripts/publish-github.mjs            # 用保存的凭据更新仓库
 //   node scripts/publish-github.mjs --check    # 只验证 token 与仓库访问
@@ -42,6 +42,8 @@ const SKIP_PATHS = new Set(['promo/out']);
 const MAX_BLOB = 12 * 1024 * 1024;
 const RELEASE_TAG = 'promo-v1';
 const RELEASE_FILES = ['assets/promo.mp4'];
+// 一次性的清理清单：这些路径在仓库历史里存在过，但以后不该再出现
+const DELETED_PATHS = ['assets/promo.mp4'];
 const API = 'https://api.github.com';
 
 async function api(path, init = {}) {
@@ -79,7 +81,8 @@ function collect(dir, out = []) {
       collect(child, out);
     } else if (e.isFile()) {
       const rel = relative(ROOT, join(dir, e.name)).split('\\').join('/');
-      if (statSync(join(dir, e.name)).size > MAX_BLOB) {
+      // 成片永远走 Release，不进仓库树——哪怕它压到 12 MB 以下
+      if (RELEASE_FILES.includes(rel) || statSync(join(dir, e.name)).size > MAX_BLOB) {
         bigFiles.push(rel);
         continue;
       }
@@ -151,6 +154,12 @@ for (const f of files) {
   });
   tree.push({ path: f, mode: '100644', type: 'blob', sha: blob.sha });
   process.stdout.write(`  · ${f}\n`);
+}
+
+// 之前误传进仓库树的大文件要显式删掉（base_tree 会把它们保留下来）
+for (const p of DELETED_PATHS) {
+  tree.push({ path: p, mode: '100644', type: 'blob', sha: null });
+  console.log(`  × 从仓库删除 ${p}`);
 }
 
 // 有历史就接在最新提交后面，否则作为首个提交
@@ -231,7 +240,7 @@ async function ensureRelease(tag, name, body) {
 
 const releaseTargets = bigFiles.filter((f) => RELEASE_FILES.includes(f));
 if (releaseTargets.length) {
-  const rel = await ensureRelease(RELEASE_TAG, '宣传片 v1', '生命游戏宣传片成片（1920×1080 / 30fps / 51.5 秒）');
+  const rel = await ensureRelease(RELEASE_TAG, '宣传片 v1', '生命游戏宣传片成片（1920×1080 / 30fps / 61.5 秒，带配乐）');
   for (const f of releaseTargets) {
     const buf = readFileSync(join(ROOT, f));
     const fileName = f.split('/').pop();
