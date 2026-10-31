@@ -1,239 +1,254 @@
-import {
-  AbsoluteFill,
-  Audio,
-  OffthreadVideo,
-  Sequence,
-  interpolate,
-  staticFile,
-  useCurrentFrame,
-} from 'remotion';
+import { AbsoluteFill, OffthreadVideo, Sequence, interpolate, staticFile, useCurrentFrame } from 'remotion';
 import { C, FONT } from '../theme';
 
 /**
- * 随机演化（v8 重做）
- * 黑底 → 标题 → 点击「随机」的小裁切 → 确认弹窗 → 淡入满屏细胞慢慢演化。
- * 动作时刻来自 record-clips.mjs 打印的 marks：
- * random 2.085s / confirm 3.722s；录屏 30fps。
+ * 随机演化（v9）
+ * 三句话 + 一颗骰子 + 一圈光晕；随后切进回环模式的连续拉远镜头：
+ * 从细胞特写一直拉到整张世界 + 环面重复区域，最后接结尾。
+ * 不再出现任何界面操作录制。
  */
 
-const CLIP = 'clip-random.mp4';
-const CARD_W = 760;
-const CARD_H = 430;
+const GOLD = '#ffd9a0';
+const OFFWHITE = '#f2ede2';
 
-const CropCard: React.FC<{
-  startFrom: number;
-  targetX: number;
-  targetY: number;
-  zoom: number;
-  label: string;
-  clickFrame: number;
-  ringX: number;
-  ringY: number;
-}> = ({ startFrom, targetX, targetY, zoom, label, clickFrame, ringX, ringY }) => {
+const PIPS = [
+  [30, 30],
+  [70, 30],
+  [50, 50],
+  [30, 70],
+  [70, 70],
+];
+
+const STARS = Array.from({ length: 30 }, (_, i) => ({
+  x: (i * 137 + 61) % 1920,
+  y: (i * 241 + 37) % 1080,
+  r: i % 7 === 0 ? 2.2 : 1.2,
+  warm: i % 5 === 0,
+  ph: i * 0.7,
+}));
+
+const diePips = (
+  <>
+    {PIPS.map(([x, y], i) => (
+      <div
+        key={i}
+        style={{
+          position: 'absolute',
+          left: x,
+          top: y,
+          width: 13,
+          height: 13,
+          marginLeft: -6.5,
+          marginTop: -6.5,
+          borderRadius: 99,
+          background: GOLD,
+          boxShadow: `0 0 14px ${GOLD}aa`,
+        }}
+      />
+    ))}
+  </>
+);
+
+export const RandomEvolutionScene: React.FC = () => {
   const frame = useCurrentFrame();
-  const local = frame;
-  const appear = interpolate(local, [0, 12], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const ring = interpolate(local, [clickFrame, clickFrame + 3, clickFrame + 14], [0, 1, 0], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
-  const ringScale = interpolate(local, [clickFrame, clickFrame + 14], [0.6, 1.7], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
-  const tx = CARD_W / 2 - targetX * zoom;
-  const ty = (CARD_H - 54) / 2 - targetY * zoom;
+
+  // 三句话
+  const line1 = interpolate(frame, [10, 30], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const line2 = interpolate(frame, [40, 60], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const line3 = interpolate(frame, [70, 90], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const poemOut = interpolate(frame, [118, 145], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const dieIn = interpolate(frame, [0, 24], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const dieRoll = interpolate(frame, [40, 78], [0, 200], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const dieToss = Math.sin(Math.min(1, Math.max(0, (frame - 40) / 38)) * Math.PI) * -36;
+  const ringRot = frame * 0.18;
+  const clipIn = interpolate(frame, [126, 152], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
-    <div
-      style={{
-        width: CARD_W,
-        height: CARD_H,
-        borderRadius: 18,
-        border: `1px solid ${C.accentSoft}`,
-        background: 'rgba(8,13,19,0.96)',
-        boxShadow: '0 26px 90px rgba(0,0,0,0.55), 0 0 60px rgba(108,245,210,0.10)',
-        opacity: appear,
-        transform: `translateY(${(1 - appear) * 18}px)`,
-        overflow: 'hidden',
-      }}
-    >
+    <AbsoluteFill style={{ background: '#04070a', color: OFFWHITE, fontFamily: FONT, overflow: 'hidden' }}>
+      {/* 神性的底光：金色光晕 + 星点 + 一圈轨道 */}
+      <AbsoluteFill
+        style={{
+          background:
+            'radial-gradient(42% 46% at 50% 30%, rgba(255,217,160,0.12) 0%, rgba(255,217,160,0.03) 42%, rgba(4,7,10,0) 72%)',
+        }}
+      />
+      <AbsoluteFill
+        style={{
+          background:
+            'linear-gradient(180deg, rgba(255,217,160,0.035) 0%, rgba(4,7,10,0) 22%, rgba(4,7,10,0) 76%, rgba(4,7,10,0.82) 100%)',
+        }}
+      />
+      {STARS.map((s, i) => {
+        const tw = 0.35 + 0.65 * ((Math.sin(frame / 18 + s.ph) + 1) / 2);
+        return (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: s.x,
+              top: s.y,
+              width: s.r,
+              height: s.r,
+              borderRadius: 99,
+              background: s.warm ? GOLD : C.accent,
+              opacity: tw * 0.55,
+              boxShadow: `0 0 8px ${s.warm ? 'rgba(255,217,160,0.5)' : 'rgba(108,245,210,0.45)'}`,
+            }}
+          />
+        );
+      })}
+
+      {/* 骰子与光环 */}
       <div
         style={{
-          height: 54,
-          padding: '0 20px',
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 168,
+          height: 320,
           display: 'flex',
           alignItems: 'center',
-          gap: 10,
-          borderBottom: `1px solid ${C.line}`,
+          justifyContent: 'center',
+          opacity: dieIn * poemOut,
+          zIndex: 5,
         }}
       >
-        <div style={{ width: 8, height: 8, borderRadius: 99, background: C.accent, boxShadow: `0 0 10px ${C.accent}` }} />
-        <div style={{ fontSize: 17, color: C.text, letterSpacing: 1 }}>{label}</div>
-        <div style={{ marginLeft: 'auto', fontSize: 12, color: C.dim, letterSpacing: 2 }}>REAL UI · 实录</div>
-      </div>
-
-      <div style={{ position: 'relative', width: CARD_W, height: CARD_H - 54, overflow: 'hidden', background: '#05080c' }}>
-        <OffthreadVideo
-          src={staticFile(CLIP)}
-          muted
-          startFrom={startFrom}
+        <div
           style={{
             position: 'absolute',
-            width: 1920,
-            height: 1080,
-            transform: `translate(${tx}px, ${ty}px) scale(${zoom})`,
-            transformOrigin: '0 0',
-            filter: 'brightness(1.12) contrast(1.03)',
+            width: 300,
+            height: 300,
+            borderRadius: '50%',
+            border: `1px dashed rgba(255,217,160,0.22)`,
+            transform: `rotate(${ringRot}deg)`,
           }}
         />
         <div
           style={{
             position: 'absolute',
-            left: ringX,
-            top: ringY,
-            width: 80,
-            height: 80,
-            marginLeft: -40,
-            marginTop: -40,
+            width: 238,
+            height: 238,
             borderRadius: '50%',
-            border: `2px solid ${C.accent}`,
-            boxShadow: `0 0 24px ${C.accentSoft}`,
-            opacity: ring,
-            transform: `scale(${ringScale})`,
+            border: `1px solid rgba(108,245,210,0.13)`,
+            transform: `rotate(${-ringRot * 0.6}deg)`,
           }}
         />
+        <div
+          style={{
+            position: 'relative',
+            width: 100,
+            height: 100,
+            borderRadius: 24,
+            border: `1.5px solid rgba(255,217,160,0.85)`,
+            background: 'linear-gradient(145deg, rgba(24,23,22,0.96), rgba(8,10,13,0.96))',
+            boxShadow: `0 0 70px rgba(255,217,160,0.22), inset 0 0 22px rgba(255,217,160,0.08)`,
+            transform: `translateY(${dieToss}px) rotate(${dieRoll}deg)`,
+          }}
+        >
+          {diePips}
+        </div>
       </div>
-    </div>
-  );
-};
 
-export const RandomEvolutionScene: React.FC = () => {
-  const frame = useCurrentFrame();
-
-  const titleIn = interpolate(frame, [0, 12], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const titleOut = interpolate(frame, [44, 56], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const line1 = interpolate(frame, [56, 66, 96, 106], [0, 1, 1, 0], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
-  const line2 = interpolate(frame, [100, 112, 160, 172], [0, 1, 1, 0], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
-  const fullIn = interpolate(frame, [150, 180], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const cardOut = interpolate(frame, [150, 160], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-
-  return (
-    <AbsoluteFill style={{ background: '#05080c', color: C.text, fontFamily: FONT, overflow: 'hidden' }}>
-      {/* 标题：黑底，先只给标题 */}
-      <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center', opacity: titleIn * titleOut }}>
-        <div style={{ fontSize: 17, letterSpacing: 10, color: C.accent }}>组件 · 随机</div>
-        <div style={{ marginTop: 22, fontSize: 88, fontWeight: 800, letterSpacing: 6, color: '#eafff8' }}>随机演化</div>
-        <div style={{ marginTop: 18, fontSize: 24, color: C.dim, letterSpacing: 2 }}>不设计，也是一种设计</div>
-      </AbsoluteFill>
-
-      {/* 两个动作特写 */}
-      <AbsoluteFill style={{ opacity: cardOut }}>
-        <Sequence from={56} durationInFrames={16}>
-          <div style={{ position: 'absolute', left: 1010, top: 300 }}>
-            <CropCard
-              startFrom={56}
-              targetX={215}
-              targetY={1052}
-              zoom={2.0}
-              label="点击「随机」"
-              clickFrame={6}
-              ringX={CARD_W / 2}
-              ringY={(CARD_H - 54) / 2}
-            />
-          </div>
-        </Sequence>
-        <Sequence from={72} durationInFrames={88}>
-          <div style={{ position: 'absolute', left: 1010, top: 300 }}>
-            <CropCard
-              startFrom={72}
-              targetX={960}
-              targetY={540}
-              zoom={1.45}
-              label="确认覆盖当前图案"
-              clickFrame={40}
-              ringX={CARD_W / 2 + (1150 - 960) * 1.45}
-              ringY={(CARD_H - 54) / 2 + (550 - 540) * 1.45}
-            />
-          </div>
-        </Sequence>
-      </AbsoluteFill>
-
-      {/* 两句话 */}
-      <AbsoluteFill style={{ padding: '0 120px', justifyContent: 'center' }}>
-        <div style={{ width: 760, position: 'relative', height: 260 }}>
+      {/* 三句话：一句一句出现，整首停下来 */}
+      <AbsoluteFill style={{ pointerEvents: 'none', zIndex: 5 }}>
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: 470,
+            textAlign: 'center',
+            opacity: poemOut,
+            textShadow: '0 2px 34px rgba(4,7,10,0.98), 0 0 18px rgba(4,7,10,0.9)',
+          }}
+        >
           <div
             style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
               opacity: line1,
-              transform: `translateY(${(1 - line1) * 16}px)`,
-              textShadow: '0 2px 26px rgba(5,8,12,0.98)',
+              transform: `translateY(${(1 - line1) * 14}px)`,
+              fontSize: 52,
+              fontWeight: 300,
+              letterSpacing: 9,
+              color: OFFWHITE,
             }}
           >
-            <div style={{ fontSize: 17, letterSpacing: 8, color: C.accent }}>退一步</div>
-            <div style={{ marginTop: 16, fontSize: 56, fontWeight: 700, letterSpacing: 2, color: '#eafff8' }}>那不妨掷出骰子</div>
-            <div style={{ marginTop: 12, fontSize: 22, color: C.dim }}>把选择，交给随机数。</div>
+            如果你只想静静的看着混沌演化
           </div>
           <div
             style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              justifyContent: 'center',
+              marginTop: 22,
               opacity: line2,
-              transform: `translateY(${(1 - line2) * 16}px)`,
-              textShadow: '0 2px 26px rgba(5,8,12,0.98)',
+              transform: `translateY(${(1 - line2) * 14}px)`,
+              fontSize: 52,
+              fontWeight: 300,
+              letterSpacing: 9,
+              color: OFFWHITE,
             }}
           >
-            <div style={{ fontSize: 17, letterSpacing: 8, color: C.accent }}>接下来</div>
-            <div style={{ marginTop: 16, fontSize: 56, fontWeight: 700, letterSpacing: 2, color: '#eafff8' }}>然后把一切交给时间</div>
-            <div style={{ marginTop: 12, fontSize: 22, color: C.dim }}>这一次，不预设结局。</div>
+            那不妨投掷一次骰子
           </div>
+          <div
+            style={{
+              marginTop: 22,
+              opacity: line3,
+              transform: `translateY(${(1 - line3) * 14}px)`,
+              fontSize: 56,
+              fontWeight: 400,
+              letterSpacing: 10,
+              color: GOLD,
+            }}
+          >
+            然后把一切交给时间
+          </div>
+          <div
+            style={{
+              width: 220,
+              height: 1,
+              margin: '30px auto 0',
+              background: `linear-gradient(90deg, transparent, ${GOLD}, transparent)`,
+              opacity: line3 * 0.6,
+            }}
+          />
         </div>
       </AbsoluteFill>
 
-      {/* 满屏细胞：裁掉顶部工具栏、右侧图案库和底部播放条 */}
-      <AbsoluteFill style={{ opacity: fullIn, background: '#05080c' }}>
-        <OffthreadVideo
-          src={staticFile(CLIP)}
-          muted
-          startFrom={168}
-          playbackRate={0.75}
-          style={{
-            position: 'absolute',
-            width: 1920,
-            height: 1080,
-            transform: 'translate(-73px, -63px) scale(1.207)',
-            transformOrigin: '0 0',
-            filter: 'brightness(1.08) contrast(1.04)',
-          }}
-        />
-        <AbsoluteFill
-          style={{
-            background:
-              'radial-gradient(110% 80% at 50% 50%, rgba(5,8,12,0) 55%, rgba(5,8,12,0.55) 100%)',
-          }}
-        />
-      </AbsoluteFill>
+      {/* 回环拉远：从细胞特写一直拉到整张世界 + 环面重复 */}
+      <Sequence from={126} durationInFrames={294}>
+        <AbsoluteFill style={{ opacity: clipIn }}>
+          <OffthreadVideo
+            src={staticFile('clip-random-loop.mp4')}
+            muted
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+          <AbsoluteFill
+            style={{
+              background:
+                'radial-gradient(120% 90% at 50% 50%, rgba(4,7,10,0) 52%, rgba(4,7,10,0.58) 100%)',
+            }}
+          />
+          <AbsoluteFill
+            style={{
+              background:
+                'linear-gradient(180deg, rgba(4,7,10,0.78) 0%, rgba(4,7,10,0.06) 26%, rgba(4,7,10,0.04) 62%, rgba(4,7,10,0.7) 100%)',
+            }}
+          />
+        </AbsoluteFill>
+      </Sequence>
 
-      {/* 点击声：和两次点击同步 */}
-      <Sequence from={62} durationInFrames={12}>
-        <Audio src={staticFile('sfx/click.wav')} volume={0.65} />
-      </Sequence>
-      <Sequence from={112} durationInFrames={12}>
-        <Audio src={staticFile('sfx/click.wav')} volume={0.7} />
-      </Sequence>
+      <div
+        style={{
+          position: 'absolute',
+          left: 96,
+          top: 84,
+          zIndex: 5,
+          fontSize: 16,
+          letterSpacing: 10,
+          color: GOLD,
+          opacity: 0.7 * poemOut,
+        }}
+      >
+        随机演化
+      </div>
     </AbsoluteFill>
   );
 };

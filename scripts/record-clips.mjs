@@ -270,6 +270,66 @@ try {
     console.log('随机片段动作时刻（秒）：', JSON.stringify(marks));
   }
 
+  // 回环拉远：纯画布、无 UI；随机汤从特写一直拉到整张世界 + 环形重复
+  if (want('random-loop')) {
+    await page.evaluate(`(async () => {
+      const L = window.__life;
+      const board = document.getElementById('board');
+      board.style.cssText = [
+        'position:fixed','left:0','top:0','width:100vw','height:100vh',
+        'z-index:2147483000','border-radius:0','box-shadow:none',
+        'background:#05080c','display:block'
+      ].join(';');
+      document.body.style.background = '#05080c';
+      document.body.style.overflow = 'hidden';
+
+      L.world.clear();
+      L.world.randomize(0.3);
+      L.world.edge = 'wrap';
+      L.commit();
+      L.world.gen = 0;
+
+      const sl = document.getElementById('speed');
+      sl.value = '72';
+      sl.dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 500));
+
+      if (!L.playing) document.getElementById('btn-play').click();
+
+      const W = board.clientWidth;
+      const H = board.clientHeight;
+      const s = 14;
+      L.view.setView({ scale: s, ox: W / 2 - 512 * s, oy: H / 2 - 288 * s });
+      await new Promise((r) => setTimeout(r, 500));
+      return { W, H };
+    })()`);
+
+    await record(page, 'random-loop', async () => {
+      await page.evaluate(`(async () => {
+        const L = window.__life;
+        const board = document.getElementById('board');
+        const W = board.clientWidth;
+        const H = board.clientHeight;
+        const s0 = 14;
+        const s1 = 0.8;
+        const dur = 9000;
+        const t0 = performance.now();
+        const ease = (p) => p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+        await new Promise((res) => {
+          const step = (t) => {
+            const p = Math.min(1, (t - t0) / dur);
+            const e = ease(p);
+            const s = s0 * Math.pow(s1 / s0, e);
+            L.view.setView({ scale: s, ox: W / 2 - 512 * s, oy: H / 2 - 288 * s });
+            if (p < 1) requestAnimationFrame(step); else res();
+          };
+          requestAnimationFrame(step);
+        });
+      })()`);
+      await sleep(250);
+    });
+  }
+
   // 快照：打开内容库，保存一帧
   if (want('snapshot')) {
     await page.evaluate(`(async () => {

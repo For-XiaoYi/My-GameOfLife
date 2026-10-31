@@ -512,17 +512,15 @@ export const GliderStaticScene: React.FC = () => {
               <Eyebrow>组件 · 其三</Eyebrow>
               <Heading size={62}>滑翔机</Heading>
             </Rise>
-            <Rise delay={12} style={{ marginTop: 26 }}>
-              <div style={{ fontSize: 26, color: C.text, lineHeight: 1.7, opacity: 0.92 }}>
-                五格而已。放在那儿不动的时候，它看起来一点也不特别。
+            <Rise delay={12} style={{ marginTop: 30 }}>
+              <div style={{ fontSize: 32, color: C.text, lineHeight: 1.6, fontWeight: 700 }}>五格而已。</div>
+            </Rise>
+            <Rise delay={36} style={{ marginTop: 14 }}>
+              <div style={{ fontSize: 26, color: C.text, lineHeight: 1.65, opacity: 0.85 }}>
+                一旦跑起来，它会一直朝一个方向走。
               </div>
             </Rise>
-            <Rise delay={42} style={{ marginTop: 18 }}>
-              <div style={{ fontSize: 24, color: C.text, lineHeight: 1.7, opacity: 0.82 }}>
-                可一旦把它丢进画布、让它跑起来 —— 它会自己朝一个方向，一直走下去。
-              </div>
-            </Rise>
-            <Rise delay={74} style={{ marginTop: 40 }}>
+            <Rise delay={66} style={{ marginTop: 38 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 20, color: C.accent }}>
                 <div style={{ width: 30, height: 2, background: C.accent, opacity: 0.6 }} />
                 下一步：把它放进画布
@@ -633,8 +631,9 @@ export const GunTeaserScene: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const title = spring({ frame: frame - 2, fps, config: { damping: 200, mass: 0.7 } });
-  const l1 = spring({ frame: frame - 14, fps, config: { damping: 200, mass: 0.7 } });
-  const l2 = spring({ frame: frame - 28, fps, config: { damping: 200, mass: 0.7 } });
+  // 两行之间留 1.3 秒：第一行读完，第二行再进来
+  const l1 = spring({ frame: frame - 20, fps, config: { damping: 200, mass: 0.7 } });
+  const l2 = spring({ frame: frame - 58, fps, config: { damping: 200, mass: 0.7 } });
 
   return (
     <AbsoluteFill style={{ background: '#05080c', color: C.text, fontFamily: FONT, overflow: 'hidden' }}>

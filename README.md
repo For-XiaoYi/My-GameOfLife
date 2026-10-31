@@ -163,18 +163,18 @@ Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`
 （旧版）
 　·　首帧海报：[`assets/promo-poster.png`](assets/promo-poster.png)
 　·　一图看全片：[`assets/promo-storyboard.png`](assets/promo-storyboard.png)（12 个关键帧，带时间点）
-　·　本地最新渲染：`promo/out/promo-v8.mp4`（1920×1080，30fps，125 秒，带配乐与音效）
+　·　本地最新渲染：`promo/out/promo-v9.mp4`（1920×1080，30fps，125 秒，带配乐与音效）
 
 > 视频没放进仓库：几十 MB 的二进制塞进 git 会让每次 clone 都变慢，所以走 Release 附件，
 > 上面那个链接点开就能直接下载。`assets/` 里的海报和分镜图是普通文件，clone 下来就有。
 
 片子的结构：标题 → 四条规则 → 静物 → 振荡子 → 滑翔机（定格）→ 滑翔机（实机录像）→
-滑翔枪预告 → 滑翔枪 → 开关（两颗滑翔机湮灭）→ 黑屏提问 → 逻辑门 → 门阵列 → 图灵机 →
+滑翔枪预告 → 滑翔枪 → 判断（两颗滑翔机湮灭）→ 黑屏提问 → 逻辑门 → 门阵列 → 图灵机 →
 宏大结构 → 随机演化 → 结尾。后半段从「门」一路推到「机器」：四张逻辑门卡片（与 / 或 / 非 /
 异或）每 1.5 秒进一张；门阵列换成四台真实搭建、真的在跑的小电路（解复用器 / 触发器 /
 存储单元 / 面包触发器）；Rendell 的图灵机用模拟器算出局部演化，P59 炮阵和通用图灵机
 用全图 + 实时小窗，太空填充者整屏实时生长。
-随机演化重做成「黑底标题 → 点随机的小裁切 → 确认弹窗 → 淡入满屏细胞慢演化」。
+随机演化重做成「三句话 + 一颗骰子 → 回环模式的连续拉远镜头 → 结尾」，不再出现操作录屏。
 
 **声音**：有一条自己合成的配乐，没有旁白——`scripts/make-music.mjs` 用纯代码做加法合成：
 暗色 pad 铺底、随段落逐渐加快的琶音、功能段进鼓、转场呼啸与上扬 riser，最后收在一个大三和弦上。
@@ -212,12 +212,12 @@ pnpm render                         # 直接出 out/promo.mp4
 
 | 目录 | 内容 |
 | --- | --- |
-| `promo/src/scenes/` | 十六个场景：标题 / 规则 / 静物 / 振荡子 / 滑翔机 / 实机演示 / 滑翔枪预告 / 滑翔枪 / 开关 / 黑屏提问 / 逻辑门 / 门阵列 / 图灵机 / 宏大结构 / 随机演化 / 结尾 |
+| `promo/src/scenes/` | 十六个场景：标题 / 规则 / 静物 / 振荡子 / 滑翔机 / 实机演示 / 滑翔枪预告 / 滑翔枪 / 判断 / 黑屏提问 / 逻辑门 / 门阵列 / 图灵机 / 宏大结构 / 随机演化 / 结尾 |
 | `promo/src/lib/life.ts` | 真的生命游戏规则（视频里所有细胞演化都是现场算的；支持按轴回绕） |
 | `promo/src/lib/gates.ts` | 四种门的真实反应帧（与 / 或 / 非 / 异或） |
 | `promo/src/lib/circuits.ts` | 四台真实小电路（解复用器 / 触发器 / 存储单元 / 面包触发器）的坐标数据 |
 | `promo/src/assets/patterns.json` | 20 个预设图案的位图，由 `scripts/dump-patterns.mjs` 从主程序里导出 |
-| `promo/public/` | 界面截图、背景汤、`pattern-turing.png`、`grand-*.png`、`clip-random.mp4`、`clip-*-live.mp4`（图灵机 / P59 / 太空填充者 / 通用图灵机）、`sfx/*.wav`、`music/score.mp3`（2.9 MB，已进仓库） |
+| `promo/public/` | 界面截图、背景汤、`pattern-turing.png`、`grand-*.png`、`spacefiller-seed.png`、`clip-random-loop.mp4`、`clip-*-live.mp4`（图灵机 / P59 / 太空填充者 / 通用图灵机）、`sfx/*.wav`、`music/score.mp3`（2.9 MB，已进仓库） |
 | `scripts/make-music.mjs` | 生成 125 秒配乐（wav 中间产物） |
 | `scripts/make-sfx.mjs` | 出生 / 死亡 / live / tick / whoosh / 碰撞 / 点击音效 |
 | `scripts/sim-life-clip.mjs` | 稀疏 Life 模拟 + ffmpeg 编码，生成大图案的动态片段 |
@@ -238,6 +238,9 @@ pnpm render                         # 直接出 out/promo.mp4
 - 逻辑门那四张卡是引擎里跑出来的真实反应，不是示意图；但**不是可级联的标准门库**：
   与门的输出是一个静物方块，或门靠方块反射器把两路信号送到同一出口。片子里标“真实反应”。
   门阵列没有用符号，四张卡都是 LifeWiki 上真实搭出来的电路图案。
-- 随机片段的源是 `promo/public/clip-random.mp4`（CDP 录的真实界面）。要重录：
-  `node scripts/record-clips.mjs random`，脚本会打印“随机 / 确认 / 不限速 / 播放”四个动作
-  时刻；`RandomEvolution.tsx` 用两个小裁切卡 + 最后一次满屏裁切，动作帧按这些时刻排。
+- 随机片段的源是 `promo/public/clip-random-loop.mp4`：回环模式下随机汤从特写一路拉到
+  整张 1024×576 世界 + 2×2 以上的环形重复区域，**没有 UI**。要重录：
+  `node scripts/record-clips.mjs random-loop`；它会临时把 `#board` 拉满全屏、隐藏其它 UI，
+  录完用 ffmpeg 压到 12 MB 以内再入库。三句话、骰子、光晕都在 `RandomEvolution.tsx` 里。
+- 门阵列结尾用「四块电路，接起来会是什么？」把问题交给下一段，图灵机开场回答
+  「四块电路接起来 / 是一台机器」，然后才是标题和局部实时演化。

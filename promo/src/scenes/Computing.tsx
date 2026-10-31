@@ -324,6 +324,8 @@ const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> =
 export const GateArrayScene: React.FC = () => {
   const frame = useCurrentFrame();
   const fadeOut = interpolate(frame, [150, 180], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const closing = interpolate(frame, [128, 150], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const dim = interpolate(frame, [128, 166], [1, 0.18], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
     <Backdrop>
@@ -375,7 +377,16 @@ export const GateArrayScene: React.FC = () => {
             </Rise>
           </div>
 
-          <div style={{ position: 'relative', width: 778, height: 778, flexShrink: 0 }}>
+          <div
+            style={{
+              position: 'relative',
+              width: 778,
+              height: 778,
+              flexShrink: 0,
+              opacity: dim,
+              transform: `scale(${1 - 0.03 * closing})`,
+            }}
+          >
             <div
               style={{
                 position: 'absolute',
@@ -394,6 +405,28 @@ export const GateArrayScene: React.FC = () => {
           </div>
         </div>
       </AbsoluteFill>
+
+      {/* 结尾把问题抛给下一段：四块电路接起来是什么？ */}
+      <AbsoluteFill style={{ pointerEvents: 'none' }}>
+        <div style={{ position: 'absolute', inset: 0, background: `rgba(5,8,12,${0.56 * closing})` }} />
+        <div
+          style={{
+            position: 'absolute',
+            left: 0,
+            right: 0,
+            top: '40%',
+            textAlign: 'center',
+            opacity: closing,
+            fontSize: 42,
+            fontWeight: 700,
+            letterSpacing: 3,
+            color: '#eafff8',
+            textShadow: '0 2px 34px rgba(5,8,12,0.95), 0 0 24px rgba(108,245,210,0.15)',
+          }}
+        >
+          四块电路，接起来会是什么？
+        </div>
+      </AbsoluteFill>
     </Backdrop>
   );
 };
@@ -403,14 +436,22 @@ export const TuringMachineScene: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const textIn = spring({ frame: frame - 30, fps, config: { damping: 200, mass: 0.8 } });
+  // 镜头不要钉死：9 秒里缓慢推近 + 轻微平移
+  const camScale = interpolate(frame, [0, 270], [1.0, 1.14], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const camX = interpolate(frame, [0, 270], [0, -24], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const camY = interpolate(frame, [0, 270], [0, 14], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
     <Backdrop>
       <AbsoluteFill style={{ padding: '72px 96px', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 44 }}>
         <div style={{ width: 470, flexShrink: 0 }}>
           <Rise delay={0}>
-            <Eyebrow>2000 · Paul Rendell</Eyebrow>
-            <Heading size={78}>图灵机</Heading>
+            <div style={{ fontSize: 16, letterSpacing: 7, color: C.dim }}>四块电路接起来</div>
+            <div style={{ marginTop: 6, fontSize: 34, fontWeight: 800, color: C.accent }}>是一台机器。</div>
+            <div style={{ marginTop: 20 }}>
+              <Eyebrow>2000 · Paul Rendell</Eyebrow>
+              <Heading size={68}>图灵机</Heading>
+            </div>
           </Rise>
           <div style={{ opacity: textIn, transform: `translateY(${(1 - textIn) * 16}px)` }}>
             <div style={{ marginTop: 26, fontSize: 25, color: C.text, lineHeight: 1.7, opacity: 0.9 }}>
@@ -456,6 +497,7 @@ export const TuringMachineScene: React.FC = () => {
                 height: '100%',
                 objectFit: 'cover',
                 filter: 'saturate(1.15) brightness(1.05)',
+                transform: `scale(${camScale}) translate(${camX}px, ${camY}px)`,
               }}
             />
             <div
@@ -566,6 +608,11 @@ type Grand = {
   mode: 'inset' | 'full';
   zoom?: number;
   localLabel?: string;
+  /** 小窗在 5 秒里推近的倍数和焦点 */
+  insetZoom?: number;
+  insetFocus?: string;
+  /** 右下角的种子卡（太空填充者） */
+  seed?: string;
 };
 
 const GRANDS: Grand[] = [
@@ -579,11 +626,13 @@ const GRANDS: Grand[] = [
     credit: 'LifeWiki',
     pw: 8870,
     ph: 7352,
-    crop: { x: 7488, y: 3328, w: 480, h: 270 },
+    crop: { x: 3612, y: 3860, w: 480, h: 270 },
     gpf: 1,
     mode: 'inset',
     zoom: 4,
-    localLabel: '炮阵的一角',
+    localLabel: '炮阵的密集区',
+    insetZoom: 1.35,
+    insetFocus: '50% 55%',
   },
   {
     clip: 'clip-spacefiller-live.mp4',
@@ -598,6 +647,7 @@ const GRANDS: Grand[] = [
     crop: { x: -260, y: -70, w: 960, h: 540 },
     gpf: 3,
     mode: 'full',
+    seed: 'spacefiller-seed.png',
   },
   {
     clip: 'clip-utm-live.mp4',
@@ -614,6 +664,8 @@ const GRANDS: Grand[] = [
     mode: 'inset',
     zoom: 2,
     localLabel: '机器头部',
+    insetZoom: 1.55,
+    insetFocus: '58% 42%',
   },
 ];
 
@@ -677,7 +729,13 @@ const GrandSegment: React.FC<{ g: Grand; i: number; opacity: number }> = ({ g, i
             <OffthreadVideo
               src={staticFile(g.clip)}
               muted
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                transform: `scale(${1 + ((g.insetZoom ?? 1.15) - 1) * (f / SEG)})`,
+                transformOrigin: g.insetFocus ?? '50% 50%',
+              }}
             />
             <div
               style={{
@@ -708,9 +766,37 @@ const GrandSegment: React.FC<{ g: Grand; i: number; opacity: number }> = ({ g, i
               color: C.dim,
             }}
           >
-            局部：{g.localLabel}，细胞正在按四条规则运行
+            局部：{g.localLabel}，镜头正在缓慢推近
           </div>
         </>
+      )}
+
+      {g.seed && (
+        <div
+          style={{
+            position: 'absolute',
+            right: 96,
+            bottom: 148,
+            width: 420,
+            padding: 14,
+            borderRadius: 16,
+            border: `1px solid ${C.line}`,
+            background: 'rgba(5,8,12,0.76)',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.45)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, letterSpacing: 2, color: C.dim }}>
+            <span>种子</span>
+            <span style={{ color: C.accent }}>200 个细胞</span>
+          </div>
+          <Img
+            src={staticFile(g.seed)}
+            style={{ width: '100%', marginTop: 8, display: 'block', filter: 'saturate(1.1) brightness(1.05)' }}
+          />
+          <div style={{ marginTop: 6, fontSize: 11, color: C.dim, letterSpacing: 2 }}>
+            49 × 26 格 · 第 0 代
+          </div>
+        </div>
       )}
 
       {/* 实时状态：局部位 + 第几代 */}

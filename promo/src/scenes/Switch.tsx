@@ -59,7 +59,7 @@ const CELL_X = 28 * STEP + PX / 2; // 341
 const CELL_Y = 20 * STEP + PX / 2; // 245
 const PAD = 14;
 
-const Lines: React.FC<{ lines: { at: number; text: string; big?: boolean }[] }> = ({ lines }) => {
+const Lines: React.FC<{ lines: { at: number; text: string; big?: boolean; size?: number }[] }> = ({ lines }) => {
   const frame = useCurrentFrame();
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: 660 }}>
@@ -75,9 +75,9 @@ const Lines: React.FC<{ lines: { at: number; text: string; big?: boolean }[] }> 
             style={{
               opacity: a * (isLast ? 1 : 0.32),
               transform: `translateY(${(1 - a) * 10}px)`,
-              fontSize: l.big ? 30 : 25,
-              lineHeight: 1.65,
-              fontWeight: l.big ? 700 : 400,
+              fontSize: l.size ?? (l.big ? 30 : 25),
+              lineHeight: 1.55,
+              fontWeight: l.size || l.big ? 700 : 400,
               color: isLast ? C.text : C.dim,
             }}
           >
@@ -319,7 +319,7 @@ export const SwitchScene: React.FC = () => {
               lines={[
                 { at: 118, text: '它们会精确抵消 —— 像什么都没发生过。' },
                 { at: 166, text: '两颗都到，输出 0；只到一颗，输出 1。', big: true },
-                { at: 218, text: '一次碰撞，就是一次判断。把判断接起来，才是逻辑门。' },
+                { at: 214, text: '碰撞，就是判断。接起来，就是逻辑门。', size: 34 },
               ]}
             />
           </div>

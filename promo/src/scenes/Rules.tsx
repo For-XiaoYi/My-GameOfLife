@@ -309,13 +309,12 @@ export const RulesScene: React.FC = () => {
           {/* 左：标题 + 四条规则 */}
           <div style={{ width: 820 }}>
             <Eyebrow>它是怎么运转的</Eyebrow>
-            <Heading size={56}>
-              每个格子只有生或死，
-              <br />
-              命运只看身边的 8 个邻居
-            </Heading>
+            <Heading size={58}>它只有四条规则</Heading>
+            <div style={{ marginTop: 14, fontSize: 24, color: C.dim, lineHeight: 1.6, maxWidth: 720 }}>
+              每个格子只有生或死，命运只看身边的 8 个邻居。
+            </div>
 
-            <div style={{ marginTop: 48, display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div style={{ marginTop: 38, display: 'flex', flexDirection: 'column', gap: 14 }}>
               {PHASES.map((p, i) => {
                 const active = i === index;
                 const s = spring({ frame: frame - 20 - i * 7, fps, config: { damping: 200 } });
