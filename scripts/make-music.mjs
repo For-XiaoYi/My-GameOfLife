@@ -1,6 +1,5 @@
-// 宣传片配乐：恒定速度、恒定响度，靠"加层"推进情绪，转场点给重音，最后硬收。
-// 结构（秒）：标题 0 · 规则 4.0 · 静物 14.0 · 振荡子 22.667 · 滑翔机静态 30.667
-//            实机 35.667 · 滑翔枪 42.667 · 逻辑电路 50.0 · 收尾 60.0 · 断 65.1
+// 宣传片配乐 v7：恒速 120BPM，靠“加层”推进情绪；门进场给鼓，宏大结构给高潮，
+// 随机演化降下来（慢 pad + 心跳），结尾回到 C 大调后硬切。
 // 用法：node scripts/make-music.mjs [输出路径]
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
@@ -14,11 +13,17 @@ const B = {
   gliderStill: 25.0,
   gliderLive: 29.0,
   gun: 38.0,
-  circuits: 46.0,
-  outro: 56.0,
+  switch: 46.0,
+  black: 56.0,
+  gates: 59.0,
+  array: 69.0,
+  turing: 75.0,
+  grand: 84.0,
+  random: 99.0,
+  outro: 113.0,
 };
-const DUR = 61.5;
-const CUT = 61.25;
+const DUR = 125.0;
+const CUT = 124.75;
 const N = Math.round(SR * DUR);
 
 let seed = 20261029;
@@ -142,7 +147,6 @@ function snare(t0, gain = 0.12) {
   }
 }
 
-/** 转场重音：低频一击，不喧宾夺主 */
 function thump(t0, gain = 0.42) {
   const i0 = Math.round(t0 * SR);
   const n = Math.round(0.5 * SR);
@@ -167,7 +171,7 @@ function riser(t0, dur = 0.6, gain = 0.13) {
   }
 }
 
-// ── 和声：每 2.2 秒一个和弦，整片同一套进行 ────────────────────────────────
+// ── 和声 ──────────────────────────────────────────────────────────────────
 const CH = {
   Am: [57, 60, 64, 69],
   F: [53, 57, 60, 65],
@@ -182,69 +186,171 @@ const ARP = {
   G: [67, 71, 74, 79],
 };
 const PROG = ['Am', 'F', 'C', 'G'];
-const CHORDS = [];
-for (let t = 0, k = 0; t < DUR; t += 2.2, k++) {
-  CHORDS.push([t, Math.min(DUR, t + 2.2), PROG[k % 4]]);
+
+const chordSegs = [];
+for (let t = 0, k = 0; t < 56; t += 2.2, k++) {
+  chordSegs.push([t, Math.min(56.2, t + 2.2), PROG[k % 4]]);
 }
-const chordAt = (t) => CHORDS.find(([a, b]) => t >= a && t < b)?.[2] ?? 'Am';
+chordSegs.push([56, 59, 'Am']);
+['Am', 'F', 'C', 'G', 'Am', 'F', 'C'].forEach((n, i) => {
+  chordSegs.push([59 + i * 1.5, 59 + i * 1.5 + 1.5, n]);
+});
+['F', 'C', 'G', 'Am'].forEach((n, i) => {
+  chordSegs.push([69 + i * 1.5, 69 + i * 1.5 + 1.5, n]);
+});
+chordSegs.push([75, 79, 'Am'], [79, 84, 'F']);
+['F', 'C', 'G', 'Am', 'F'].forEach((n, i) => {
+  chordSegs.push([84 + i * 3, 84 + i * 3 + 3, n]);
+});
+chordSegs.push([99, 106, 'Am'], [106, 113, 'F']);
+chordSegs.push([113, 118, 'C'], [118, 122, 'F'], [122, 125, 'C']);
 
-CHORDS.forEach(([t0, t1, name], i) => pad(t0 - 0.05, t1 - t0 + 0.3, CH[name], 0.165, Math.sin(i * 0.9) * 0.18));
+const chordAt = (t) => chordSegs.find(([a, b]) => t >= a && t < b)?.[2] ?? 'Am';
 
-const BEAT = 0.5;
+const padGain = (t) => {
+  if (t < 56) return 0.165;
+  if (t < 59) return 0.13;
+  if (t < 69) return 0.145;
+  if (t < 75) return 0.16;
+  if (t < 84) return 0.18;
+  if (t < 99) return 0.185;
+  if (t < 113) return 0.13;
+  return 0.18;
+};
+chordSegs.forEach(([t0, t1, name], i) => {
+  pad(t0 - 0.05, t1 - t0 + 0.3, CH[name], padGain(t0), Math.sin(i * 0.9) * 0.18);
+});
+
+// 低音
 const beats = (a, b) => {
   const out = [];
-  for (let t = a; t < b - 0.02; t += BEAT) out.push(t);
+  for (let t = a; t < b - 0.02; t += 0.5) out.push(t);
   return out;
 };
-
-// 低音：从规则段开始一直到底，音量不变
-beats(B.rules, B.outro + 2).forEach((t, i) => {
+beats(4, 56).forEach((t, i) => {
   const root = BASS_OF[chordAt(t)];
   bass(t, root, 0.4, 0.2);
   if (i % 2 === 1) bass(t + 0.25, root + 12, 0.18, 0.075);
 });
+// 黑屏 + 门：每次进场一根低音
+[56, 59, 60.5, 62, 63.5, 65, 66.5, 68].forEach((t) => {
+  bass(t, BASS_OF[chordAt(t)], 0.7, t === 56 ? 0.14 : 0.17);
+});
+// 阵列：每拍推进
+beats(69, 75).forEach((t, i) => {
+  bass(t, BASS_OF[chordAt(t)], 0.34, 0.16 + (i % 4) * 0.01);
+});
+// 图灵机：长音
+bass(75, BASS_OF.Am, 3.6, 0.2);
+bass(79, BASS_OF.F, 4.4, 0.2);
+// 宏大结构：更重
+[84, 87, 90, 93, 96].forEach((t) => bass(t, BASS_OF[chordAt(t)], 2.6, 0.23));
+beats(85, 99).forEach((t, i) => {
+  if (i % 2 === 0) bass(t + 0.25, BASS_OF[chordAt(t)] + 12, 0.2, 0.08);
+});
+// 随机：长音 + 心跳之间的空
+bass(99, BASS_OF.Am, 6.5, 0.12);
+bass(106, BASS_OF.F, 6.5, 0.12);
+// 结尾：C 大调慢慢落
+bass(113, BASS_OF.C, 4.6, 0.18);
+bass(118, BASS_OF.F, 3.6, 0.16);
+bass(122, BASS_OF.C, 2.6, 0.16);
 
-// 琶音：16 分音符，音量恒定
-for (let t = B.rules + 4; t < B.outro + 2; t += 0.125) {
+// 琶音
+for (let t = 8; t < 56; t += 0.125) {
   const name = chordAt(t);
   const notes = ARP[name];
   const k = Math.round(t / 0.125);
   pluck(t, notes[k % notes.length], 0.055, 0.22, ((k % 4) - 1.5) * 0.2);
 }
-
-// 鼓：一直保持同一力度，靠"加不加镲/军鼓"区分段落
-beats(B.rules + 4, B.outro + 2).forEach((t, i) => {
-  kick(t, 0.4);
-  if (t >= B.osc) hat(t, 0.05);
-  if (t >= B.osc) hat(t + 0.25, 0.03, -0.25);
-  if (t >= B.gliderStill && i % 2 === 1) snare(t, 0.115);
+// 门进场：每次一记高音
+[59, 60.5, 62, 63.5].forEach((t, i) => {
+  pluck(t, ARP[chordAt(t)][i % 4], 0.07, 0.3, i % 2 ? 0.2 : -0.2);
 });
-
-// 转场重音 + 短 riser：全部卡在场景边界上
-const CUES = [B.rules, B.stills, B.osc, B.gliderStill, B.gliderLive, B.gun, B.circuits, B.outro];
-CUES.forEach((c, i) => {
-  if (i > 0) riser(c - 0.55, 0.55, 0.1);
-  thump(c, i === CUES.length - 1 ? 0.55 : 0.34);
-});
-
-// 收束：最后一小节只留 pad + 低音，然后硬切
-impactEnd(CUT - 0.9);
-
-function impactEnd(t0) {
-  const i0 = Math.round(t0 * SR);
-  const n = Math.round(1.2 * SR);
-  let prev = 0;
-  for (let k = 0; k < n; k++) {
-    const t = k / SR;
-    const f = 90 * Math.exp(-t * 3) + 32;
-    const n2 = rnd() * 2 - 1;
-    const hp = n2 - prev;
-    prev = n2;
-    const v = (Math.sin(2 * Math.PI * f * t) * Math.exp(-t * 3.2) + hp * Math.exp(-t * 26) * 0.3) * 0.75;
-    add(i0 + k, v, 0);
-    send(i0 + k, v * 0.5);
-  }
+// 阵列：16 分爬升
+for (let t = 69; t < 75; t += 0.125) {
+  const k = Math.round((t - 69) / 0.125);
+  const notes = ARP[chordAt(t)];
+  pluck(t, notes[k % 4] + 12, 0.04 + Math.min(0.03, k * 0.0008), 0.18, ((k % 4) - 1.5) * 0.25);
 }
+// 图灵机：慢一点
+for (let t = 75.5; t < 84; t += 0.25) {
+  const k = Math.round((t - 75) / 0.25);
+  pluck(t, ARP[chordAt(t)][k % 4], 0.04, 0.4, ((k % 4) - 1.5) * 0.25);
+}
+// 宏大结构：密
+for (let t = 84; t < 99; t += 0.125) {
+  const k = Math.round((t - 84) / 0.125);
+  const notes = ARP[chordAt(t)];
+  pluck(t, notes[k % 4], 0.045, 0.2, ((k % 4) - 1.5) * 0.3);
+}
+// 随机：稀疏高音
+[102, 108, 111].forEach((t, i) => pluck(t, [76, 79, 84][i], 0.035, 0.5, 0.25));
+// 结尾
+[114, 119, 123].forEach((t, i) => pluck(t, [76, 79, 84][i], 0.04, 0.6, 0.1));
+
+// ── 鼓 ─────────────────────────────────────────────────────────────────────
+beats(8, 56).forEach((t, i) => {
+  kick(t, 0.4);
+  if (t >= 20) hat(t, 0.05);
+  if (t >= 20) hat(t + 0.25, 0.03, -0.25);
+  if (t >= 25 && i % 2 === 1) snare(t, 0.115);
+});
+
+// 黑屏：静
+// 门：进场四记鼓 + 细碎脉冲
+[59, 60.5, 62, 63.5].forEach((t, i) => {
+  thump(t, i === 0 ? 0.5 : 0.38);
+  kick(t, 0.3);
+  hat(t + 0.25, 0.05);
+  if (i === 3) snare(t, 0.14);
+});
+for (let t = 59; t < 69; t += 0.25) hat(t, 0.028, ((Math.round(t * 4) % 2) ? 0.25 : -0.25));
+// 阵列：加密，推到图灵机
+beats(69, 75).forEach((t, i) => {
+  kick(t, 0.38);
+  hat(t, 0.05);
+  hat(t + 0.25, 0.035, -0.25);
+  if (i % 2 === 1) snare(t, 0.11);
+});
+riser(73.6, 1.4, 0.12);
+// 图灵机：大鼓 + 慢拍
+thump(75, 0.62);
+beats(75, 84).forEach((t, i) => {
+  if (i % 2 === 0) kick(t, 0.32);
+  if (i % 4 === 2) snare(t, 0.09);
+});
+// 宏大结构：高潮
+[84, 89, 94].forEach((t) => thump(t, 0.66));
+beats(84, 99).forEach((t, i) => {
+  kick(t, i % 2 === 0 ? 0.46 : 0.3);
+  hat(t, 0.055);
+  hat(t + 0.25, 0.04, -0.25);
+  if (i % 2 === 1) snare(t, 0.13);
+});
+riser(82.6, 1.4, 0.14);
+riser(97.6, 1.2, 0.09);
+// 随机：心跳 60BPM
+for (let t = 99; t < 113; t += 1.0) kick(t, 0.2, 0.36);
+// 结尾：安静
+thump(113, 0.34);
+
+// ── 转场重音 + riser ───────────────────────────────────────────────────────
+const CUES = [4, 14, 20, 25, 29, 36, 38, 46, 56, 59, 69, 75, 84, 99, 113];
+CUES.forEach((c, i) => {
+  if (c === 36) {
+    riser(35.95, 1.9, 0.075);
+    return;
+  }
+  if (c === 99) {
+    thump(c, 0.22);
+    return;
+  }
+  if (c > 4) riser(c - 0.55, 0.55, c === 84 || c === 75 ? 0.12 : 0.09);
+  thump(c, c === 84 || c === 75 ? 0.55 : 0.32);
+});
+// 最后一下：C 大调收在硬切前
+thump(124.2, 0.4);
 
 // ── 混响 ──────────────────────────────────────────────────────────────────
 function reverb(sendBuf, outL, outR) {
@@ -271,8 +377,7 @@ function reverb(sendBuf, outL, outR) {
 }
 reverb(SEND, L, R);
 
-// ── 母带：轻压缩 → 归一 → 硬切 ─────────────────────────────────────────────
-// 先做一遍慢速自动增益，抹平段落之间的响度差（避免忽大忽小）
+// ── 母带 ──────────────────────────────────────────────────────────────────
 const W = Math.round(0.4 * SR);
 let env = 0;
 const target = 0.14;
@@ -291,17 +396,50 @@ for (let i = 0; i < N; i++) {
   peak = Math.max(peak, Math.abs(L[i]), Math.abs(R[i]));
 }
 const norm = peak > 0 ? 0.9 / peak : 1;
+
+// 段落动态：黑屏压低、门抬起、宏大最强、随机降下来、结尾回温
+const GAIN_KEYS = [
+  [0, 1], [55.5, 1], [56.6, 0.62], [58.6, 0.62], [59.6, 0.94],
+  [68.5, 0.94], [69.6, 0.98], [74.4, 0.98], [75.6, 1.04], [83.4, 1.04],
+  [84.6, 1.1], [98.4, 1.1], [100.0, 0.6], [112.4, 0.6], [113.6, 0.95], [125, 0.95],
+];
+function sectionGain(t) {
+  for (let i = 1; i < GAIN_KEYS.length; i++) {
+    const [t1, g1] = GAIN_KEYS[i];
+    if (t <= t1) {
+      const [t0, g0] = GAIN_KEYS[i - 1];
+      const u = t1 > t0 ? (t - t0) / (t1 - t0) : 1;
+      return g0 + (g1 - g0) * u;
+    }
+  }
+  return GAIN_KEYS[GAIN_KEYS.length - 1][1];
+}
+
 const fadeIn = Math.round(0.2 * SR);
 const cutIdx = Math.round(CUT * SR);
 const tail = Math.round(0.025 * SR);
 for (let i = 0; i < N; i++) {
-  let g = norm;
+  const t = i / SR;
+  let g = norm * sectionGain(t);
   if (i < fadeIn) g *= i / fadeIn;
   if (i >= cutIdx) g = 0;
   else if (i > cutIdx - tail) g *= (cutIdx - i) / tail;
   L[i] *= g;
   R[i] *= g;
 }
+
+// 段落后再查一次峰值，避免高潮处削波
+let finalPeak = 0;
+for (let i = 0; i < N; i++) finalPeak = Math.max(finalPeak, Math.abs(L[i]), Math.abs(R[i]));
+if (finalPeak > 0.98) {
+  const s = 0.98 / finalPeak;
+  for (let i = 0; i < N; i++) {
+    L[i] *= s;
+    R[i] *= s;
+  }
+  finalPeak = 0.98;
+}
+console.log('最终峰值：', finalPeak.toFixed(2));
 
 // ── 写 WAV ────────────────────────────────────────────────────────────────
 const out = process.argv[2] || 'promo/public/music/score.wav';

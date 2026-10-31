@@ -160,29 +160,33 @@ Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`
 ## 宣传片
 
 **成片：** [Releases · 宣传片 v1](https://github.com/For-XiaoYi/My-GameOfLife/releases/download/promo-v1/promo.mp4)
-（1920×1080，30fps，61.5 秒，8.9 MB，带配乐）
+（旧版）
 　·　首帧海报：[`assets/promo-poster.png`](assets/promo-poster.png)
 　·　一图看全片：[`assets/promo-storyboard.png`](assets/promo-storyboard.png)（12 个关键帧，带时间点）
-　·　本地最新渲染：`promo/out/promo-v6.mp4`（61.5 秒，14.6 MB）
+　·　本地最新渲染：`promo/out/promo-v7.mp4`（1920×1080，30fps，125 秒，带配乐）
 
 > 视频没放进仓库：几十 MB 的二进制塞进 git 会让每次 clone 都变慢，所以走 Release 附件，
 > 上面那个链接点开就能直接下载。`assets/` 里的海报和分镜图是普通文件，clone 下来就有。
 
-片子的结构是「先讲规则，再拆组件」：标题 → 四条规则 → 静物 → 振荡子 → 滑翔机（定格）→
-滑翔机（实机录像）→ 滑翔枪 → 逻辑电路 → 结尾。功能演示不是单独一段，而是以真实操作短片的
-形式穿插在组件之间，所以看到的是「这个东西真的能在那个界面里摆出来」。
-振荡子一段用「时钟」解释它们通向什么；逻辑电路段在湮灭之后直接放出 Paul Rendell 2000 年
-图灵机的真实图案（1714×1647 格，36,549 个活细胞）。
+片子的结构：标题 → 四条规则 → 静物 → 振荡子 → 滑翔机（定格）→ 滑翔机（实机录像）→
+滑翔枪预告 → 滑翔枪 → 开关（两颗滑翔机湮灭）→ 黑屏提问 → 逻辑门 → 门阵列 → 图灵机 →
+宏大结构 → 随机演化 → 结尾。后半段从「门」一路推到「机器」：四张逻辑门卡片（与 / 或 / 非 /
+异或）每 1.5 秒进一张，门阵列排开，Rendell 的图灵机、P59 炮阵、太空填充者、通用图灵机
+依次出现；随机演化是真实界面里点「随机」、确认、不限速、播放的录屏，用裁切呈现。
 
 **声音**：有一条自己合成的配乐，没有旁白——`scripts/make-music.mjs` 用纯代码做加法合成：
 暗色 pad 铺底、随段落逐渐加快的琶音、功能段进鼓、转场呼啸与上扬 riser，最后收在一个大三和弦上。
 没用任何采样库，想调节奏、换和弦、改音量，改脚本再跑一次就行（随机数有固定种子，跑出来的结果每次都一样）：
 
 ```bash
-node scripts/make-music.mjs       # 重新生成 promo/public/music/score.wav
+node scripts/make-music.mjs       # 先合成 125 秒 wav（中间产物）
+# 压成 mp3 再进仓库（wav 21 MB，超出仓库树 12 MB 的单文件限制）
+ffmpeg -i promo/public/music/score.wav -c:a libmp3lame -b:a 192k promo/public/music/score.mp3
+node scripts/make-sfx.mjs         # 规则段的生死音效（出生 / 死亡 / tick / whoosh）
 ```
 
-配乐由 `src/Promo.tsx` 里的 `<Audio src={staticFile('music/score.wav')} />` 挂到整条时间线上。
+配乐由 `src/Promo.tsx` 里的 `<Audio src={staticFile('music/score.mp3')} />` 挂到整条时间线上；
+规则段的生死音效是 `RulesScene` 里单独挂的 `<Audio>`，不混进配乐，方便逐帧对齐。
 
 ## 在自己电脑上改这支片子
 
@@ -204,14 +208,16 @@ pnpm render                         # 直接出 out/promo.mp4
 
 | 目录 | 内容 |
 | --- | --- |
-| `promo/src/scenes/` | 九个场景：标题 / 规则 / 静物 / 振荡子 / 滑翔机 / 实机演示 / 滑翔枪 / 逻辑电路 / 结尾 |
-| `promo/src/lib/life.ts` | 真的生命游戏规则（视频里所有细胞演化都是现场算的） |
+| `promo/src/scenes/` | 十六个场景：标题 / 规则 / 静物 / 振荡子 / 滑翔机 / 实机演示 / 滑翔枪预告 / 滑翔枪 / 开关 / 黑屏提问 / 逻辑门 / 门阵列 / 图灵机 / 宏大结构 / 随机演化 / 结尾 |
+| `promo/src/lib/life.ts` | 真的生命游戏规则（视频里所有细胞演化都是现场算的；支持按轴回绕） |
+| `promo/src/lib/gates.ts` | 四种门的真实反应帧（与 / 或 / 非 / 异或） |
 | `promo/src/assets/patterns.json` | 20 个预设图案的位图，由 `scripts/dump-patterns.mjs` 从主程序里导出 |
-| `promo/public/` | 界面截图、背景汤、`pattern-turing.png`（图灵机，由 RLE 生成）、`music/score.wav`（8.6 MB，已进仓库） |
-| `scripts/make-music.mjs` | 生成配乐 |
+| `promo/public/` | 界面截图、背景汤、`pattern-turing.png`、`grand-*.png`（P59 / 太空填充者 / 通用图灵机）、`clip-random.mp4`、`sfx/*.wav`、`music/score.mp3`（2.9 MB，已进仓库） |
+| `scripts/make-music.mjs` | 生成 125 秒配乐（wav 中间产物） |
+| `scripts/make-sfx.mjs` | 规则段的出生 / 死亡 / tick / whoosh 音效 |
 | `scripts/dump-patterns.mjs` | 重新从 `生命游戏.html` 里导出图案数据 |
 | `scripts/make-storyboard.mjs` | 把关键帧拼成 `assets/promo-storyboard.png` |
-| `scripts/render-rle-png.mjs` | 把大图案 RLE 渲成 PNG（片中的图灵机就是它出的） |
+| `scripts/render-rle-png.mjs` | 把大图案 RLE 渲成 PNG（图灵机、P59、通用图灵机就是它出的） |
 
 渲染会用到浏览器：`promo/remotion.config.ts` 会自动在常见路径里找 Chrome / Edge，
 找不到就让 Remotion 自己下载 headless shell，**不用手改路径**。想指定自己的浏览器，
@@ -219,6 +225,11 @@ pnpm render                         # 直接出 out/promo.mp4
 
 - 界面镜头是脚本用 CDP 拍下的真实界面（`scripts/shoot-promo*.mjs`），存在 `promo/public/`；
   图案动画则由 `src/lib/life.ts` 现算每一代的位图，所以视频里的演化是真的。
-- 图灵机那段是静态图 `promo/public/pattern-turing.png` + 缓慢推近，不是实时演化：图案太大
-  （1714×1647 格），10 秒内逐代实时算不现实。源文件是 `tools/patterns/turingmachine.rle`
+- 图灵机 / 宏大结构那几段是静态图 + 缓慢推近，不是实时演化：图案太大（1714×1647 到
+  12,699×12,652 格），逐代实时算不现实。图灵机的源文件是 `tools/patterns/turingmachine.rle`
   （LifeWiki，Paul Rendell，2000），要重出 PNG 跑 `node scripts/render-rle-png.mjs`。
+- 逻辑门那四张卡是引擎里跑出来的真实反应，不是示意图；但**不是可级联的标准门库**：
+  与门的输出是一个静物方块，或门靠方块反射器把两路信号送到同一出口。片子里标“真实反应”。
+- 随机片段的源是 `promo/public/clip-random.mp4`（CDP 录的真实界面）。要重录：
+  `node scripts/record-clips.mjs random`，脚本会打印“随机 / 确认 / 不限速 / 播放”四个动作
+  时刻，`RandomEvolution.tsx` 的裁切关键帧就按这些时刻排。

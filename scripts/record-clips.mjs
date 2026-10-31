@@ -207,6 +207,69 @@ try {
     });
   }
 
+  // 随机：点“随机”→ 确认 → 不限速 → 播放；呈现时用裁切，不整屏放
+  if (want('random')) {
+    await page.evaluate(`(async () => {
+      const L = window.__life;
+      L.world.clear(); L.commit();
+      L.world.randomize(0.28); L.commit(); L.world.gen = 0;
+      const c = document.getElementById('board');
+      const s = 5.4;
+      // 世界是 1024×576，中心是 512,288；之前按 512,512 取景，随机汤只露了一条边
+      L.view.setView({
+        scale: s,
+        ox: c.clientWidth / 2 - (L.world.width / 2) * s,
+        oy: c.clientHeight / 2 - (L.world.height / 2) * s,
+      });
+      await new Promise((r) => setTimeout(r, 700));
+      return true;
+    })()`);
+
+    const marks = [];
+    const mark = (name) => marks.push({ name, t: (Date.now() - markT0) / 1000 });
+    const markT0 = Date.now();
+    await record(page, 'random', async () => {
+      let pos = [1720, 760];
+      await page.evaluate(`window.__moveCur(${pos[0]}, ${pos[1]})`);
+      await sleep(1200);
+
+      const rnd = await page.evaluate(rectOf('#btn-random'));
+      if (!rnd) throw new Error('没找到随机按钮');
+      pos = await moveTo(page, pos, [rnd.x, rnd.y], 600);
+      await page.evaluate(`document.getElementById('btn-random').click()`);
+      mark('random');
+      await clickAt(page, [rnd.x, rnd.y]);
+      await sleep(500);
+
+      const ok = await page.evaluate(rectOf('#confirm-ok'));
+      if (!ok) throw new Error('没找到确认按钮');
+      pos = await moveTo(page, pos, [ok.x, ok.y], 500);
+      await page.evaluate(`document.getElementById('confirm-ok').click()`);
+      mark('confirm');
+      await clickAt(page, [ok.x, ok.y]);
+      // 确认后弹窗背板有一个淡出/模糊过渡，等它清掉再动镜头
+      await sleep(1800);
+
+      const inf = await page.evaluate(rectOf('#btn-unlimited'));
+      if (!inf) throw new Error('没找到不限速按钮');
+      pos = await moveTo(page, pos, [inf.x, inf.y], 500);
+      await page.evaluate(`document.getElementById('btn-unlimited').click()`);
+      mark('unlimited');
+      await clickAt(page, [inf.x, inf.y]);
+      await sleep(500);
+
+      const play = await page.evaluate(rectOf('#btn-play'));
+      if (!play) throw new Error('没找到播放按钮');
+      pos = await moveTo(page, pos, [play.x, play.y], 500);
+      await page.evaluate(`document.getElementById('btn-play').click()`);
+      mark('play');
+      await clickAt(page, [play.x, play.y]);
+      await moveTo(page, pos, [1700, 820], 700);
+      await sleep(6500);
+    });
+    console.log('随机片段动作时刻（秒）：', JSON.stringify(marks));
+  }
+
   // 快照：打开内容库，保存一帧
   if (want('snapshot')) {
     await page.evaluate(`(async () => {

@@ -119,31 +119,54 @@ const BG = hex(opt.bg, [5, 8, 12]);
 const FG = hex(opt.fg, [108, 245, 210]);
 
 const pat = parseRLE(readFileSync(inFile, 'utf8'));
-const scale = pat.w / targetW;
-const W = Math.round(pat.w / scale);
-const H = Math.round(pat.h / scale);
-const rgb = Buffer.alloc(W * H * 3);
-for (let y = 0; y < H; y++) {
-  const y0 = Math.floor(y * scale);
-  const y1 = Math.min(pat.h - 1, Math.ceil((y + 1) * scale));
-  for (let x = 0; x < W; x++) {
-    const x0 = Math.floor(x * scale);
-    const x1 = Math.min(pat.w - 1, Math.ceil((x + 1) * scale));
-    let sum = 0;
-    let n = 0;
-    for (let yy = y0; yy <= y1; yy++) {
-      const row = yy * pat.w;
-      for (let xx = x0; xx <= x1; xx++) {
-        sum += pat.cells[row + xx];
-        n++;
-      }
+
+// --scale=N：一格画成 N×N 像素（适合小棋盘，别用宽度抽样把格子糊掉）
+const cellScale = Math.max(1, parseInt(opt.scale ?? '0', 10) || 0);
+let W;
+let H;
+let rgb;
+if (cellScale > 1) {
+  W = pat.w * cellScale;
+  H = pat.h * cellScale;
+  rgb = Buffer.alloc(W * H * 3);
+  for (let y = 0; y < H; y++) {
+    const cy = Math.floor(y / cellScale);
+    for (let x = 0; x < W; x++) {
+      const v = pat.cells[cy * pat.w + Math.floor(x / cellScale)];
+      const i = (y * W + x) * 3;
+      const c = v ? FG : BG;
+      rgb[i] = c[0];
+      rgb[i + 1] = c[1];
+      rgb[i + 2] = c[2];
     }
-    // 密度 → 亮度：单格太稀会糊成黑，这里把 1 格的密度拉到接近满亮
-    const d = Math.min(1, (sum / n) * 5.5);
-    const i = (y * W + x) * 3;
-    rgb[i] = Math.round(BG[0] + (FG[0] - BG[0]) * d);
-    rgb[i + 1] = Math.round(BG[1] + (FG[1] - BG[1]) * d);
-    rgb[i + 2] = Math.round(BG[2] + (FG[2] - BG[2]) * d);
+  }
+} else {
+  const scale = pat.w / targetW;
+  W = Math.round(pat.w / scale);
+  H = Math.round(pat.h / scale);
+  rgb = Buffer.alloc(W * H * 3);
+  for (let y = 0; y < H; y++) {
+    const y0 = Math.floor(y * scale);
+    const y1 = Math.min(pat.h - 1, Math.ceil((y + 1) * scale));
+    for (let x = 0; x < W; x++) {
+      const x0 = Math.floor(x * scale);
+      const x1 = Math.min(pat.w - 1, Math.ceil((x + 1) * scale));
+      let sum = 0;
+      let n = 0;
+      for (let yy = y0; yy <= y1; yy++) {
+        const row = yy * pat.w;
+        for (let xx = x0; xx <= x1; xx++) {
+          sum += pat.cells[row + xx];
+          n++;
+        }
+      }
+      // 密度 → 亮度：单格太稀会糊成黑，这里把 1 格的密度拉到接近满亮
+      const d = Math.min(1, (sum / n) * 5.5);
+      const i = (y * W + x) * 3;
+      rgb[i] = Math.round(BG[0] + (FG[0] - BG[0]) * d);
+      rgb[i + 1] = Math.round(BG[1] + (FG[1] - BG[1]) * d);
+      rgb[i + 2] = Math.round(BG[2] + (FG[2] - BG[2]) * d);
+    }
   }
 }
 writeFileSync(outFile, encodePNG(W, H, rgb));

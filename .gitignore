@@ -9,6 +9,8 @@ dist/
 # 宣传片工程：源码留着，依赖与渲染输出不进仓库（成品在 assets/promo.mp4）
 promo/node_modules/
 promo/out/
+# 配乐中间产物：入库的是 score.mp3（2.9 MB），wav 有 21 MB
+promo/public/music/score.wav
 
 # 本机 AI 协作约定：只给本地会话读，不进仓库
 AGENTS.md

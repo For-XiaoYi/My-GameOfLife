@@ -1,17 +1,30 @@
 export type Bitmap = { w: number; h: number; cells: number[] };
 export type Frame = { w: number; h: number; cells: number[]; age: number[] };
 
-/** 环面演化一代（小世界直接遍历整张图，够快也够简单） */
-export function stepOnce(cur: number[], w: number, h: number): number[] {
+/** 演化一代。默认环面；可单轴关闭回绕（滑翔枪段：左右不回绕、上下保留） */
+export type WrapOpts = { wrapX?: boolean; wrapY?: boolean };
+
+export function stepOnce(
+  cur: number[],
+  w: number,
+  h: number,
+  wrap: WrapOpts = {},
+): number[] {
+  const wrapX = wrap.wrapX !== false;
+  const wrapY = wrap.wrapY !== false;
   const out = new Array<number>(w * h).fill(0);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       let n = 0;
       for (let dy = -1; dy <= 1; dy++) {
-        const yy = (y + dy + h) % h;
+        const sy = y + dy;
+        if (!wrapY && (sy < 0 || sy >= h)) continue;
+        const yy = wrapY ? (sy + h) % h : sy;
         for (let dx = -1; dx <= 1; dx++) {
           if (dx === 0 && dy === 0) continue;
-          n += cur[yy * w + ((x + dx + w) % w)];
+          const sx = x + dx;
+          if (!wrapX && (sx < 0 || sx >= w)) continue;
+          n += cur[yy * w + (wrapX ? (sx + w) % w : sx)];
         }
       }
       const alive = cur[y * w + x];
@@ -24,8 +37,8 @@ export function stepOnce(cur: number[], w: number, h: number): number[] {
 const cache = new Map<string, Frame[]>();
 
 /** 演化 gens 代，返回每一代（含年龄），按 key 缓存避免每帧重算 */
-export function framesOf(key: string, bm: Bitmap, gens: number): Frame[] {
-  const cacheKey = `${key}:${bm.w}x${bm.h}:${gens}`;
+export function framesOf(key: string, bm: Bitmap, gens: number, wrap: WrapOpts = {}): Frame[] {
+  const cacheKey = `${key}:${bm.w}x${bm.h}:${gens}:${wrap.wrapX === false ? 'bx' : 'tx'}${wrap.wrapY === false ? 'by' : 'ty'}`;
   const hit = cache.get(cacheKey);
   if (hit) return hit;
 
@@ -35,7 +48,7 @@ export function framesOf(key: string, bm: Bitmap, gens: number): Frame[] {
   frames.push({ w: bm.w, h: bm.h, cells: cells.slice(), age: age.slice() });
 
   for (let g = 1; g <= gens; g++) {
-    const next = stepOnce(cells, bm.w, bm.h);
+    const next = stepOnce(cells, bm.w, bm.h, wrap);
     const nextAge = next.map((v, i) => (v ? Math.min(255, (age[i] ?? 0) + 1) : 0));
     cells = next;
     age = nextAge;

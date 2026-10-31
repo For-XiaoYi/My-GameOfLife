@@ -1,4 +1,4 @@
-import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Audio, Sequence, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { Backdrop, Eyebrow, Heading } from '../components/ui';
 import { C } from '../theme';
 
@@ -291,7 +291,18 @@ export const RulesScene: React.FC = () => {
   const countIn = spring({ frame: local - 8, fps, config: { damping: 200 } });
 
   return (
-    <Backdrop>
+    <>
+      {/* 四条规则的判定瞬间：死/生/活各一个合成音效（单独一层，和配乐分开） */}
+      {PHASES.map((p, i) => {
+        const file = p.verdict === 'born' ? 'birth' : p.verdict === 'live' ? 'tick' : 'death';
+        const volume = p.verdict === 'born' ? 0.5 : p.verdict === 'live' ? 0.18 : 0.48;
+        return (
+          <Sequence key={p.verdict} from={i * PHASE_DUR + JUDGE + 2} durationInFrames={18}>
+            <Audio src={staticFile(`sfx/${file}.wav`)} volume={volume} />
+          </Sequence>
+        );
+      })}
+      <Backdrop>
       <AbsoluteFill style={{ padding: '0 116px', justifyContent: 'center' }}>
         <div style={{ display: 'flex', gap: 84, alignItems: 'center' }}>
           {/* 左：标题 + 四条规则 */}
@@ -515,6 +526,7 @@ export const RulesScene: React.FC = () => {
           </div>
         </div>
       </AbsoluteFill>
-    </Backdrop>
+      </Backdrop>
+    </>
   );
 };
