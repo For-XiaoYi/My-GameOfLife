@@ -163,7 +163,7 @@ Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`
 （旧版）
 　·　首帧海报：[`assets/promo-poster.png`](assets/promo-poster.png)
 　·　一图看全片：[`assets/promo-storyboard.png`](assets/promo-storyboard.png)（12 个关键帧，带时间点）
-　·　本地最新渲染：`promo/out/promo-v7.mp4`（1920×1080，30fps，125 秒，带配乐）
+　·　本地最新渲染：`promo/out/promo-v8.mp4`（1920×1080，30fps，125 秒，带配乐与音效）
 
 > 视频没放进仓库：几十 MB 的二进制塞进 git 会让每次 clone 都变慢，所以走 Release 附件，
 > 上面那个链接点开就能直接下载。`assets/` 里的海报和分镜图是普通文件，clone 下来就有。
@@ -171,18 +171,22 @@ Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`
 片子的结构：标题 → 四条规则 → 静物 → 振荡子 → 滑翔机（定格）→ 滑翔机（实机录像）→
 滑翔枪预告 → 滑翔枪 → 开关（两颗滑翔机湮灭）→ 黑屏提问 → 逻辑门 → 门阵列 → 图灵机 →
 宏大结构 → 随机演化 → 结尾。后半段从「门」一路推到「机器」：四张逻辑门卡片（与 / 或 / 非 /
-异或）每 1.5 秒进一张，门阵列排开，Rendell 的图灵机、P59 炮阵、太空填充者、通用图灵机
-依次出现；随机演化是真实界面里点「随机」、确认、不限速、播放的录屏，用裁切呈现。
+异或）每 1.5 秒进一张；门阵列换成四台真实搭建、真的在跑的小电路（解复用器 / 触发器 /
+存储单元 / 面包触发器）；Rendell 的图灵机用模拟器算出局部演化，P59 炮阵和通用图灵机
+用全图 + 实时小窗，太空填充者整屏实时生长。
+随机演化重做成「黑底标题 → 点随机的小裁切 → 确认弹窗 → 淡入满屏细胞慢演化」。
 
 **声音**：有一条自己合成的配乐，没有旁白——`scripts/make-music.mjs` 用纯代码做加法合成：
 暗色 pad 铺底、随段落逐渐加快的琶音、功能段进鼓、转场呼啸与上扬 riser，最后收在一个大三和弦上。
+前 14 秒规则段刻意不铺鼓点，把声音让给四条规则的判定音效；黑屏提问处不断崖式掉音量；
+门 / 门阵列的鼓点更重；随机段降到慢 pad + 60BPM 心跳。
 没用任何采样库，想调节奏、换和弦、改音量，改脚本再跑一次就行（随机数有固定种子，跑出来的结果每次都一样）：
 
 ```bash
 node scripts/make-music.mjs       # 先合成 125 秒 wav（中间产物）
 # 压成 mp3 再进仓库（wav 21 MB，超出仓库树 12 MB 的单文件限制）
 ffmpeg -i promo/public/music/score.wav -c:a libmp3lame -b:a 192k promo/public/music/score.mp3
-node scripts/make-sfx.mjs         # 规则段的生死音效（出生 / 死亡 / tick / whoosh）
+node scripts/make-sfx.mjs         # 出生 / 死亡 / live / tick / whoosh / 碰撞 / 点击
 ```
 
 配乐由 `src/Promo.tsx` 里的 `<Audio src={staticFile('music/score.mp3')} />` 挂到整条时间线上；
@@ -211,10 +215,12 @@ pnpm render                         # 直接出 out/promo.mp4
 | `promo/src/scenes/` | 十六个场景：标题 / 规则 / 静物 / 振荡子 / 滑翔机 / 实机演示 / 滑翔枪预告 / 滑翔枪 / 开关 / 黑屏提问 / 逻辑门 / 门阵列 / 图灵机 / 宏大结构 / 随机演化 / 结尾 |
 | `promo/src/lib/life.ts` | 真的生命游戏规则（视频里所有细胞演化都是现场算的；支持按轴回绕） |
 | `promo/src/lib/gates.ts` | 四种门的真实反应帧（与 / 或 / 非 / 异或） |
+| `promo/src/lib/circuits.ts` | 四台真实小电路（解复用器 / 触发器 / 存储单元 / 面包触发器）的坐标数据 |
 | `promo/src/assets/patterns.json` | 20 个预设图案的位图，由 `scripts/dump-patterns.mjs` 从主程序里导出 |
-| `promo/public/` | 界面截图、背景汤、`pattern-turing.png`、`grand-*.png`（P59 / 太空填充者 / 通用图灵机）、`clip-random.mp4`、`sfx/*.wav`、`music/score.mp3`（2.9 MB，已进仓库） |
+| `promo/public/` | 界面截图、背景汤、`pattern-turing.png`、`grand-*.png`、`clip-random.mp4`、`clip-*-live.mp4`（图灵机 / P59 / 太空填充者 / 通用图灵机）、`sfx/*.wav`、`music/score.mp3`（2.9 MB，已进仓库） |
 | `scripts/make-music.mjs` | 生成 125 秒配乐（wav 中间产物） |
-| `scripts/make-sfx.mjs` | 规则段的出生 / 死亡 / tick / whoosh 音效 |
+| `scripts/make-sfx.mjs` | 出生 / 死亡 / live / tick / whoosh / 碰撞 / 点击音效 |
+| `scripts/sim-life-clip.mjs` | 稀疏 Life 模拟 + ffmpeg 编码，生成大图案的动态片段 |
 | `scripts/dump-patterns.mjs` | 重新从 `生命游戏.html` 里导出图案数据 |
 | `scripts/make-storyboard.mjs` | 把关键帧拼成 `assets/promo-storyboard.png` |
 | `scripts/render-rle-png.mjs` | 把大图案 RLE 渲成 PNG（图灵机、P59、通用图灵机就是它出的） |
@@ -223,13 +229,15 @@ pnpm render                         # 直接出 out/promo.mp4
 找不到就让 Remotion 自己下载 headless shell，**不用手改路径**。想指定自己的浏览器，
 设环境变量 `CHROME_PATH` 即可。
 
-- 界面镜头是脚本用 CDP 拍下的真实界面（`scripts/shoot-promo*.mjs`），存在 `promo/public/`；
-  图案动画则由 `src/lib/life.ts` 现算每一代的位图，所以视频里的演化是真的。
-- 图灵机 / 宏大结构那几段是静态图 + 缓慢推近，不是实时演化：图案太大（1714×1647 到
-  12,699×12,652 格），逐代实时算不现实。图灵机的源文件是 `tools/patterns/turingmachine.rle`
-  （LifeWiki，Paul Rendell，2000），要重出 PNG 跑 `node scripts/render-rle-png.mjs`。
+- 界面镜头是脚本用 CDP 拍下的真实界面（`scripts/shoot-promo*.mjs`），存在 `promo/public/`。
+  小场景的图案由 `src/lib/life.ts` 现算每一代；图灵机 / P59 / 太空填充者 / 通用图灵机
+  太大，先用 `scripts/sim-life-clip.mjs` 稀疏模拟、编码成 `clip-*-live.mp4`，再交给 Remotion。
+- 图灵机是 9 秒的局部实时演化 + 左下角全图小地图；P59 和通用图灵机用「全图当背景 +
+  右上角实时小窗」；太空填充者整屏实时生长。图灵机源文件是 `tools/patterns/turingmachine.rle`
+  （LifeWiki，Paul Rendell，2000），静态全图仍由 `node scripts/render-rle-png.mjs` 生成。
 - 逻辑门那四张卡是引擎里跑出来的真实反应，不是示意图；但**不是可级联的标准门库**：
   与门的输出是一个静物方块，或门靠方块反射器把两路信号送到同一出口。片子里标“真实反应”。
+  门阵列没有用符号，四张卡都是 LifeWiki 上真实搭出来的电路图案。
 - 随机片段的源是 `promo/public/clip-random.mp4`（CDP 录的真实界面）。要重录：
   `node scripts/record-clips.mjs random`，脚本会打印“随机 / 确认 / 不限速 / 播放”四个动作
-  时刻，`RandomEvolution.tsx` 的裁切关键帧就按这些时刻排。
+  时刻；`RandomEvolution.tsx` 用两个小裁切卡 + 最后一次满屏裁切，动作帧按这些时刻排。

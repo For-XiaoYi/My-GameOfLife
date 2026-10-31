@@ -1,8 +1,10 @@
-import { AbsoluteFill, Img, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Img, OffthreadVideo, Sequence, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { LifeGrid } from '../components/LifeGrid';
 import { Backdrop, Eyebrow, Heading, Rise } from '../components/ui';
 import { C } from '../theme';
 import { GATE_DEMOS, type GateDemo } from '../lib/gates';
+import { CIRCUITS, type CircuitDef } from '../lib/circuits';
+import { framesOf, type Bitmap, type Frame } from '../lib/life';
 
 // ── 黑屏字幕：电路段结束后，把问题抛给下一章 ───────────────────────────────
 export const BlackCaptionScene: React.FC = () => {
@@ -16,7 +18,7 @@ export const BlackCaptionScene: React.FC = () => {
       <div style={{ opacity: a, transform: `translateY(${(1 - a) * 18}px)`, textAlign: 'center' }}>
         <div style={{ fontSize: 18, letterSpacing: 10, color: C.accent, marginBottom: 26 }}>问下去</div>
         <div style={{ fontSize: 50, fontWeight: 700, letterSpacing: 2, lineHeight: 1.55 }}>
-          那有了开关，
+          那有了判断，
           <br />
           我们可以拿它来做什么呢？
         </div>
@@ -223,28 +225,110 @@ export const GatesScene: React.FC = () => {
   );
 };
 
-// ── 门阵列：把四种门排成一片，信号在格子里走 ────────────────────────────────
-const SYMBOLS = ['∧', '∨', '¬', '⊕'];
-const TILE = 74;
-const TGAP = 8;
-const GRID = 8;
+// ── 门阵列：不用符号，换成四台真实搭建、真的在跑的小电路 ──────────────────
+const ARRAY_STYLE: Record<string, { pad: number; px: number }> = {
+  demux: { pad: 4, px: 4 },
+  toggle: { pad: 1, px: 3 },
+  memory: { pad: 4, px: 4 },
+  loaf: { pad: 4, px: 5 },
+};
+
+type ArrayItem = CircuitDef & {
+  board: Bitmap;
+  px: number;
+  gap: number;
+  frames: Frame[];
+};
+
+const ARRAY_ITEMS: ArrayItem[] = CIRCUITS.map((c) => {
+  const { pad, px } = ARRAY_STYLE[c.id] ?? { pad: 4, px: 4 };
+  const gap = 1;
+  const w = c.w + pad * 2;
+  const h = c.h + pad * 2;
+  const cells = new Array<number>(w * h).fill(0);
+  for (const idx of c.cells) {
+    const x = idx % c.w;
+    const y = Math.floor(idx / c.w);
+    cells[(y + pad) * w + (x + pad)] = 1;
+  }
+  const board: Bitmap = { w, h, cells };
+  const frames = framesOf(`circuit-${c.id}`, board, 90, { wrapX: false, wrapY: false });
+  return { ...c, board, px, gap, frames };
+});
+
+const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> = ({ item, index, entry }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const local = frame - entry;
+  const appear = spring({ frame: local, fps, config: { damping: 200, mass: 0.7 } });
+  if (local < 0) return null;
+  const gi = Math.floor(local * 0.6 + index * 9) % item.frames.length;
+
+  return (
+    <div
+      style={{
+        width: 380,
+        height: 380,
+        padding: '14px 16px 12px',
+        borderRadius: 16,
+        border: `1px solid ${C.line}`,
+        background: 'linear-gradient(180deg, rgba(11,18,26,0.94), rgba(7,11,17,0.9))',
+        opacity: appear,
+        transform: `translateY(${(1 - appear) * 24}px)`,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <div style={{ fontSize: 24, fontWeight: 700 }}>{item.name}</div>
+        <div style={{ fontSize: 11, letterSpacing: 2, color: C.dim }}>{item.en}</div>
+        <div
+          style={{
+            marginLeft: 'auto',
+            fontSize: 10,
+            color: C.accent,
+            border: `1px solid ${C.accentSoft}`,
+            borderRadius: 999,
+            padding: '2px 7px',
+            letterSpacing: 1,
+          }}
+        >
+          真实电路
+        </div>
+      </div>
+
+      <div
+        style={{
+          flex: 1,
+          marginTop: 8,
+          borderRadius: 10,
+          background: 'rgba(5,9,14,0.75)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+        }}
+      >
+        <LifeGrid frames={item.frames} gi={gi} px={item.px} gap={item.gap} radius={1} showGrid />
+      </div>
+
+      <div style={{ marginTop: 7, display: 'flex', justifyContent: 'space-between', fontSize: 11, color: C.dim }}>
+        <span>{item.w} × {item.h} 格</span>
+        <span style={{ color: C.accent, fontVariantNumeric: 'tabular-nums' }}>第 {gi} 代</span>
+      </div>
+    </div>
+  );
+};
 
 export const GateArrayScene: React.FC = () => {
   const frame = useCurrentFrame();
-  const tiles = [];
-  for (let y = 0; y < GRID; y++) {
-    for (let x = 0; x < GRID; x++) {
-      tiles.push({ x, y });
-    }
-  }
-  const appear = interpolate(frame, [0, 45], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const zoom = interpolate(frame, [0, 160], [1.08, 1.0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const fadeOut = interpolate(frame, [150, 180], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
     <Backdrop>
-      <AbsoluteFill style={{ padding: '86px 110px' }}>
-        <div style={{ display: 'flex', gap: 50, alignItems: 'center', height: '100%' }}>
+      <AbsoluteFill style={{ padding: '76px 110px', opacity: fadeOut }}>
+        <div style={{ display: 'flex', gap: 44, alignItems: 'center', justifyContent: 'center', height: '100%' }}>
           <div style={{ width: 760 }}>
             <Rise delay={0}>
               <Eyebrow>从门到机器</Eyebrow>
@@ -253,15 +337,15 @@ export const GateArrayScene: React.FC = () => {
                 一颗滑翔机是一个比特，一排门是一条信号线。
               </div>
               <div style={{ marginTop: 10, fontSize: 21, color: C.dim, lineHeight: 1.7 }}>
-                把与、或、非、异或排成一片，信号就能在格子里自己走。
+                右边不是画出来的符号 —— 是四台真的在跑的小电路。
               </div>
             </Rise>
 
-            <Rise delay={50} style={{ marginTop: 70 }}>
+            <Rise delay={50} style={{ marginTop: 54 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 {[
                   { t: '逻辑门', n: '4 种反应' },
-                  { t: '门阵列', n: '一片电路', on: true },
+                  { t: '门阵列', n: '真实电路', on: true },
                   { t: '图灵机', n: '一台机器' },
                 ].map((s, i) => (
                   <div key={s.t} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
@@ -281,50 +365,32 @@ export const GateArrayScene: React.FC = () => {
                 ))}
               </div>
             </Rise>
+
+            <Rise delay={90} style={{ marginTop: 28 }}>
+              <div style={{ fontSize: 16, color: C.dim, lineHeight: 1.75 }}>
+                解复用器 · 触发器 · 存储单元 · 面包触发器
+                <br />
+                都是 LifeWiki 上真实搭出来的图案，每一格都在按四条规则演化。
+              </div>
+            </Rise>
           </div>
 
-          <div
-            style={{
-              position: 'relative',
-              width: GRID * (TILE + TGAP) - TGAP,
-              height: GRID * (TILE + TGAP) - TGAP,
-              flexShrink: 0,
-              transform: `scale(${zoom * fadeOut})`,
-              opacity: appear,
-            }}
-          >
-            {tiles.map(({ x, y }, i) => {
-              const wave = (Math.sin((x + y) * 0.65 - frame * 0.12) + 1) / 2;
-              const on = wave > 0.72;
-              const kind = (x * 3 + y) % 4;
-              const sym = SYMBOLS[kind];
-              const label = ['AND', 'OR', 'NOT', 'XOR'][kind];
-              return (
-                <div
-                  key={i}
-                  style={{
-                    position: 'absolute',
-                    left: x * (TILE + TGAP),
-                    top: y * (TILE + TGAP),
-                    width: TILE,
-                    height: TILE,
-                    borderRadius: 12,
-                    border: `1px solid ${on ? C.accentSoft : C.line}`,
-                    background: on ? 'rgba(108,245,210,0.10)' : 'rgba(8,13,19,0.72)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 2,
-                    opacity: 0.5 + 0.5 * wave,
-                    boxShadow: on ? '0 0 22px rgba(108,245,210,0.16)' : 'none',
-                  }}
-                >
-                  <div style={{ fontSize: 28, color: on ? C.accent : C.dim, fontWeight: 700 }}>{sym}</div>
-                  <div style={{ fontSize: 9, letterSpacing: 1, color: C.dim }}>{label}</div>
-                </div>
-              );
-            })}
+          <div style={{ position: 'relative', width: 778, height: 778, flexShrink: 0 }}>
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                backgroundImage:
+                  'linear-gradient(to right, rgba(120,200,220,0.06) 1px, transparent 1px), linear-gradient(to bottom, rgba(120,200,220,0.06) 1px, transparent 1px)',
+                backgroundSize: '26px 26px',
+                borderRadius: 18,
+              }}
+            />
+            <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '380px 380px', gap: 18 }}>
+              {ARRAY_ITEMS.map((item, i) => (
+                <CircuitCard key={item.id} item={item} index={i} entry={i * 8} />
+              ))}
+            </div>
           </div>
         </div>
       </AbsoluteFill>
@@ -336,13 +402,11 @@ export const GateArrayScene: React.FC = () => {
 export const TuringMachineScene: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const zoom = interpolate(frame, [0, 160], [1.14, 1.0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const drift = interpolate(frame, [160, 270], [0, 10], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const textIn = spring({ frame: frame - 30, fps, config: { damping: 200, mass: 0.8 } });
 
   return (
     <Backdrop>
-      <AbsoluteFill style={{ padding: '72px 96px', flexDirection: 'row', alignItems: 'center', gap: 44 }}>
+      <AbsoluteFill style={{ padding: '72px 96px', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 44 }}>
         <div style={{ width: 470, flexShrink: 0 }}>
           <Rise delay={0}>
             <Eyebrow>2000 · Paul Rendell</Eyebrow>
@@ -374,7 +438,8 @@ export const TuringMachineScene: React.FC = () => {
           <div
             style={{
               position: 'relative',
-              height: 940,
+              width: 960,
+              height: 720,
               borderRadius: 18,
               border: `1px solid ${C.line}`,
               background: '#05090e',
@@ -382,13 +447,14 @@ export const TuringMachineScene: React.FC = () => {
               boxShadow: '0 0 120px rgba(108,245,210,0.10)',
             }}
           >
-            <Img
-              src={staticFile('pattern-turing.png')}
+            {/* 250×... 的局部实时演化：机器真的在跑 */}
+            <OffthreadVideo
+              src={staticFile('clip-turing-live.mp4')}
+              muted
               style={{
+                width: '100%',
                 height: '100%',
-                width: 'auto',
-                display: 'block',
-                transform: `scale(${zoom}) translateY(${drift}px)`,
+                objectFit: 'cover',
                 filter: 'saturate(1.15) brightness(1.05)',
               }}
             />
@@ -402,7 +468,7 @@ export const TuringMachineScene: React.FC = () => {
                 gap: 10,
                 padding: '5px 13px 5px 6px',
                 borderRadius: 999,
-                background: 'rgba(5,8,12,0.72)',
+                background: 'rgba(5,8,12,0.78)',
                 border: `1px solid ${C.line}`,
               }}
             >
@@ -417,9 +483,61 @@ export const TuringMachineScene: React.FC = () => {
                   color: C.accent,
                 }}
               >
-                真实图案
+                真实图案 · 实时演化
               </div>
-              <div style={{ fontSize: 14, color: C.text, opacity: 0.8 }}>不是示意图</div>
+              <div style={{ fontSize: 13, color: C.text, opacity: 0.75 }}>局部放大</div>
+            </div>
+
+            {/* 全图小地图：让观众知道镜头在整台机器的哪里 */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 16,
+                right: 18,
+                width: 180,
+                padding: 5,
+                borderRadius: 10,
+                background: 'rgba(5,8,12,0.78)',
+                border: `1px solid ${C.line}`,
+              }}
+            >
+              <div style={{ position: 'relative', width: 170, height: 164, overflow: 'hidden', borderRadius: 6 }}>
+                <Img
+                  src={staticFile('pattern-turing.png')}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.65 }}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: `${(768 / 1714) * 100}%`,
+                    top: `${(768 / 1647) * 100}%`,
+                    width: `${(640 / 1714) * 100}%`,
+                    height: `${(480 / 1647) * 100}%`,
+                    border: `1.5px solid ${C.accent}`,
+                    boxShadow: '0 0 10px rgba(108,245,210,0.5)',
+                  }}
+                />
+              </div>
+              <div style={{ marginTop: 4, fontSize: 10, color: C.dim, letterSpacing: 2, textAlign: 'center' }}>
+                整机位置
+              </div>
+            </div>
+
+            <div
+              style={{
+                position: 'absolute',
+                right: 18,
+                bottom: 14,
+                padding: '5px 11px',
+                borderRadius: 999,
+                background: 'rgba(5,8,12,0.78)',
+                border: `1px solid ${C.line}`,
+                fontSize: 13,
+                color: C.accent,
+                fontVariantNumeric: 'tabular-nums',
+              }}
+            >
+              第 {Math.min(269, Math.floor(frame))} 代
             </div>
           </div>
         </div>
@@ -428,37 +546,232 @@ export const TuringMachineScene: React.FC = () => {
   );
 };
 
-// ── 宏大结构：三段真实大图案，逐段推近 ─────────────────────────────────────
-type Grand = { img: string; name: string; en: string; stat: string; note: string; credit: string };
+// ── 宏大结构：三段真实大图案，直接播放模拟器算出来的局部演化 ──────────────
+type Grand = {
+  clip: string;
+  img: string;
+  name: string;
+  en: string;
+  stat: string;
+  note: string;
+  credit: string;
+  /** 图案总尺寸（小地图用） */
+  pw: number;
+  ph: number;
+  /** 局部裁切（小地图上的框） */
+  crop: { x: number; y: number; w: number; h: number };
+  /** 每帧推进几代 */
+  gpf: number;
+  /** inset：全图当背景，右上角开一个实时演化的小窗；full：整屏都是视频 */
+  mode: 'inset' | 'full';
+  zoom?: number;
+  localLabel?: string;
+};
+
 const GRANDS: Grand[] = [
   {
+    clip: 'clip-p59-live.mp4',
     img: 'grand-p59.png',
     name: 'P59 炮阵',
     en: 'Period-59 gun array',
     stat: '8,870 × 7,352 格',
     note: '一排枪，连成一片大陆',
     credit: 'LifeWiki',
+    pw: 8870,
+    ph: 7352,
+    crop: { x: 7488, y: 3328, w: 480, h: 270 },
+    gpf: 1,
+    mode: 'inset',
+    zoom: 4,
+    localLabel: '炮阵的一角',
   },
   {
+    clip: 'clip-spacefiller-live.mp4',
     img: 'grand-spacefiller.png',
     name: '太空填充者',
     en: 'Spacefiller',
     stat: '从 200 个细胞长成实心',
     note: '它把空白，一格一格地填满',
     credit: 'LifeWiki / Golly',
+    pw: 427,
+    ph: 404,
+    crop: { x: -260, y: -70, w: 960, h: 540 },
+    gpf: 3,
+    mode: 'full',
   },
   {
+    clip: 'clip-utm-live.mp4',
     img: 'grand-utm.png',
     name: '通用图灵机',
     en: 'Universal Turing machine',
     stat: '12,699 × 12,652 格',
     note: '一条数据带，绕了半张宇宙',
     credit: 'Paul Rendell · 2010',
+    pw: 12699,
+    ph: 12652,
+    crop: { x: 6000, y: 6000, w: 960, h: 540 },
+    gpf: 1,
+    mode: 'inset',
+    zoom: 2,
+    localLabel: '机器头部',
   },
 ];
 
 const SEG = 150;
 const XFADE = 12;
+
+const GrandSegment: React.FC<{ g: Grand; i: number; opacity: number }> = ({ g, i, opacity }) => {
+  const f = useCurrentFrame();
+  const z = interpolate(f, [0, SEG], [1.04, 1.0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const tx = interpolate(f, [0, SEG], [i % 2 ? -10 : 10, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const gen = Math.floor(f * g.gpf);
+
+  return (
+    <AbsoluteFill style={{ opacity }}>
+      {g.mode === 'inset' ? (
+        <AbsoluteFill style={{ overflow: 'hidden', transform: `scale(${z}) translateX(${tx}px)` }}>
+          <Img
+            src={staticFile(g.img)}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'saturate(1.06) brightness(0.92)' }}
+          />
+        </AbsoluteFill>
+      ) : (
+        <AbsoluteFill style={{ overflow: 'hidden', transform: `scale(${z}) translateX(${tx}px)` }}>
+          <OffthreadVideo
+            src={staticFile(g.clip)}
+            muted
+            style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'saturate(1.1) brightness(1.05)' }}
+          />
+        </AbsoluteFill>
+      )}
+
+      <AbsoluteFill
+        style={{
+          background:
+            'linear-gradient(180deg, rgba(5,8,12,0.46) 0%, rgba(5,8,12,0.04) 26%, rgba(5,8,12,0.3) 55%, rgba(5,8,12,0.97) 100%)',
+        }}
+      />
+      <AbsoluteFill
+        style={{
+          background:
+            'linear-gradient(90deg, rgba(5,8,12,0.86) 0%, rgba(5,8,12,0.2) 40%, rgba(5,8,12,0) 62%)',
+        }}
+      />
+
+      {/* 全图 + 实时小窗：大结构先交代清楚，再让观众看到它真的在动 */}
+      {g.mode === 'inset' && (
+        <>
+          <div
+            style={{
+              position: 'absolute',
+              right: 96,
+              top: 150,
+              width: 620,
+              height: 349,
+              borderRadius: 14,
+              overflow: 'hidden',
+              border: `1px solid ${C.accentSoft}`,
+              boxShadow: '0 24px 70px rgba(0,0,0,0.6), 0 0 60px rgba(108,245,210,0.10)',
+            }}
+          >
+            <OffthreadVideo
+              src={staticFile(g.clip)}
+              muted
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+            <div
+              style={{
+                position: 'absolute',
+                left: 10,
+                top: 10,
+                padding: '3px 9px',
+                borderRadius: 999,
+                background: 'rgba(5,8,12,0.78)',
+                border: `1px solid ${C.accentSoft}`,
+                fontSize: 11,
+                letterSpacing: 2,
+                color: C.accent,
+              }}
+            >
+              局部 ×{g.zoom}
+            </div>
+          </div>
+          <div
+            style={{
+              position: 'absolute',
+              right: 96,
+              top: 510,
+              width: 620,
+              textAlign: 'right',
+              fontSize: 13,
+              letterSpacing: 2,
+              color: C.dim,
+            }}
+          >
+            局部：{g.localLabel}，细胞正在按四条规则运行
+          </div>
+        </>
+      )}
+
+      {/* 实时状态：局部位 + 第几代 */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 78,
+          left: 96,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+        }}
+      >
+        <div
+          style={{
+            padding: '5px 12px',
+            borderRadius: 999,
+            border: `1px solid ${C.accentSoft}`,
+            background: 'rgba(5,8,12,0.74)',
+            fontSize: 13,
+            letterSpacing: 2,
+            color: C.accent,
+          }}
+        >
+          {g.mode === 'inset' ? '局部实时' : '实时生长'}
+        </div>
+        <div
+          style={{
+            padding: '5px 12px',
+            borderRadius: 999,
+            border: `1px solid ${C.line}`,
+            background: 'rgba(5,8,12,0.74)',
+            fontSize: 13,
+            color: C.text,
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          第 {gen} 代
+        </div>
+      </div>
+
+      <AbsoluteFill style={{ padding: '78px 96px', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <div style={{ fontSize: 15, letterSpacing: 6, color: C.accent }}>大神们的作品</div>
+              <div style={{ fontSize: 13, color: C.dim, letterSpacing: 2 }}>0{i + 1} / 03</div>
+            </div>
+            <div style={{ fontSize: 66, fontWeight: 800, letterSpacing: 3 }}>{g.name}</div>
+            <div style={{ marginTop: 6, fontSize: 20, letterSpacing: 4, color: C.accent }}>{g.en}</div>
+            <div style={{ marginTop: 18, fontSize: 24, color: C.text, opacity: 0.86 }}>{g.note}</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 24, fontWeight: 700, color: C.text }}>{g.stat}</div>
+            <div style={{ marginTop: 6, fontSize: 15, color: C.dim }}>{g.credit}</div>
+          </div>
+        </div>
+      </AbsoluteFill>
+    </AbsoluteFill>
+  );
+};
 
 export const GrandStructuresScene: React.FC = () => {
   const frame = useCurrentFrame();
@@ -466,56 +779,22 @@ export const GrandStructuresScene: React.FC = () => {
     <AbsoluteFill style={{ background: '#05080c', color: C.text, overflow: 'hidden' }}>
       {GRANDS.map((g, i) => {
         const start = i * SEG;
-        const o = interpolate(
-          frame,
-          [start - XFADE, start + XFADE, start + SEG - XFADE, start + SEG + XFADE],
-          [0, 1, 1, 0],
-          { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
-        );
-        const z = interpolate(frame, [start, start + SEG], [1.06, 1.0]);
-        const tx = interpolate(frame, [start, start + SEG], [i % 2 ? -18 : 18, 0]);
+        const o =
+          i === 0
+            ? interpolate(frame, [0, XFADE, SEG - XFADE, SEG + XFADE], [1, 1, 1, 0], {
+                extrapolateLeft: 'clamp',
+                extrapolateRight: 'clamp',
+              })
+            : interpolate(
+                frame,
+                [start - XFADE, start + XFADE, start + SEG - XFADE, start + SEG + XFADE],
+                [0, 1, 1, 0],
+                { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
+              );
         return (
-          <AbsoluteFill key={g.img} style={{ opacity: o }}>
-            <Img
-              src={staticFile(g.img)}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                transform: `scale(${z}) translateX(${tx}px)`,
-                filter: 'saturate(1.1) brightness(1.05)',
-              }}
-            />
-            <AbsoluteFill
-              style={{
-                background:
-                  'linear-gradient(180deg, rgba(5,8,12,0.55) 0%, rgba(5,8,12,0.05) 26%, rgba(5,8,12,0.28) 55%, rgba(5,8,12,0.97) 100%)',
-              }}
-            />
-            <AbsoluteFill
-              style={{
-                background:
-                  'linear-gradient(90deg, rgba(5,8,12,0.85) 0%, rgba(5,8,12,0.2) 40%, rgba(5,8,12,0) 62%)',
-              }}
-            />
-            <AbsoluteFill style={{ padding: '78px 96px', justifyContent: 'flex-end' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-                    <div style={{ fontSize: 15, letterSpacing: 6, color: C.accent }}>大神们的作品</div>
-                    <div style={{ fontSize: 13, color: C.dim, letterSpacing: 2 }}>0{i + 1} / 03</div>
-                  </div>
-                  <div style={{ fontSize: 66, fontWeight: 800, letterSpacing: 3 }}>{g.name}</div>
-                  <div style={{ marginTop: 6, fontSize: 20, letterSpacing: 4, color: C.accent }}>{g.en}</div>
-                  <div style={{ marginTop: 18, fontSize: 24, color: C.text, opacity: 0.86 }}>{g.note}</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: C.text }}>{g.stat}</div>
-                  <div style={{ marginTop: 6, fontSize: 15, color: C.dim }}>{g.credit}</div>
-                </div>
-              </div>
-            </AbsoluteFill>
-          </AbsoluteFill>
+          <Sequence key={g.clip} from={start} durationInFrames={SEG + XFADE}>
+            <GrandSegment g={g} i={i} opacity={o} />
+          </Sequence>
         );
       })}
     </AbsoluteFill>

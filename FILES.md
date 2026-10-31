@@ -29,11 +29,11 @@
 | --- | --- | --- | --- |
 | `src/` | 游戏源码：入口与界面、演化、回溯、渲染、存储、图案 | 11 | ✅ |
 | `src/core/` `src/render/` `src/view/` | 依次是规则核心、离屏渲染、相机换算 | — | ✅ |
-| `scripts/` | 构建、自检、发布、CDP 截图、宣传片脚本 | 21 | ✅ |
+| `scripts/` | 构建、自检、发布、CDP 截图、宣传片脚本 | 22 | ✅ |
 | `tools/patterns/` | 20 个内置图案的 RLE + 1 个宣传片专用的图灵机；`gen-patterns.mjs` 只认 META 里列出的内置图案 | 21 | ✅ |
 | `assets/` | README 与发布页的图：截图、海报、分镜图；宣传片成片也在这一层 | 4 | ✅（成片走 Release） |
 | `docs/` | GitHub Pages 产物，构建自动生成，**不要手改** | 1 | ✅ |
-| `promo/` | Remotion 宣传片工程：场景、组件、素材、配乐；`public/pattern-turing.png`、`grand-*.png` 由 RLE 生成 | 54 | ✅ |
+| `promo/` | Remotion 宣传片工程：场景、组件、素材、配乐、动态 Life 片段；`public/pattern-turing.png`、`grand-*.png` 由 RLE 生成 | 62 | ✅ |
 | `promo/out/` | 渲染中间产物（抽帧、storyboard、测试视频），可随时删 | 45 | ❌ |
 | `promo/node_modules/` | 宣传片依赖 | — | ❌ |
 
@@ -60,7 +60,7 @@
 4. **体积策略**：单文件超过 12 MB 不进仓库树，改走 Release 附件；`assets/promo.mp4` 固定走 Release（否则每次 clone 都要拖一个大视频）；
 5. 规则一改，同步 `scripts/inventory.mjs` 顶部的常量，否则它末尾会报「规则漂移」。
 
-按现状：工作区 **122** 个文件，**120** 个会上传（约 19.2 MB），1 个走 Release 附件、1 个是超过 12 MB 的配乐 wav 中间产物（入库的是 `score.mp3`）。
+按现状：工作区 **131** 个文件，**129** 个会上传（约 31.0 MB），1 个走 Release 附件、1 个是超过 12 MB 的配乐 wav 中间产物（入库的是 `score.mp3`）。
 上传是全量重传（每次重新上传所有 blob），一次约 2–3 分钟——后续会改成只传变化的文件。
 
 ## 不在文件树里的东西（浏览器本地数据）

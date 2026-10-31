@@ -171,6 +171,59 @@ const STILLS = [
   { rows: ['.O.', 'O.O', '.O.'], name: '浴缸', note: '中间永远空着' },
 ];
 
+/** 底部补一条“稳定不是不动”的说明，填掉原来空着的下半屏 */
+const StabilityStrip: React.FC<{ gen: number }> = ({ gen }) => {
+  const frame = useCurrentFrame();
+  const block = framesOf('still-strip-block', toBitmap(STILLS[0].rows), 1);
+  return (
+    <div
+      style={{
+        marginTop: 26,
+        height: 150,
+        padding: '18px 24px',
+        borderRadius: 18,
+        border: `1px solid ${C.line}`,
+        background: 'rgba(9,15,22,0.66)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 30,
+        overflow: 'hidden',
+      }}
+    >
+      <div style={{ width: 560 }}>
+        <div style={{ fontSize: 15, letterSpacing: 6, color: C.accent }}>稳定不是不动</div>
+        <div style={{ marginTop: 7, fontSize: 24, fontWeight: 700, lineHeight: 1.45 }}>
+          每一代都重新判定，每一代都回到同一个形状。
+        </div>
+        <div style={{ marginTop: 6, fontSize: 16, color: C.dim }}>
+          平衡不是一次通过，是连续通过。
+        </div>
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+          {Array.from({ length: 5 }).map((_, i) => {
+            const pulse = 0.45 + 0.55 * ((Math.sin(frame / 8 - i * 0.8) + 1) / 2);
+            return (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <div style={{ opacity: 0.35 + 0.65 * pulse }}>
+                  <LifeGrid frames={block} gi={0} px={12} gap={3} radius={3} />
+                </div>
+                {i < 4 && <div style={{ fontSize: 14, color: 'rgba(108,245,210,0.35)' }}>→</div>}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ fontSize: 15, color: C.dim, lineHeight: 1.6 }}>
+          第 1 代 → … → 第 {Math.floor(gen).toLocaleString('en-US')} 代
+          <br />
+          <span style={{ color: C.accent, fontSize: 22, fontWeight: 700 }}>0 次变化</span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export const StillsScene: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
@@ -202,7 +255,7 @@ export const StillsScene: React.FC = () => {
 
       {/* 标题退场后进入展示 */}
       {cardsIn > 0 && (
-        <AbsoluteFill style={{ padding: '86px 104px', opacity: cardsIn }}>
+        <AbsoluteFill style={{ padding: '0 104px', justifyContent: 'center', opacity: cardsIn }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 40 }}>
             <div style={{ maxWidth: 1140 }}>
               <Eyebrow>固定组件 · 静物</Eyebrow>
@@ -214,7 +267,7 @@ export const StillsScene: React.FC = () => {
             <EraBadge gen={gen} />
           </div>
 
-          <div style={{ display: 'flex', gap: 26, marginTop: 50 }}>
+          <div style={{ display: 'flex', gap: 26, marginTop: 40 }}>
             {STILLS.map((s, i) => {
               const frames = framesOf(`still-${s.name}`, toBitmap(s.rows), 1);
               const a = spring({ frame: frame - 52 - i * 5, fps, config: { damping: 200, mass: 0.7 } });
@@ -225,14 +278,14 @@ export const StillsScene: React.FC = () => {
                     flex: 1,
                     opacity: a,
                     transform: `translateY(${(1 - a) * 26}px)`,
-                    padding: '24px 22px 20px',
+                    padding: '20px 22px 16px',
                     borderRadius: 18,
                     border: `1px solid ${C.line}`,
                     background: 'rgba(10,16,23,0.75)',
                   }}
                 >
-                  <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <LifeGrid frames={frames} gi={0} px={32} gap={6} radius={5} />
+                  <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <LifeGrid frames={frames} gi={0} px={30} gap={6} radius={5} />
                   </div>
                   <div style={{ marginTop: 14, display: 'flex', alignItems: 'baseline', gap: 10 }}>
                     <div style={{ fontSize: 28, fontWeight: 700 }}>{s.name}</div>
@@ -252,6 +305,27 @@ export const StillsScene: React.FC = () => {
                 </div>
               );
             })}
+          </div>
+
+          <StabilityStrip gen={gen} />
+
+          <div
+            style={{
+              position: 'absolute',
+              left: 104,
+              right: 104,
+              bottom: 40,
+              paddingTop: 14,
+              borderTop: `1px solid ${C.line}`,
+              display: 'flex',
+              justifyContent: 'space-between',
+              fontSize: 14,
+              letterSpacing: 2,
+              color: C.dim,
+            }}
+          >
+            <span>没有总设计师，也没有随机数</span>
+            <span style={{ color: C.accent }}>所有秩序，都是它们一代代筛出来的</span>
           </div>
         </AbsoluteFill>
       )}
@@ -416,43 +490,45 @@ export const GliderStaticScene: React.FC = () => {
 
   return (
     <Backdrop>
-      <AbsoluteFill style={{ padding: '0 110px', flexDirection: 'row', alignItems: 'center', gap: 80 }}>
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-          <div
-            style={{
-              padding: 34,
-              borderRadius: 24,
-              border: `1px solid ${C.line}`,
-              background: 'rgba(8,13,19,0.85)',
-              boxShadow: `0 0 ${60 * glow}px rgba(108,245,210,0.18)`,
-              transform: `scale(${0.94 + 0.06 * s})`,
-            }}
-          >
-            <LifeGrid frames={frames} gi={0} px={74} gap={8} radius={8} glow={glow} />
+      <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 60, justifyContent: 'center' }}>
+          <div style={{ width: 400, display: 'flex', justifyContent: 'center' }}>
+            <div
+              style={{
+                padding: 34,
+                borderRadius: 24,
+                border: `1px solid ${C.line}`,
+                background: 'rgba(8,13,19,0.85)',
+                boxShadow: `0 0 ${60 * glow}px rgba(108,245,210,0.18)`,
+                transform: `scale(${0.94 + 0.06 * s})`,
+              }}
+            >
+              <LifeGrid frames={frames} gi={0} px={74} gap={8} radius={8} glow={glow} />
+            </div>
           </div>
-        </div>
 
-        <div style={{ width: 720 }}>
-          <Rise delay={0}>
-            <Eyebrow>组件 · 其三</Eyebrow>
-            <Heading size={62}>滑翔机</Heading>
-          </Rise>
-          <Rise delay={12} style={{ marginTop: 26 }}>
-            <div style={{ fontSize: 26, color: C.text, lineHeight: 1.7, opacity: 0.92 }}>
-              五格而已。放在那儿不动的时候，它看起来一点也不特别。
-            </div>
-          </Rise>
-          <Rise delay={42} style={{ marginTop: 18 }}>
-            <div style={{ fontSize: 24, color: C.text, lineHeight: 1.7, opacity: 0.82 }}>
-              可一旦把它丢进画布、让它跑起来 —— 它会自己朝一个方向，一直走下去。
-            </div>
-          </Rise>
-          <Rise delay={74} style={{ marginTop: 40 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 20, color: C.accent }}>
-              <div style={{ width: 30, height: 2, background: C.accent, opacity: 0.6 }} />
-              下一步：把它放进画布
-            </div>
-          </Rise>
+          <div style={{ width: 620 }}>
+            <Rise delay={0}>
+              <Eyebrow>组件 · 其三</Eyebrow>
+              <Heading size={62}>滑翔机</Heading>
+            </Rise>
+            <Rise delay={12} style={{ marginTop: 26 }}>
+              <div style={{ fontSize: 26, color: C.text, lineHeight: 1.7, opacity: 0.92 }}>
+                五格而已。放在那儿不动的时候，它看起来一点也不特别。
+              </div>
+            </Rise>
+            <Rise delay={42} style={{ marginTop: 18 }}>
+              <div style={{ fontSize: 24, color: C.text, lineHeight: 1.7, opacity: 0.82 }}>
+                可一旦把它丢进画布、让它跑起来 —— 它会自己朝一个方向，一直走下去。
+              </div>
+            </Rise>
+            <Rise delay={74} style={{ marginTop: 40 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 20, color: C.accent }}>
+                <div style={{ width: 30, height: 2, background: C.accent, opacity: 0.6 }} />
+                下一步：把它放进画布
+              </div>
+            </Rise>
+          </div>
         </div>
       </AbsoluteFill>
     </Backdrop>
@@ -610,11 +686,15 @@ export const InsertScene: React.FC<{
   caption: string;
   rate?: number;
   startFrom?: number;
-}> = ({ file, step, caption, rate = 1, startFrom = 0 }) => {
+  outAt?: number;
+}> = ({ file, step, caption, rate = 1, startFrom = 0, outAt = 208 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const s = spring({ frame: frame - 3, fps, config: { damping: 200, mass: 0.8 } });
-  const out = interpolate(frame, [196, 208], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const out = interpolate(frame, [outAt - 12, outAt], [1, 0], {
+    extrapolateLeft: 'clamp',
+    extrapolateRight: 'clamp',
+  });
 
   return (
     <AbsoluteFill style={{ background: '#05080c', color: C.text, fontFamily: FONT, opacity: out }}>

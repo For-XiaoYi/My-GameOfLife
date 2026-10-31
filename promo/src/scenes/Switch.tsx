@@ -1,4 +1,13 @@
-import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
+import {
+  AbsoluteFill,
+  Audio,
+  Sequence,
+  interpolate,
+  spring,
+  staticFile,
+  useCurrentFrame,
+  useVideoConfig,
+} from 'remotion';
 import { LifeGrid } from '../components/LifeGrid';
 import { Backdrop, Eyebrow, Heading, Rise } from '../components/ui';
 import { C } from '../theme';
@@ -53,7 +62,7 @@ const PAD = 14;
 const Lines: React.FC<{ lines: { at: number; text: string; big?: boolean }[] }> = ({ lines }) => {
   const frame = useCurrentFrame();
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: 840 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, width: 660 }}>
       {lines.map((l, i) => {
         const a = interpolate(frame, [l.at, l.at + 12], [0, 1], {
           extrapolateLeft: 'clamp',
@@ -114,13 +123,16 @@ export const SwitchScene: React.FC = () => {
 
   return (
     <Backdrop>
+      <Sequence from={HIT_FRAME} durationInFrames={30}>
+        <Audio src={staticFile('sfx/impact.wav')} volume={0.95} />
+      </Sequence>
       <AbsoluteFill style={{ padding: '76px 100px' }}>
         <Rise delay={0}>
           <Eyebrow>组件 · 其五</Eyebrow>
           <Heading size={44}>两个滑翔机撞在一起，会发生什么？</Heading>
         </Rise>
 
-        <div style={{ display: 'flex', gap: 48, marginTop: 24, alignItems: 'center' }}>
+        <div style={{ display: 'flex', gap: 56, marginTop: 24, alignItems: 'center', justifyContent: 'center' }}>
           <div
             style={{
               position: 'relative',
@@ -298,22 +310,22 @@ export const SwitchScene: React.FC = () => {
                 opacity: after ? 1 : 0.45,
               }}
             >
-              {after ? 'A + B → 0 · 画布空了，但「关」被记住了' : 'A、B 两路信号，正在靠近'}
+              {after ? 'A + B → 0 · 画布空了，但这次判断被记住了' : 'A、B 两路信号，正在靠近'}
             </div>
           </div>
 
-          <div style={{ flex: 1 }}>
+          <div style={{ width: 660 }}>
             <Lines
               lines={[
                 { at: 118, text: '它们会精确抵消 —— 像什么都没发生过。' },
-                { at: 172, text: '抵消 = 「关」；不抵消 = 「开」。一个开关，有了。', big: true },
-                { at: 228, text: '把开关接起来，就是逻辑门。' },
+                { at: 166, text: '两颗都到，输出 0；只到一颗，输出 1。', big: true },
+                { at: 218, text: '一次碰撞，就是一次判断。把判断接起来，才是逻辑门。' },
               ]}
             />
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 26 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 14, marginTop: 26 }}>
           {[
             { t: 'A', n: '输入 1' },
             { t: 'B', n: '输入 1' },

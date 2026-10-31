@@ -24,9 +24,8 @@ import { OutroScene } from './scenes/Ending';
 type SceneDef = { key: string; dur: number; node: ReactNode };
 
 /**
- * v7 结构：规则 → 组件（静物 / 振荡子 / 滑翔机 / 滑翔枪 / 开关）→ 黑屏提问
- * → 逻辑门 → 门阵列 → 图灵机 → 宏大结构 → 随机演化 → 结尾。
- * 前 56 秒的场景时长与 v6 一致；56 秒后是新增章节。
+ * v8 结构：规则 → 组件（静物 / 振荡子 / 滑翔机 / 滑翔枪 / 判断）→ 黑屏提问
+ * → 逻辑门 → 真实电路阵列 → 动态图灵机 → 动态宏大结构 → 重做随机 → 结尾。
  */
 export const SCENES: SceneDef[] = [
   { key: 'title', dur: 120, node: <TitleScene /> },
@@ -36,17 +35,18 @@ export const SCENES: SceneDef[] = [
   { key: 'glider-static', dur: 120, node: <GliderStaticScene /> },
   {
     key: 'glider-live',
-    dur: 208,
+    dur: 150,
     node: (
       <InsertScene
         file="clip-glider.mp4"
         step="接着：把它放进画布"
         caption="选中、落子、按下播放 —— 它自己就走了"
         startFrom={52}
+        outAt={150}
       />
     ),
   },
-  { key: 'gun-teaser', dur: 62, node: <GunTeaserScene /> },
+  { key: 'gun-teaser', dur: 120, node: <GunTeaserScene /> },
   { key: 'gun', dur: 240, node: <GunScene /> },
   { key: 'switch', dur: 300, node: <SwitchScene /> },
   { key: 'black-caption', dur: 90, node: <BlackCaptionScene /> },

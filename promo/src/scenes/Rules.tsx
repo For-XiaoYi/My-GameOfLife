@@ -294,10 +294,11 @@ export const RulesScene: React.FC = () => {
     <>
       {/* 四条规则的判定瞬间：死/生/活各一个合成音效（单独一层，和配乐分开） */}
       {PHASES.map((p, i) => {
-        const file = p.verdict === 'born' ? 'birth' : p.verdict === 'live' ? 'tick' : 'death';
-        const volume = p.verdict === 'born' ? 0.5 : p.verdict === 'live' ? 0.18 : 0.48;
+        const file = p.verdict === 'born' ? 'birth' : p.verdict === 'live' ? 'live' : 'death';
+        // 四条都要听得见；出生最亮，死亡最重，存活是一记双音确认
+        const volume = p.verdict === 'born' ? 0.92 : p.verdict === 'live' ? 0.78 : 0.95;
         return (
-          <Sequence key={p.verdict} from={i * PHASE_DUR + JUDGE + 2} durationInFrames={18}>
+          <Sequence key={p.verdict} from={i * PHASE_DUR + JUDGE + 2} durationInFrames={30}>
             <Audio src={staticFile(`sfx/${file}.wav`)} volume={volume} />
           </Sequence>
         );

@@ -107,3 +107,50 @@ function lowpass(sig, cut) {
   }
   writeWav('whoosh.wav', out);
 }
+
+// 活：规则 2 的确认音，两个音，比 tick 更有存在感
+{
+  const dur = 0.34;
+  const n = Math.round(dur * SR);
+  const out = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    const t = i / SR;
+    const env = Math.min(1, t / 0.008) * Math.exp(-t * 8);
+    const a = Math.sin(TAU * 660 * t) * 0.34;
+    const b = Math.sin(TAU * 990 * t) * 0.2 * Math.exp(-t * 12);
+    out[i] = (a + b) * env;
+  }
+  const lp = lowpass(out, 3200);
+  writeWav('live.wav', lp);
+}
+
+// 湮灭碰撞：一记低频重击 + 一点噪声裂口
+{
+  const dur = 0.72;
+  const n = Math.round(dur * SR);
+  const out = new Array(n).fill(0);
+  let phase = 0;
+  const noise = lowpass(Array.from({ length: n }, () => rnd() * 2 - 1), 700);
+  for (let i = 0; i < n; i++) {
+    const t = i / SR;
+    const f = 64 * Math.exp(-t * 5) + 34;
+    phase += (TAU * f) / SR;
+    const boom = Math.sin(phase) * Math.exp(-t * 4.2) * 0.95;
+    const crack = (rnd() * 2 - 1) * Math.exp(-t * 38) * 0.22;
+    out[i] = boom + noise[i] * Math.exp(-t * 7) * 0.35 + crack;
+  }
+  writeWav('impact.wav', out.map((v) => Math.tanh(v * 1.25)));
+}
+
+// UI 点击：随机/确认按钮用
+{
+  const dur = 0.075;
+  const n = Math.round(dur * SR);
+  const out = new Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    const t = i / SR;
+    const env = Math.exp(-t * 75);
+    out[i] = (Math.sin(TAU * 1500 * t) * 0.35 + (rnd() * 2 - 1) * 0.22) * env;
+  }
+  writeWav('click.wav', out);
+}
