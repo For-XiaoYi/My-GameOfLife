@@ -1,4 +1,4 @@
-import { AbsoluteFill, OffthreadVideo, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Img, OffthreadVideo, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { LifeGrid } from '../components/LifeGrid';
 import { Backdrop, Eyebrow, Heading, Rise } from '../components/ui';
 import { C, FONT } from '../theme';
@@ -82,6 +82,68 @@ const Lines: React.FC<{ lines: { at: number; text: string; big?: boolean }[]; wi
     </div>
   );
 };
+
+/** 参数小卡：给数据一个落点，免得左下半边空着 */
+const StatTile: React.FC<{ k: string; v: string; u?: string }> = ({ k, v, u }) => (
+  <div
+    style={{
+      flex: 1,
+      padding: '13px 18px 14px',
+      borderRadius: 14,
+      border: `1px solid ${C.line}`,
+      background: 'rgba(10,16,23,0.72)',
+    }}
+  >
+    <div style={{ fontSize: 15, letterSpacing: 3, color: C.dim }}>{k}</div>
+    <div
+      style={{
+        marginTop: 5,
+        fontSize: 32,
+        fontWeight: 800,
+        lineHeight: 1.1,
+        fontVariantNumeric: 'tabular-nums',
+      }}
+    >
+      {v}
+      {u && <span style={{ marginLeft: 6, fontSize: 15, fontWeight: 400, color: C.dim }}>{u}</span>}
+    </div>
+  </div>
+);
+
+/**
+ * 一条"节拍轨道"：一格 = 一代，每 p 格一个刻度。
+ * 光点波浪式扫过，刻度亮起 —— 把"周期"变成看得见的节拍。
+ */
+const PulseTrack: React.FC<{ p: number; cells: number }> = ({ p, cells }) => {
+  const frame = useCurrentFrame();
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, height: 26 }}>
+      {Array.from({ length: cells }, (_, i) => {
+        const tick = i % p === 0;
+        const wave = (Math.sin(frame / 7 - i * 0.34) + 1) / 2;
+        return (
+          <div
+            key={i}
+            style={{
+              flex: 1,
+              height: tick ? 20 : 5,
+              borderRadius: 3,
+              background: tick ? C.accent : 'rgba(120,200,220,0.28)',
+              opacity: tick ? 0.5 + 0.5 * wave : 0.1 + 0.14 * wave,
+              boxShadow: tick && wave > 0.72 ? `0 0 12px ${C.accentSoft}` : 'none',
+            }}
+          />
+        );
+      })}
+    </div>
+  );
+};
+
+const PULSE_ROWS = [
+  { name: '闪光灯', p: 2 },
+  { name: '脉冲星', p: 3 },
+  { name: '十五面体', p: 15 },
+];
 
 // ── 1) 静物：先亮明主题，再逐个摆出来 ─────────────────────────────────────
 const STILLS = [
@@ -253,8 +315,68 @@ export const OscillatorsScene: React.FC = () => {
           })}
         </div>
 
-        <Rise delay={46} style={{ marginTop: 34 }}>
-          <div style={{ fontSize: 22, color: C.dim }}>
+        {/* 它通向什么：周期 → 节拍 → 时钟 */}
+        <Rise delay={50} style={{ marginTop: 28 }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 30,
+              padding: '20px 28px',
+              borderRadius: 18,
+              border: `1px solid ${C.line}`,
+              background: 'rgba(10,16,23,0.72)',
+            }}
+          >
+            <div style={{ width: 600 }}>
+              <div style={{ fontSize: 16, letterSpacing: 6, color: C.accent }}>它通向什么</div>
+              <div style={{ marginTop: 8, fontSize: 27, fontWeight: 700, lineHeight: 1.45 }}>
+                位置不动，节拍不停
+              </div>
+              <div style={{ marginTop: 4, fontSize: 19, color: C.dim, lineHeight: 1.55 }}>
+                后来搭出的生命游戏电路，把它们当时钟用：给整台机器打拍子。
+              </div>
+            </div>
+
+            <div style={{ width: 1, alignSelf: 'stretch', background: C.line }} />
+
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 9 }}>
+              {PULSE_ROWS.map((r) => (
+                <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
+                  <div style={{ width: 72, fontSize: 15, color: C.dim }}>{r.name}</div>
+                  <div style={{ flex: 1 }}>
+                    <PulseTrack p={r.p} cells={26} />
+                  </div>
+                  <div style={{ width: 34, textAlign: 'right', fontSize: 15, color: C.accent }}>
+                    p{r.p}
+                  </div>
+                </div>
+              ))}
+              <div style={{ textAlign: 'right', fontSize: 13, color: C.dim, letterSpacing: 2 }}>
+                一格 = 一代
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ fontSize: 28, color: C.dim }}>→</div>
+              <div
+                style={{
+                  padding: '12px 20px',
+                  borderRadius: 14,
+                  border: `1px solid ${C.accentSoft}`,
+                  background: 'rgba(108,245,210,0.08)',
+                  textAlign: 'center',
+                }}
+              >
+                <div style={{ fontSize: 22, fontWeight: 700, color: C.accent }}>时钟</div>
+                <div style={{ fontSize: 13, color: C.dim, letterSpacing: 2 }}>clock</div>
+              </div>
+            </div>
+          </div>
+        </Rise>
+
+        <Rise delay={104} style={{ marginTop: 20 }}>
+          <div style={{ fontSize: 21, color: C.dim }}>
             静物不变，振荡子来回变 —— 但都留在原地。真正会走的，还在后面。
           </div>
         </Rise>
@@ -342,6 +464,15 @@ export const GunScene: React.FC = () => {
                 ]}
               />
             </div>
+
+            {/* 左下补三张参数卡：周期 30、枪体 36×9、产出无限 */}
+            <Rise delay={96} style={{ marginTop: 34 }}>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <StatTile k="周期" v="30" u="代" />
+                <StatTile k="枪体" v="36 × 9" u="格" />
+                <StatTile k="产出" v="∞" u="不停止" />
+              </div>
+            </Rise>
           </div>
 
           <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
@@ -383,33 +514,74 @@ const COLLIDE_FRAMES = framesOf('glider-collide', COLLIDE_BOARD, 90);
 
 export const CircuitsScene: React.FC = () => {
   const frame = useCurrentFrame();
-  const gi = Math.min(COLLIDE_FRAMES.length - 1, 20 + Math.floor(frame * 0.6));
+  // 放慢到第 ~72 帧才撞上，别一进场就撞完留 8 秒空画布
+  const gi = Math.min(COLLIDE_FRAMES.length - 1, 8 + Math.floor(frame * 0.72));
   const hitAt = 60;
   const ring = interpolate(gi, [hitAt, hitAt + 18], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const after = gi > hitAt;
-  const boardDim = interpolate(frame, [78, 100], [1, 0.45], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const boardDim = interpolate(frame, [64, 96], [1, 0.5], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  // 先让空画布退干净，再让图案进来：两段不重叠，避免字幕叠在图案上
+  const boardOut = interpolate(frame, [100, 114], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const arrayIn = interpolate(frame, [116, 134], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const arrayZoom = interpolate(frame, [134, 300], [0, 0.06], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
     <Backdrop>
       <AbsoluteFill style={{ padding: '76px 100px' }}>
         <Rise delay={0}>
           <Eyebrow>组件 · 其五</Eyebrow>
-          <Heading size={48}>两颗滑翔机撞上，会一起消失</Heading>
+          {/* 标题跟着画面一起换：讲对撞时讲对撞，讲图灵机时讲门 */}
+          <div style={{ position: 'relative', height: 60 }}>
+            <Heading
+              size={48}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                opacity: 1 - interpolate(frame, [100, 112], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }),
+              }}
+            >
+              两颗滑翔机撞上，会一起消失
+            </Heading>
+            <Heading
+              size={48}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                opacity: interpolate(frame, [112, 126], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }),
+              }}
+            >
+              把门接起来，就能算
+            </Heading>
+          </div>
         </Rise>
 
         <div style={{ display: 'flex', gap: 52, marginTop: 28, alignItems: 'center' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {/* 左：先演示对撞，再换成真实的图灵机图案；两块位置固定，不跳版 */}
+          <div style={{ position: 'relative', width: 700, height: 680, flexShrink: 0 }}>
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'center',
+                gap: 14,
+                opacity: boardOut,
+              }}
+            >
           <div
             style={{
               position: 'relative',
-              padding: 18,
+              width: 'fit-content',
+              margin: '0 auto',
+              padding: 16,
               borderRadius: 20,
               border: `1px solid ${C.line}`,
               background: 'rgba(8,13,19,0.82)',
               opacity: boardDim,
             }}
           >
-            <LifeGrid frames={COLLIDE_FRAMES} gi={gi} px={17} gap={2} radius={2} showGrid />
+            <LifeGrid frames={COLLIDE_FRAMES} gi={gi} px={12} gap={2} radius={2} showGrid />
             {ring > 0 && (
               <div
                 style={{
@@ -451,16 +623,99 @@ export const CircuitsScene: React.FC = () => {
                 fontSize: 18,
                 color: C.dim,
                 textAlign: 'center',
-                opacity: interpolate(frame, [86, 104], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }),
+                opacity: interpolate(frame, [70, 88], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }),
               }}
             >
               画布回到空无一物 —— 这就是「抵消」
             </div>
+            </div>
+
+            {/* 真实的图灵机图案：1714×1647 格，Paul Rendell 2000 年建成，来自 LifeWiki */}
+            <div style={{ position: 'absolute', inset: 0, opacity: arrayIn }}>
+              <div
+                style={{
+                  position: 'relative',
+                  width: 700,
+                  height: 636,
+                  borderRadius: 18,
+                  border: `1px solid ${C.line}`,
+                  background: '#05090e',
+                  overflow: 'hidden',
+                  boxShadow: '0 0 80px rgba(108,245,210,0.08)',
+                }}
+              >
+                <Img
+                  src={staticFile('pattern-turing.png')}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    transform: `scale(${1 + arrayZoom})`,
+                    filter: 'saturate(1.2) brightness(1.1)',
+                  }}
+                />
+                <AbsoluteFill
+                  style={{
+                    background:
+                      'linear-gradient(180deg, rgba(5,8,12,0.72) 0%, rgba(5,8,12,0.18) 14%, rgba(5,8,12,0) 26%, rgba(5,8,12,0) 66%, rgba(5,8,12,0.9) 100%)',
+                  }}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 16,
+                    left: 18,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                    padding: '5px 13px 5px 6px',
+                    borderRadius: 999,
+                    background: 'rgba(5,8,12,0.66)',
+                    border: `1px solid ${C.line}`,
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: '3px 10px',
+                      borderRadius: 999,
+                      border: `1px solid ${C.accentSoft}`,
+                      background: 'rgba(108,245,210,0.1)',
+                      fontSize: 14,
+                      letterSpacing: 2,
+                      color: C.accent,
+                    }}
+                  >
+                    真实图案
+                  </div>
+                  <div style={{ fontSize: 15, color: C.text, opacity: 0.82 }}>1714 × 1647 格</div>
+                </div>
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: 18,
+                    right: 18,
+                    bottom: 14,
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    fontSize: 15,
+                    color: C.text,
+                    opacity: 0.7,
+                    textShadow: '0 1px 8px rgba(5,8,12,0.95)',
+                  }}
+                >
+                  <span>Paul Rendell · 2000</span>
+                  <span>36,549 个活细胞</span>
+                </div>
+              </div>
+              <div style={{ marginTop: 12, fontSize: 17, color: C.dim, textAlign: 'center' }}>
+                LifeWiki 收录的完整图案
+              </div>
+            </div>
           </div>
 
-          <div style={{ width: 740 }}>
+          <div style={{ width: 860 }}>
             <Lines
-              width={720}
+              width={840}
               lines={[
                 { at: 4, text: '两颗滑翔机正面相撞，会精确抵消。', big: true },
                 { at: 84, text: '抵消，就是「关」；不抵消，就是「开」。一个开关有了。' },
@@ -472,7 +727,7 @@ export const CircuitsScene: React.FC = () => {
         </div>
 
         {/* 递进：从一颗滑翔机，到能算数的机器 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 46, paddingLeft: 4 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 34, paddingLeft: 4 }}>
           {[
             { t: '滑翔机', n: '1 个比特' },
             { t: '滑翔机流', n: '1 条信号线' },

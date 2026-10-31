@@ -163,6 +163,7 @@ Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`
 （1920×1080，30fps，61.5 秒，8.9 MB，带配乐）
 　·　首帧海报：[`assets/promo-poster.png`](assets/promo-poster.png)
 　·　一图看全片：[`assets/promo-storyboard.png`](assets/promo-storyboard.png)（12 个关键帧，带时间点）
+　·　本地最新渲染：`promo/out/promo-v6.mp4`（61.5 秒，14.6 MB）
 
 > 视频没放进仓库：几十 MB 的二进制塞进 git 会让每次 clone 都变慢，所以走 Release 附件，
 > 上面那个链接点开就能直接下载。`assets/` 里的海报和分镜图是普通文件，clone 下来就有。
@@ -170,6 +171,8 @@ Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`
 片子的结构是「先讲规则，再拆组件」：标题 → 四条规则 → 静物 → 振荡子 → 滑翔机（定格）→
 滑翔机（实机录像）→ 滑翔枪 → 逻辑电路 → 结尾。功能演示不是单独一段，而是以真实操作短片的
 形式穿插在组件之间，所以看到的是「这个东西真的能在那个界面里摆出来」。
+振荡子一段用「时钟」解释它们通向什么；逻辑电路段在湮灭之后直接放出 Paul Rendell 2000 年
+图灵机的真实图案（1714×1647 格，36,549 个活细胞）。
 
 **声音**：有一条自己合成的配乐，没有旁白——`scripts/make-music.mjs` 用纯代码做加法合成：
 暗色 pad 铺底、随段落逐渐加快的琶音、功能段进鼓、转场呼啸与上扬 riser，最后收在一个大三和弦上。
@@ -201,13 +204,14 @@ pnpm render                         # 直接出 out/promo.mp4
 
 | 目录 | 内容 |
 | --- | --- |
-| `promo/src/scenes/` | 六个场景：标题 / 规则 / 涌现 / 功能 / 回溯 / 结尾 |
+| `promo/src/scenes/` | 九个场景：标题 / 规则 / 静物 / 振荡子 / 滑翔机 / 实机演示 / 滑翔枪 / 逻辑电路 / 结尾 |
 | `promo/src/lib/life.ts` | 真的生命游戏规则（视频里所有细胞演化都是现场算的） |
 | `promo/src/assets/patterns.json` | 20 个预设图案的位图，由 `scripts/dump-patterns.mjs` 从主程序里导出 |
-| `promo/public/` | 界面截图、背景汤、`music/score.wav`（8.6 MB，已进仓库） |
+| `promo/public/` | 界面截图、背景汤、`pattern-turing.png`（图灵机，由 RLE 生成）、`music/score.wav`（8.6 MB，已进仓库） |
 | `scripts/make-music.mjs` | 生成配乐 |
 | `scripts/dump-patterns.mjs` | 重新从 `生命游戏.html` 里导出图案数据 |
 | `scripts/make-storyboard.mjs` | 把关键帧拼成 `assets/promo-storyboard.png` |
+| `scripts/render-rle-png.mjs` | 把大图案 RLE 渲成 PNG（片中的图灵机就是它出的） |
 
 渲染会用到浏览器：`promo/remotion.config.ts` 会自动在常见路径里找 Chrome / Edge，
 找不到就让 Remotion 自己下载 headless shell，**不用手改路径**。想指定自己的浏览器，
@@ -215,3 +219,6 @@ pnpm render                         # 直接出 out/promo.mp4
 
 - 界面镜头是脚本用 CDP 拍下的真实界面（`scripts/shoot-promo*.mjs`），存在 `promo/public/`；
   图案动画则由 `src/lib/life.ts` 现算每一代的位图，所以视频里的演化是真的。
+- 图灵机那段是静态图 `promo/public/pattern-turing.png` + 缓慢推近，不是实时演化：图案太大
+  （1714×1647 格），10 秒内逐代实时算不现实。源文件是 `tools/patterns/turingmachine.rle`
+  （LifeWiki，Paul Rendell，2000），要重出 PNG 跑 `node scripts/render-rle-png.mjs`。
