@@ -54,6 +54,14 @@ const BOARD = mergeInto(
 );
 const FRAMES = framesOf('switch-v7', BOARD, 90, { wrapX: false, wrapY: false });
 
+// 抖音竖版会复用这套碰撞帧
+export const SWITCH_FRAMES = FRAMES;
+export const SWITCH_HIT_FRAME = HIT_FRAME;
+export const SWITCH_BOARD_W = BOARD_W;
+export const SWITCH_BOARD_H = BOARD_H;
+export const SWITCH_PX = PX;
+export const SWITCH_GAP = GAP;
+
 // 碰撞格（28,20）在棋盘与面板里的坐标
 const CELL_X = 28 * STEP + PX / 2; // 341
 const CELL_Y = 20 * STEP + PX / 2; // 245

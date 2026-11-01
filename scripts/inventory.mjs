@@ -6,7 +6,7 @@ import { join, relative } from 'node:path';
 
 const ROOT = process.cwd();
 const SKIP_DIRS = new Set(['node_modules', 'build', 'dist', '.pnpm-store', '.git', '.tools']);
-const SKIP_PATHS = new Set(['promo/out', 'AGENTS.md', 'CLAUDE.md']);
+const SKIP_PATHS = new Set(['promo/out', 'AGENTS.md', 'CLAUDE.md', 'promo/public/music/douyin.wav']);
 const MAX_BLOB = 12 * 1024 * 1024;
 const RELEASE_FILES = ['assets/promo.mp4'];
 

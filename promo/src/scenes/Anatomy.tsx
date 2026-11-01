@@ -537,6 +537,11 @@ export const GliderStaticScene: React.FC = () => {
 const GUN_BOARD = placeBitmap(getPattern('gosperglidergun'), 74, 40, 4, 14);
 const GUN_FRAMES = framesOf('gun-fire-v7', GUN_BOARD, 260, { wrapX: false, wrapY: true });
 
+// 抖音竖版复用枪的演化帧
+export const GUN_FRAMES_V = GUN_FRAMES;
+export const GUN_BOARD_W = 74;
+export const GUN_BOARD_H = 40;
+
 export const GunScene: React.FC = () => {
   const frame = useCurrentFrame();
   const gi = Math.min(GUN_FRAMES.length - 1, Math.floor(frame * 0.95));

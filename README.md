@@ -176,6 +176,24 @@ Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`
 用全图 + 实时小窗，太空填充者整屏实时生长。
 随机演化重做成「三句话 + 一颗骰子 → 回环模式的连续拉远镜头 → 结尾」，不再出现操作录屏。
 
+## 抖音竖版（60 秒）
+
+除了 16:9 完整版，工程里还有一条 **1080×1920、60 秒、9:16** 的抖音版：
+
+- 成片：`promo/out/douyin-v2.mp4`（60.01 秒，1080×1920，30fps，H.264 + AAC，28.2 MB）
+- 组合：`promo/src/douyin/DouyinPromo.tsx`，在 `src/index.tsx` 注册为 `PromoDouyin`
+- 结构：`0–4s` 对撞冷开场 → `4–10s` 四条规则 → `10–14s` 滑翔机 → `14–20s` 滑翔枪 →
+  `20–28s` 湮灭/判断 → `28–32s` 四种门 → `32–36s` 四台真实电路 → `36–44s` 图灵机 →
+  `44–52s` P59 / UTM / 太空填充者 → `52–58s` 随机回环拉远 → `58–60s` 结尾
+- 配乐：`scripts/make-douyin-music.mjs` 生成 60 秒独立配乐。**不采样、不抄旋律**，只借
+  「开智的小曲」这类 AI 介绍片的底层结构：仪式感合唱、4 音动机、太鼓/808/拍手、
+  段落 drop、随机段的心跳和音乐盒。输出 `promo/public/music/douyin.mp3`。
+- 随机段用的是**竖屏回环录像** `clip-random-loop-vertical.mp4`，不是把横版裁一刀；
+  重录命令：`node scripts/record-clips.mjs random-loop-vertical`。
+
+> 竖版和横版是两条独立时间线，不是简单裁切。横版保留 2 分 05 秒的完整叙事；
+> 竖版把最抓人的对撞放到 0 秒，把真值表、静物、振荡子这些“图鉴式”内容移出 60 秒。
+
 **声音**：有一条自己合成的配乐，没有旁白——`scripts/make-music.mjs` 用纯代码做加法合成：
 暗色 pad 铺底、随段落逐渐加快的琶音、功能段进鼓、转场呼啸与上扬 riser，最后收在一个大三和弦上。
 前 14 秒规则段刻意不铺鼓点，把声音让给四条规则的判定音效；黑屏提问处不断崖式掉音量；
@@ -217,8 +235,9 @@ pnpm render                         # 直接出 out/promo.mp4
 | `promo/src/lib/gates.ts` | 四种门的真实反应帧（与 / 或 / 非 / 异或） |
 | `promo/src/lib/circuits.ts` | 四台真实小电路（解复用器 / 触发器 / 存储单元 / 面包触发器）的坐标数据 |
 | `promo/src/assets/patterns.json` | 20 个预设图案的位图，由 `scripts/dump-patterns.mjs` 从主程序里导出 |
-| `promo/public/` | 界面截图、背景汤、`pattern-turing.png`、`grand-*.png`、`spacefiller-seed.png`、`clip-random-loop.mp4`、`clip-*-live.mp4`（图灵机 / P59 / 太空填充者 / 通用图灵机）、`sfx/*.wav`、`music/score.mp3`（2.9 MB，已进仓库） |
-| `scripts/make-music.mjs` | 生成 125 秒配乐（wav 中间产物） |
+| `promo/public/` | 界面截图、背景汤、`pattern-turing.png`、`grand-*.png`、`spacefiller-seed.png`、`clip-random-loop.mp4`、`clip-random-loop-vertical.mp4`、`clip-*-live.mp4`（图灵机 / P59 / 太空填充者 / 通用图灵机）、`sfx/*.wav`、`music/score.mp3`（2.9 MB）、`music/douyin.mp3`（1.4 MB，60 秒竖版配乐） |
+| `scripts/make-music.mjs` | 生成 125 秒完整版配乐（wav 中间产物） |
+| `scripts/make-douyin-music.mjs` | 生成 60 秒竖版配乐（仪式合唱 / 太鼓 / 808 / 音乐盒） |
 | `scripts/make-sfx.mjs` | 出生 / 死亡 / live / tick / whoosh / 碰撞 / 点击音效 |
 | `scripts/sim-life-clip.mjs` | 稀疏 Life 模拟 + ffmpeg 编码，生成大图案的动态片段 |
 | `scripts/dump-patterns.mjs` | 重新从 `生命游戏.html` 里导出图案数据 |

@@ -8,8 +8,9 @@ import { pathToFileURL } from 'node:url';
 import { launch, sleep } from './cdp.mjs';
 
 const FPS = 30;
-const W = 1920;
-const H = 1080;
+const VERTICAL = process.argv[2] === 'random-loop-vertical';
+const W = VERTICAL ? 1080 : 1920;
+const H = VERTICAL ? 1920 : 1080;
 const OUT = resolve('promo/public');
 const TMP = resolve('build/clips');
 const FILE = pathToFileURL(resolve('生命游戏.html')).href;
@@ -271,7 +272,8 @@ try {
   }
 
   // 回环拉远：纯画布、无 UI；随机汤从特写一直拉到整张世界 + 环形重复
-  if (want('random-loop')) {
+  if (want('random-loop') || want('random-loop-vertical')) {
+    const vertical = which === 'random-loop-vertical';
     await page.evaluate(`(async () => {
       const L = window.__life;
       const board = document.getElementById('board');
@@ -304,7 +306,7 @@ try {
       return { W, H };
     })()`);
 
-    await record(page, 'random-loop', async () => {
+    await record(page, vertical ? 'random-loop-vertical' : 'random-loop', async () => {
       await page.evaluate(`(async () => {
         const L = window.__life;
         const board = document.getElementById('board');
@@ -312,7 +314,7 @@ try {
         const H = board.clientHeight;
         const s0 = 14;
         const s1 = 0.8;
-        const dur = 9000;
+        const dur = ${vertical ? 4200 : 9000};
         const t0 = performance.now();
         const ease = (p) => p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
         await new Promise((res) => {
