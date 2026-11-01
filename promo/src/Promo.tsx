@@ -41,7 +41,13 @@ export const SCENES: SceneDef[] = [
         file="clip-glider.mp4"
         step="接着：把它放进画布"
         caption="选中、落子、按下播放 —— 它自己就走了"
-        startFrom={52}
+        steps={[
+          { at: 10, text: '选中' },
+          { at: 38, text: '落子' },
+          { at: 62, text: '按下播放' },
+          { at: 80, text: '它自己就走了' },
+        ]}
+        startFrom={0}
         outAt={150}
       />
     ),
@@ -51,9 +57,9 @@ export const SCENES: SceneDef[] = [
   { key: 'switch', dur: 300, node: <SwitchScene /> },
   { key: 'black-caption', dur: 90, node: <BlackCaptionScene /> },
   { key: 'gates', dur: 300, node: <GatesScene /> },
-  { key: 'array', dur: 180, node: <GateArrayScene /> },
+  { key: 'array', dur: 300, node: <GateArrayScene /> },
   { key: 'turing', dur: 270, node: <TuringMachineScene /> },
-  { key: 'grand', dur: 450, node: <GrandStructuresScene /> },
+  { key: 'grand', dur: 750, node: <GrandStructuresScene /> },
   { key: 'random', dur: 420, node: <RandomEvolutionScene /> },
   { key: 'outro', dur: 360, node: <OutroScene /> },
 ];
@@ -73,7 +79,7 @@ export const Promo: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: '#05080c' }}>
       {/* 整片配乐：scripts/make-music.mjs 合成，段落与场景对齐，结尾硬收 */}
-      <Audio src={staticFile('music/score.mp3')} volume={1} />
+      <Audio src={staticFile('music/score-v11.mp3')} volume={1} />
       {SCENES.map((s) => {
         const from = at;
         at += s.dur;

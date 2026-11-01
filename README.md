@@ -163,7 +163,7 @@ Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`
 （旧版）
 　·　首帧海报：[`assets/promo-poster.png`](assets/promo-poster.png)
 　·　一图看全片：[`assets/promo-storyboard.png`](assets/promo-storyboard.png)（12 个关键帧，带时间点）
-　·　本地最新渲染：`promo/out/promo-v10.mp4`（1920×1080，30fps，125 秒，带配乐与音效）
+　·　本地最新渲染：`promo/out/promo-v11.mp4`（1920×1080，30fps，139 秒，带临时延长的配乐与音效）
 
 > 视频没放进仓库：几十 MB 的二进制塞进 git 会让每次 clone 都变慢，所以走 Release 附件，
 > 上面那个链接点开就能直接下载。`assets/` 里的海报和分镜图是普通文件，clone 下来就有。
@@ -174,7 +174,8 @@ Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`
 宏大结构 → 随机演化 → 结尾。后半段从「门」一路推到「机器」：四张逻辑门卡片（与 / 或 / 非 /
 异或）每 1.5 秒进一张；门阵列是四张 LifeWiki 收录的图案（解复用器 / 触发器 / 存储单元 /
 面包触发器），标「LifeWiki 图案」，不再说「真实电路」；Rendell 的图灵机用模拟器算出局部演化，
-P59 炮阵和通用图灵机用全图 + 实时小窗，太空填充者整屏实时生长。
+P59 炮阵和通用图灵机用全图 + 实时小窗，太空填充者整屏实时生长；大神们的作品现在有 5 张
+（P59 / 太空填充者 / 通用图灵机 / 栽培者 1 / OTCA 元像素）。
 随机演化重做成「三句话 + 一颗骰子 → 回环模式的连续拉远镜头 → 结尾」，不再出现操作录屏。
 
 v10 的改动集中在叙事：静物段先由「由规则演变出秩序」引入，再落到「秩序的产物：静物」；
@@ -183,6 +184,14 @@ v10 的改动集中在叙事：静物段先由「由规则演变出秩序」引�
 并把提问停留拉到 4 秒；P59 小窗换到用户框选的核心区；太空填充者的初始钻石居中；随机回环
 末帧拉到 4×4（3×3 个世界 + 半圈循环空间），同时修掉镜头末尾的横向漂移；结尾把两枚含糊的
 标签改成可核对的「单文件可下 / 手机能开」。
+
+v11（当前版）：震荡子标题改成与静物同款的「秩序的产物 + 92px 类名」；滑翔机实机录像改成
+「选中 / 落子 / 按下播放 / 它自己就走了」逐步出现，和鼠标动作对齐；黑屏去掉「呢」；门阵列
+四张卡改成 1 秒一张、第 5 秒提问、提问停 5 秒（场景 6→10 秒）；P59 小窗改用真正的密集区
+（7488,3328）；大神们的作品从 3 张加到 5 张（增加栽培者 1 / OTCA 元像素，整屏静态图案）；
+结尾删掉手机相关标签，只留「网页即开 / 单文件可下」。因为门阵列 +4 秒、大神展示 +10 秒，
+全片从 125 秒变成 139 秒；配乐暂时是把原 125 秒在阵列/大神段做 loop 延长的临时版
+（`score-v11.mp3`），等下一轮整体重排。
 
 ## 抖音竖版（60 秒）
 
@@ -199,8 +208,8 @@ v10 的改动集中在叙事：静物段先由「由规则演变出秩序」引�
 - 随机段用的是**竖屏回环录像** `clip-random-loop-vertical.mp4`，不是把横版裁一刀；
   重录命令：`node scripts/record-clips.mjs random-loop-vertical`。
 
-> 竖版和横版是两条独立时间线，不是简单裁切。横版保留 2 分 05 秒的完整叙事；
-> 竖版把最抓人的对撞放到 0 秒，把真值表、静物、振荡子这些“图鉴式”内容移出 60 秒。
+> 竖版和横版是两条独立时间线，不是简单裁切。横版现在是 2 分 19 秒的完整叙事；
+> 竖版把最抓人的对撞放到 0 秒，把真值表、静物、震荡子这些“图鉴式”内容移出 60 秒。
 
 **声音**：有一条自己合成的配乐，没有旁白——`scripts/make-music.mjs` 用纯代码做加法合成：
 暗色 pad 铺底、随段落逐渐加快的琶音、功能段进鼓、转场呼啸与上扬 riser，最后收在一个大三和弦上。
@@ -215,8 +224,10 @@ ffmpeg -i promo/public/music/score.wav -c:a libmp3lame -b:a 192k promo/public/mu
 node scripts/make-sfx.mjs         # 出生 / 死亡 / live / tick / whoosh / 碰撞 / 点击
 ```
 
-配乐由 `src/Promo.tsx` 里的 `<Audio src={staticFile('music/score.mp3')} />` 挂到整条时间线上；
-规则段的生死音效是 `RulesScene` 里单独挂的 `<Audio>`，不混进配乐，方便逐帧对齐。
+v11 的成片 139 秒，用的是临时拼接的 `music/score-v11.mp3`：把原 125 秒 `score.mp3` 在
+门阵列段 +4 秒、大神展示段 +10 秒做 loop 延长。原始 125 秒的 `score.mp3` 仍在，脚本没有改；
+等下一轮整体重排后再替换。配乐由 `src/Promo.tsx` 里的 `<Audio src={staticFile('music/score-v11.mp3')} />`
+挂在时间线上；规则段的生死音效是 `RulesScene` 里单独挂的 `<Audio>`，不混进配乐。
 
 ## 在自己电脑上改这支片子
 
@@ -243,7 +254,7 @@ pnpm render                         # 直接出 out/promo.mp4
 | `promo/src/lib/gates.ts` | 四种门的真实反应帧（与 / 或 / 非 / 异或） |
 | `promo/src/lib/circuits.ts` | 四台真实小电路（解复用器 / 触发器 / 存储单元 / 面包触发器）的坐标数据 |
 | `promo/src/assets/patterns.json` | 20 个预设图案的位图，由 `scripts/dump-patterns.mjs` 从主程序里导出 |
-| `promo/public/` | 界面截图、背景汤、`pattern-turing.png`、`grand-*.png`、`spacefiller-seed.png`、`clip-random-loop.mp4`、`clip-random-loop-vertical.mp4`、`clip-*-live.mp4`（图灵机 / P59 / 太空填充者 / 通用图灵机）、`sfx/*.wav`、`music/score.mp3`（2.9 MB）、`music/douyin.mp3`（1.4 MB，60 秒竖版配乐） |
+| `promo/public/` | 界面截图、背景汤、`pattern-turing.png`、`grand-*.png`（含 `grand-breeder.png` / `grand-otca.png`）、`spacefiller-seed.png`、`clip-random-loop.mp4`、`clip-random-loop-vertical.mp4`、`clip-*-live.mp4`（图灵机 / P59 / 太空填充者 / 通用图灵机）、`sfx/*.wav`、`music/score.mp3`（2.9 MB）、`music/score-v11.mp3`（3.2 MB，139 秒临时版）、`music/douyin.mp3`（1.4 MB，60 秒竖版配乐） |
 | `scripts/make-music.mjs` | 生成 125 秒完整版配乐（wav 中间产物） |
 | `scripts/make-douyin-music.mjs` | 生成 60 秒竖版配乐（仪式合唱 / 太鼓 / 808 / 音乐盒） |
 | `scripts/make-sfx.mjs` | 出生 / 死亡 / live / tick / whoosh / 碰撞 / 点击音效 |
@@ -265,11 +276,18 @@ pnpm render                         # 直接出 out/promo.mp4
 - 逻辑门那四张卡是引擎里跑出来的真实反应，不是示意图；但**不是可级联的标准门库**：
   与门的输出是一个静物方块，或门靠方块反射器把两路信号送到同一出口。片子里标“真实反应”。
   门阵列没有用符号，四张卡都是 LifeWiki 收录的图案，标「LifeWiki 图案」，不再写「真实电路」。
-- P59 小窗用 pattern 坐标 (3806,3108) 的 480×270，5 秒推近 1.35×；太空填充者整屏视频
-  用 `transform: translate(500px,300px) scale(1.35)` 把初始钻石移到画面中间，不再顶在左上角。
+- 大神们的作品 5 张：P59 / 太空填充者 / 通用图灵机 / 栽培者 1（`grand-breeder.png`）/
+  OTCA 元像素（`grand-otca.png`）；后两张是整屏静态图案，顶部标「真实图案 / LifeWiki 收录」。
+- P59 小窗用真正的密集区 pattern 坐标 (7488,3328) 的 480×270，5 秒推近 1.35×；太空填充者
+  整屏视频用 `transform: translate(500px,300px) scale(1.35)` 把初始钻石移到画面中间。
+- 滑翔机实机录像的标题按动作分步出现：「选中」→「落子」→「按下播放」→「它自己就走了」，
+  和鼠标的选中 / 落子 / 播放时刻对齐。
 - 随机片段的源是 `promo/public/clip-random-loop.mp4`：回环模式下随机汤从特写一路拉到
   **4×4 个世界（中间 3×3 + 周围半圈）**，**没有 UI**。录制时临时把 `view.minScale` 降到 0.1，
   否则 `setView` 会把 scale 夹在 fit/2，而 `ox/oy` 仍按更小的 scale 算，镜头末尾会横向漂移。
   要重录：`node scripts/record-clips.mjs random-loop`；录完用 ffmpeg 压到 12 MB 以内再入库。
-- 门阵列结尾用「将不同的阵列组合起来，又会得到什么？」把问题交给下一段，停留 4 秒；
-  图灵机开场回答「将不同的阵列组合起来 / 会得到一台机器」，然后才是标题和局部实时演化。
+- 门阵列场景 10 秒：四张卡 1 秒一张、第 5 秒抛出「将不同的阵列组合起来，又会得到什么？」、
+  停 5 秒；图灵机开场回答「将不同的阵列组合起来 / 会得到一台机器」。
+- 结尾只保留「网页即开 / 单文件可下」，不再提手机（手机能打开但 bug 多，暂时不写）。
+- 配乐：原 125 秒 `score.mp3` 在阵列段 +4 秒、大神段 +10 秒做了临时 loop 延长，输出
+  `score-v11.mp3`（139 秒）；这不是最终配乐，下一轮整体重排。

@@ -159,7 +159,6 @@ export const OutroScene: React.FC = () => {
         >
           <Chip>网页即开</Chip>
           <Chip>单文件可下</Chip>
-          <Chip>手机能开</Chip>
         </div>
 
         {/* GitHub：图标 + 仓库地址 + 开源说明 */}

@@ -20,7 +20,7 @@ export const BlackCaptionScene: React.FC = () => {
         <div style={{ fontSize: 50, fontWeight: 700, letterSpacing: 2, lineHeight: 1.55 }}>
           那有了逻辑，
           <br />
-          我们可以拿它来做什么呢？
+          我们可以拿它来做什么？
         </div>
         <div
           style={{
@@ -324,10 +324,10 @@ const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> =
 
 export const GateArrayScene: React.FC = () => {
   const frame = useCurrentFrame();
-  const fadeOut = interpolate(frame, [150, 180], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  // 问题提前到 2s 出现，留 4s 给观众读完
-  const closing = interpolate(frame, [60, 84], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const dim = interpolate(frame, [60, 110], [1, 0.18], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const fadeOut = interpolate(frame, [270, 300], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  // 四张卡 1 秒一张；全部出完后第 5 秒抛问题，留 5 秒读完
+  const closing = interpolate(frame, [150, 174], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const dim = interpolate(frame, [150, 210], [1, 0.18], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
     <Backdrop>
@@ -435,7 +435,7 @@ export const GateArrayScene: React.FC = () => {
             </div>
             <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '380px 380px', gap: 18 }}>
               {ARRAY_ITEMS.map((item, i) => (
-                <CircuitCard key={item.id} item={item} index={i} entry={i * 8} />
+                <CircuitCard key={item.id} item={item} index={i} entry={i * 30} />
               ))}
             </div>
           </div>
@@ -626,7 +626,7 @@ export const TuringMachineScene: React.FC = () => {
 
 // ── 宏大结构：三段真实大图案，直接播放模拟器算出来的局部演化 ──────────────
 type Grand = {
-  clip: string;
+  clip?: string;
   img: string;
   name: string;
   en: string;
@@ -640,8 +640,8 @@ type Grand = {
   crop: { x: number; y: number; w: number; h: number };
   /** 每帧推进几代 */
   gpf: number;
-  /** inset：全图当背景，右上角开一个实时演化的小窗；full：整屏都是视频 */
-  mode: 'inset' | 'full';
+  /** inset：全图当背景，右上角开一个实时演化的小窗；full：整屏都是视频；image：整屏静态图案 */
+  mode: 'inset' | 'full' | 'image';
   zoom?: number;
   localLabel?: string;
   /** 小窗在 5 秒里推近的倍数和焦点 */
@@ -664,11 +664,11 @@ const GRANDS: Grand[] = [
     credit: 'LifeWiki',
     pw: 8870,
     ph: 7352,
-    crop: { x: 3806, y: 3108, w: 480, h: 270 },
+    crop: { x: 7488, y: 3328, w: 480, h: 270 },
     gpf: 1,
     mode: 'inset',
     zoom: 4,
-    localLabel: '炮阵的核心区',
+    localLabel: '炮阵的密集区',
     insetZoom: 1.35,
     insetFocus: '50% 55%',
   },
@@ -706,6 +706,32 @@ const GRANDS: Grand[] = [
     insetZoom: 1.55,
     insetFocus: '58% 42%',
   },
+  {
+    img: 'grand-breeder.png',
+    name: '栽培者 1',
+    en: 'Breeder 1',
+    stat: '749 × 338 格',
+    note: '第一个被证明会二次增长的图案',
+    credit: 'Bill Gosper · 1970s',
+    pw: 749,
+    ph: 338,
+    crop: { x: 0, y: 0, w: 749, h: 338 },
+    gpf: 0,
+    mode: 'image',
+  },
+  {
+    img: 'grand-otca.png',
+    name: 'OTCA 元像素',
+    en: 'OTCA metapixel',
+    stat: '2,058 × 2,058 格',
+    note: '一个细胞里，再放一个宇宙',
+    credit: 'Brice Due · 2006',
+    pw: 2058,
+    ph: 2058,
+    crop: { x: 0, y: 0, w: 2058, h: 2058 },
+    gpf: 0,
+    mode: 'image',
+  },
 ];
 
 const SEG = 150;
@@ -719,7 +745,14 @@ const GrandSegment: React.FC<{ g: Grand; i: number; opacity: number }> = ({ g, i
 
   return (
     <AbsoluteFill style={{ opacity }}>
-      {g.mode === 'inset' ? (
+      {g.mode === 'image' ? (
+        <AbsoluteFill style={{ overflow: 'hidden', transform: `scale(${z}) translateX(${tx}px)` }}>
+          <Img
+            src={staticFile(g.img)}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'saturate(1.06) brightness(0.92)' }}
+          />
+        </AbsoluteFill>
+      ) : g.mode === 'inset' ? (
         <AbsoluteFill style={{ overflow: 'hidden', transform: `scale(${z}) translateX(${tx}px)` }}>
           <Img
             src={staticFile(g.img)}
@@ -729,7 +762,7 @@ const GrandSegment: React.FC<{ g: Grand; i: number; opacity: number }> = ({ g, i
       ) : (
         <AbsoluteFill style={{ overflow: 'hidden', transform: `scale(${z}) translateX(${tx}px)` }}>
           <OffthreadVideo
-            src={staticFile(g.clip)}
+            src={staticFile(g.clip!)}
             muted
             style={{
               width: '100%',
@@ -772,7 +805,7 @@ const GrandSegment: React.FC<{ g: Grand; i: number; opacity: number }> = ({ g, i
             }}
           >
             <OffthreadVideo
-              src={staticFile(g.clip)}
+              src={staticFile(g.clip!)}
               muted
               style={{
                 width: '100%',
@@ -866,7 +899,7 @@ const GrandSegment: React.FC<{ g: Grand; i: number; opacity: number }> = ({ g, i
             color: C.accent,
           }}
         >
-          {g.mode === 'inset' ? '局部实时' : '实时生长'}
+          {g.mode === 'inset' ? '局部实时' : g.mode === 'full' ? '实时生长' : '真实图案'}
         </div>
         <div
           style={{
@@ -879,7 +912,7 @@ const GrandSegment: React.FC<{ g: Grand; i: number; opacity: number }> = ({ g, i
             fontVariantNumeric: 'tabular-nums',
           }}
         >
-          第 {gen} 代
+          {g.mode === 'image' ? 'LifeWiki 收录' : `第 ${gen} 代`}
         </div>
       </div>
 
@@ -888,7 +921,7 @@ const GrandSegment: React.FC<{ g: Grand; i: number; opacity: number }> = ({ g, i
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
               <div style={{ fontSize: 15, letterSpacing: 6, color: C.accent }}>大神们的作品</div>
-              <div style={{ fontSize: 13, color: C.dim, letterSpacing: 2 }}>0{i + 1} / 03</div>
+              <div style={{ fontSize: 13, color: C.dim, letterSpacing: 2 }}>0{i + 1} / 0{GRANDS.length}</div>
             </div>
             <div style={{ fontSize: 66, fontWeight: 800, letterSpacing: 3 }}>{g.name}</div>
             <div style={{ marginTop: 6, fontSize: 20, letterSpacing: 4, color: C.accent }}>{g.en}</div>
@@ -923,7 +956,7 @@ export const GrandStructuresScene: React.FC = () => {
                 { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
               );
         return (
-          <Sequence key={g.clip} from={start} durationInFrames={SEG + XFADE}>
+          <Sequence key={g.clip ?? g.img} from={start} durationInFrames={SEG + XFADE}>
             <GrandSegment g={g} i={i} opacity={o} />
           </Sequence>
         );

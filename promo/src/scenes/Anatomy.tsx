@@ -363,10 +363,20 @@ export const OscillatorsScene: React.FC = () => {
       <AbsoluteFill style={{ padding: '86px 104px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
           <Rise delay={0}>
-            <Eyebrow>震荡子</Eyebrow>
-            <Heading size={54}>有些形状在原地打转</Heading>
-            <div style={{ marginTop: 14, fontSize: 23, color: C.dim }}>
-              它们叫震荡子：位置不动，但每一代都在变。
+            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+              <div style={{ width: 4, height: 92, borderRadius: 4, background: C.accent, opacity: 0.9 }} />
+              <div>
+                <Eyebrow style={{ marginBottom: 8 }}>秩序的产物</Eyebrow>
+                <div style={{ fontSize: 92, fontWeight: 800, letterSpacing: 10, lineHeight: 0.98, color: '#eafff8' }}>
+                  震荡子
+                </div>
+              </div>
+            </div>
+            <div style={{ marginTop: 18, fontSize: 26, color: C.text, letterSpacing: 1 }}>
+              有些形状在原地打转。
+            </div>
+            <div style={{ marginTop: 8, fontSize: 20, color: C.dim }}>
+              位置不动，但每一代都在变。
             </div>
           </Rise>
         </div>
@@ -695,10 +705,11 @@ export const InsertScene: React.FC<{
   file: string;
   step?: string;
   caption: string;
+  steps?: { at: number; text: string }[];
   rate?: number;
   startFrom?: number;
   outAt?: number;
-}> = ({ file, step, caption, rate = 1, startFrom = 0, outAt = 208 }) => {
+}> = ({ file, step, caption, steps, rate = 1, startFrom = 0, outAt = 208 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const s = spring({ frame: frame - 3, fps, config: { damping: 200, mass: 0.8 } });
@@ -725,7 +736,25 @@ export const InsertScene: React.FC<{
       <AbsoluteFill style={{ padding: '64px 96px' }}>
         <div style={{ opacity: s, transform: `translateY(${(1 - s) * 16}px)` }}>
           <div style={{ fontSize: 18, letterSpacing: 6, color: C.accent }}>{step ?? '实机演示'}</div>
-          <div style={{ marginTop: 12, fontSize: 38, fontWeight: 700 }}>{caption}</div>
+          {steps ? (
+            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 14, fontSize: 36, fontWeight: 700 }}>
+              {steps.map((x, i) => {
+                const a = interpolate(frame, [x.at, x.at + 8], [0, 1], {
+                  extrapolateLeft: 'clamp',
+                  extrapolateRight: 'clamp',
+                });
+                const active = frame >= x.at && (i === steps.length - 1 || frame < steps[i + 1].at);
+                return (
+                  <div key={x.text} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    {i > 0 && a > 0.5 && <span style={{ color: C.dim, fontWeight: 400 }}>·</span>}
+                    <span style={{ opacity: a, color: active ? C.accent : C.text }}>{x.text}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ marginTop: 12, fontSize: 38, fontWeight: 700 }}>{caption}</div>
+          )}
         </div>
       </AbsoluteFill>
     </AbsoluteFill>

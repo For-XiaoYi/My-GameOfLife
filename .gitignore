@@ -23,3 +23,7 @@ CLAUDE.md
 .DS_Store
 Thumbs.db
 *.log
+
+# 本机 AI 协作中间数据（RLE、抽帧、临时片段）
+.dsh/
+
