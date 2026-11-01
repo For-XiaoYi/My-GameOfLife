@@ -17,8 +17,10 @@ export const BlackCaptionScene: React.FC = () => {
     <AbsoluteFill style={{ background: '#05080c', color: C.text, justifyContent: 'center', alignItems: 'center' }}>
       <div style={{ opacity: a, transform: `translateY(${(1 - a) * 16}px) scale(${0.985 + a * 0.015})`, textAlign: 'center' }}>
         <div style={{ fontSize: 16, letterSpacing: 10, color: C.accent, marginBottom: 24 }}>问下去</div>
-        <div style={{ fontSize: 48, fontWeight: 700, letterSpacing: 2, lineHeight: 1.35 }}>
-          那有了逻辑，<span style={{ color: C.accent }}>我们可以拿它来做什么？</span>
+        <div style={{ fontSize: 48, fontWeight: 700, letterSpacing: 2, lineHeight: 1.45 }}>
+          那有了逻辑，
+          <br />
+          <span style={{ color: C.accent }}>我们可以拿它来做什么？</span>
         </div>
         <div
           style={{
@@ -238,7 +240,7 @@ type ArrayItem = CircuitDef & {
   frames: Frame[];
 };
 
-const buildArrayItem = (c: CircuitDef, pad: number, px: number): ArrayItem => {
+const buildArrayItem = (c: CircuitDef, pad: number, px: number, still = false): ArrayItem => {
   const gap = 1;
   const w = c.w + pad * 2;
   const h = c.h + pad * 2;
@@ -249,7 +251,7 @@ const buildArrayItem = (c: CircuitDef, pad: number, px: number): ArrayItem => {
     cells[(y + pad) * w + (x + pad)] = 1;
   }
   const board: Bitmap = { w, h, cells };
-  const frames = framesOf(`circuit-${c.id}`, board, 90, { wrapX: false, wrapY: false });
+  const frames = framesOf(`circuit-${c.id}`, board, still ? 1 : 90, { wrapX: false, wrapY: false });
   return { ...c, board, px, gap, frames };
 };
 
@@ -281,8 +283,9 @@ const ARRAY_ITEMS: ArrayItem[] = [
     { id: 'clock', name: '时钟', en: 'CLOCK', w: getPattern('pulsar').w, h: getPattern('pulsar').h, cells: getPattern('pulsar').cells },
     4,
     8,
+    true,
   ),
-  buildArrayItem(HALF_ADDER, 4, 3),
+  buildArrayItem(HALF_ADDER, 4, 3, true),
 ];
 
 const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> = ({ item, index, entry }) => {
@@ -297,7 +300,7 @@ const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> =
     <div
       style={{
         width: 380,
-        height: 380,
+        height: 330,
         padding: '14px 16px 12px',
         borderRadius: 16,
         border: `1px solid ${C.line}`,
@@ -355,10 +358,10 @@ const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> =
 export const GateArrayScene: React.FC = () => {
   const frame = useCurrentFrame();
   const fadeOut = interpolate(frame, [330, 360], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  // 六张卡三行，滚到第 3 行露出 3/4（scroll≈316）时才开始淡出；左侧和右侧一起淡
-  const scroll = interpolate(frame, [30, 210], [0, 416], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const closing = interpolate(frame, [167, 195], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const dim = interpolate(frame, [167, 225], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  // 卡改成 330 高后，三行内容 1026、视口 778；滚到第 3 行露出 3/4（scroll≈166）时开始淡出
+  const scroll = interpolate(frame, [30, 210], [0, 248], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const closing = interpolate(frame, [150, 180], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const dim = interpolate(frame, [150, 208], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
     <Backdrop>
@@ -494,17 +497,28 @@ export const GateArrayScene: React.FC = () => {
             position: 'absolute',
             left: 0,
             right: 0,
-            top: '40%',
+            top: '35%',
             textAlign: 'center',
             opacity: closing,
-            fontSize: 42,
-            fontWeight: 700,
-            letterSpacing: 3,
             color: '#eafff8',
             textShadow: '0 2px 34px rgba(5,8,12,0.95), 0 0 24px rgba(108,245,210,0.15)',
           }}
         >
-          将不同的阵列组合起来，又会得到什么？
+          <div style={{ fontSize: 16, letterSpacing: 10, color: C.accent, marginBottom: 22 }}>问下去</div>
+          <div style={{ fontSize: 44, fontWeight: 700, letterSpacing: 2, lineHeight: 1.45 }}>
+            将不同的阵列组合起来，
+            <br />
+            <span style={{ color: C.accent }}>又会得到什么？</span>
+          </div>
+          <div
+            style={{
+              width: 132 * closing,
+              height: 2,
+              margin: '32px auto 0',
+              background: C.accent,
+              opacity: 0.55,
+            }}
+          />
         </div>
       </AbsoluteFill>
     </Backdrop>
@@ -722,8 +736,9 @@ const GRANDS: Grand[] = [
     mode: 'inset',
     zoom: 4,
     localLabel: '炮阵的交叉区',
-    insetZoom: 1.35,
+    insetZoom: 1.5,
     insetFocus: '50% 55%',
+    insetZoomOut: true,
   },
   {
     clip: 'clip-spacefiller-live.mp4',
