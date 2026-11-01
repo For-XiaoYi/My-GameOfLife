@@ -309,7 +309,7 @@ export const RulesScene: React.FC = () => {
           {/* 左：标题 + 四条规则 */}
           <div style={{ width: 820 }}>
             <Eyebrow>它是怎么运转的</Eyebrow>
-            <Heading size={58}>它只有四条规则</Heading>
+            <Heading size={58}>只有四条规则</Heading>
             <div style={{ marginTop: 14, fontSize: 24, color: C.dim, lineHeight: 1.6, maxWidth: 720 }}>
               每个格子只有生或死，命运只看身边的 8 个邻居。
             </div>

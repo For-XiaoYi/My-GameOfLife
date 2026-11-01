@@ -234,6 +234,8 @@ export const StillsScene: React.FC = () => {
   const cardsIn = interpolate(frame, [44, 58], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   // 从第 8 帧开始从 10,000 往上跳：呼应“一万代也不动一下”
   const gen = 10000 + Math.max(0, frame - 8) * 64;
+  const headerIn = spring({ frame: frame - 46, fps, config: { damping: 200, mass: 0.8 } });
+  const quoteIn = interpolate(frame, [54, 68], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
     <Backdrop>
@@ -246,10 +248,10 @@ export const StillsScene: React.FC = () => {
           transform: `scale(${1 + (1 - intro) * 0.04})`,
         }}
       >
-        <Eyebrow>组件 · 其一</Eyebrow>
-        <div style={{ fontSize: 92, fontWeight: 800, letterSpacing: 4 }}>固定组件</div>
+        <Eyebrow>从规则到秩序</Eyebrow>
+        <div style={{ fontSize: 92, fontWeight: 800, letterSpacing: 4 }}>由规则演变出秩序</div>
         <div style={{ marginTop: 26, fontSize: 34, color: C.text, letterSpacing: 3, opacity: 0.9 }}>
-          有些形状，一万代也不动一下
+          把时间拉长，规则会自己长出形状。
         </div>
       </AbsoluteFill>
 
@@ -257,11 +259,21 @@ export const StillsScene: React.FC = () => {
       {cardsIn > 0 && (
         <AbsoluteFill style={{ padding: '0 104px', justifyContent: 'center', opacity: cardsIn }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 40 }}>
-            <div style={{ maxWidth: 1140 }}>
-              <Eyebrow>固定组件 · 静物</Eyebrow>
-              <Heading size={50}>每一代都被重新判定，结果永远是自己</Heading>
-              <div style={{ marginTop: 16, fontSize: 23, color: C.dim, maxWidth: 820, lineHeight: 1.6 }}>
-                它们叫静物。平衡得很精确 —— 少一格会塌，多一格会炸。
+            <div style={{ maxWidth: 1190, opacity: headerIn, transform: `translateY(${(1 - headerIn) * 18}px)` }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
+                <div style={{ width: 4, height: 92, borderRadius: 4, background: C.accent, opacity: 0.9 }} />
+                <div>
+                  <Eyebrow style={{ marginBottom: 8 }}>秩序的产物</Eyebrow>
+                  <div style={{ fontSize: 92, fontWeight: 800, letterSpacing: 10, lineHeight: 0.98, color: '#eafff8' }}>
+                    静物
+                  </div>
+                </div>
+              </div>
+              <div style={{ marginTop: 18, fontSize: 26, color: C.text, letterSpacing: 1, opacity: quoteIn }}>
+                每一代都被重新判定，结果永远是自己。
+              </div>
+              <div style={{ marginTop: 8, fontSize: 20, color: C.dim, maxWidth: 900, lineHeight: 1.6, opacity: quoteIn }}>
+                平衡得很精确 —— 少一格会塌，多一格会炸。
               </div>
             </div>
             <EraBadge gen={gen} />
@@ -351,10 +363,10 @@ export const OscillatorsScene: React.FC = () => {
       <AbsoluteFill style={{ padding: '86px 104px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
           <Rise delay={0}>
-            <Eyebrow>组件 · 其二</Eyebrow>
+            <Eyebrow>震荡子</Eyebrow>
             <Heading size={54}>有些形状在原地打转</Heading>
             <div style={{ marginTop: 14, fontSize: 23, color: C.dim }}>
-              它们叫振荡子：位置不动，但每一代都在变。
+              它们叫震荡子：位置不动，但每一代都在变。
             </div>
           </Rise>
         </div>
@@ -509,16 +521,11 @@ export const GliderStaticScene: React.FC = () => {
 
           <div style={{ width: 620 }}>
             <Rise delay={0}>
-              <Eyebrow>组件 · 其三</Eyebrow>
-              <Heading size={62}>滑翔机</Heading>
+              <Eyebrow>滑翔机</Eyebrow>
+              <Heading size={48}>一个只有五格的图形</Heading>
             </Rise>
-            <Rise delay={12} style={{ marginTop: 30 }}>
-              <div style={{ fontSize: 32, color: C.text, lineHeight: 1.6, fontWeight: 700 }}>五格而已。</div>
-            </Rise>
-            <Rise delay={36} style={{ marginTop: 14 }}>
-              <div style={{ fontSize: 26, color: C.text, lineHeight: 1.65, opacity: 0.85 }}>
-                一旦跑起来，它会一直朝一个方向走。
-              </div>
+            <Rise delay={16} style={{ marginTop: 22 }}>
+              <div style={{ fontSize: 30, color: C.text, lineHeight: 1.6, fontWeight: 700 }}>经过演化，会发生什么</div>
             </Rise>
             <Rise delay={66} style={{ marginTop: 38 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 20, color: C.accent }}>
@@ -553,7 +560,7 @@ export const GunScene: React.FC = () => {
         <div style={{ display: 'flex', gap: 46, alignItems: 'center' }}>
           <div style={{ width: 620 }}>
             <Rise delay={0}>
-              <Eyebrow>组件 · 其四</Eyebrow>
+              <Eyebrow>1970 · 无限增长</Eyebrow>
               <Heading size={50}>滑翔枪</Heading>
             </Rise>
             <div style={{ marginTop: 26 }}>
@@ -651,7 +658,7 @@ export const GunTeaserScene: React.FC = () => {
       />
       <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center' }}>
         <div style={{ opacity: title, transform: `translateY(${(1 - title) * 22}px)`, textAlign: 'center' }}>
-          <Eyebrow>组件 · 其四</Eyebrow>
+          <Eyebrow>更进一步</Eyebrow>
           <div style={{ fontSize: 116, fontWeight: 800, letterSpacing: 8, lineHeight: 1 }}>滑翔枪</div>
         </div>
         <div

@@ -301,6 +301,7 @@ try {
       const W = board.clientWidth;
       const H = board.clientHeight;
       const s = 14;
+      L.view.minScale = 0.1;
       L.view.setView({ scale: s, ox: W / 2 - 512 * s, oy: H / 2 - 288 * s });
       await new Promise((r) => setTimeout(r, 500));
       return { W, H };
@@ -313,8 +314,9 @@ try {
         const W = board.clientWidth;
         const H = board.clientHeight;
         const s0 = 14;
-        const s1 = 0.8;
+        const s1 = ${vertical ? 0.8 : 0.47};
         const dur = ${vertical ? 4200 : 9000};
+        L.view.minScale = 0.1;
         const t0 = performance.now();
         const ease = (p) => p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
         await new Promise((res) => {

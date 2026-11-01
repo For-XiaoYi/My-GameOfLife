@@ -18,7 +18,7 @@ export const BlackCaptionScene: React.FC = () => {
       <div style={{ opacity: a, transform: `translateY(${(1 - a) * 18}px)`, textAlign: 'center' }}>
         <div style={{ fontSize: 18, letterSpacing: 10, color: C.accent, marginBottom: 26 }}>问下去</div>
         <div style={{ fontSize: 50, fontWeight: 700, letterSpacing: 2, lineHeight: 1.55 }}>
-          那有了判断，
+          那有了逻辑，
           <br />
           我们可以拿它来做什么呢？
         </div>
@@ -203,7 +203,7 @@ export const GatesScene: React.FC = () => {
     <Backdrop>
       <AbsoluteFill style={{ padding: '76px 120px', opacity: out }}>
         <Rise delay={0}>
-          <Eyebrow>逻辑 · 其六</Eyebrow>
+          <Eyebrow>逻辑</Eyebrow>
           <Heading size={46}>四种门，四种反应</Heading>
           <div style={{ marginTop: 10, fontSize: 20, color: C.dim }}>
             都是细胞真的在跑 —— 为了让眼睛看清，每张卡循环同一组输入。
@@ -281,6 +281,7 @@ const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> =
       }}
     >
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: C.accent, letterSpacing: 1 }}>0{index + 1}</div>
         <div style={{ fontSize: 24, fontWeight: 700 }}>{item.name}</div>
         <div style={{ fontSize: 11, letterSpacing: 2, color: C.dim }}>{item.en}</div>
         <div
@@ -294,7 +295,7 @@ const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> =
             letterSpacing: 1,
           }}
         >
-          真实电路
+          LifeWiki 图案
         </div>
       </div>
 
@@ -324,8 +325,9 @@ const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> =
 export const GateArrayScene: React.FC = () => {
   const frame = useCurrentFrame();
   const fadeOut = interpolate(frame, [150, 180], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const closing = interpolate(frame, [128, 150], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const dim = interpolate(frame, [128, 166], [1, 0.18], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  // 问题提前到 2s 出现，留 4s 给观众读完
+  const closing = interpolate(frame, [60, 84], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const dim = interpolate(frame, [60, 110], [1, 0.18], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
     <Backdrop>
@@ -333,13 +335,13 @@ export const GateArrayScene: React.FC = () => {
         <div style={{ display: 'flex', gap: 44, alignItems: 'center', justifyContent: 'center', height: '100%' }}>
           <div style={{ width: 760 }}>
             <Rise delay={0}>
-              <Eyebrow>从门到机器</Eyebrow>
+              <Eyebrow>从门到阵列</Eyebrow>
               <Heading size={52}>把门排成阵列</Heading>
               <div style={{ marginTop: 20, fontSize: 24, color: C.text, lineHeight: 1.7, opacity: 0.9 }}>
                 一颗滑翔机是一个比特，一排门是一条信号线。
               </div>
               <div style={{ marginTop: 10, fontSize: 21, color: C.dim, lineHeight: 1.7 }}>
-                右边不是画出来的符号 —— 是四台真的在跑的小电路。
+                右边不是画出来的符号 —— 是 LifeWiki 上收录的真实图案。
               </div>
             </Rise>
 
@@ -347,8 +349,7 @@ export const GateArrayScene: React.FC = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 {[
                   { t: '逻辑门', n: '4 种反应' },
-                  { t: '门阵列', n: '真实电路', on: true },
-                  { t: '图灵机', n: '一台机器' },
+                  { t: '门阵列', n: 'LifeWiki 图案', on: true },
                 ].map((s, i) => (
                   <div key={s.t} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                     <div
@@ -362,17 +363,36 @@ export const GateArrayScene: React.FC = () => {
                       <div style={{ fontSize: 20, fontWeight: 700, color: s.on ? C.accent : C.text }}>{s.t}</div>
                       <div style={{ fontSize: 14, color: C.dim, marginTop: 2 }}>{s.n}</div>
                     </div>
-                    {i < 2 && <div style={{ fontSize: 20, color: C.dim }}>→</div>}
+                    {i < 1 && <div style={{ fontSize: 20, color: C.dim }}>→</div>}
                   </div>
                 ))}
               </div>
             </Rise>
 
-            <Rise delay={90} style={{ marginTop: 28 }}>
-              <div style={{ fontSize: 16, color: C.dim, lineHeight: 1.75 }}>
-                解复用器 · 触发器 · 存储单元 · 面包触发器
-                <br />
-                都是 LifeWiki 上真实搭出来的图案，每一格都在按四条规则演化。
+            <Rise delay={84} style={{ marginTop: 30 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, maxWidth: 560 }}>
+                {['解复用器', '触发器', '存储单元', '面包触发器'].map((n, i) => (
+                  <div
+                    key={n}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      padding: '8px 12px',
+                      borderRadius: 10,
+                      border: `1px solid ${C.line}`,
+                      background: 'rgba(8,13,19,0.66)',
+                    }}
+                  >
+                    <span style={{ fontSize: 11, color: C.accent, fontWeight: 800 }}>0{i + 1}</span>
+                    <span style={{ fontSize: 15, color: C.text }}>{n}</span>
+                  </div>
+                ))}
+              </div>
+            </Rise>
+            <Rise delay={98} style={{ marginTop: 16 }}>
+              <div style={{ fontSize: 15, color: C.dim, lineHeight: 1.7, maxWidth: 560 }}>
+                都是 LifeWiki 收录的图案，每一格都按四条规则演化。
               </div>
             </Rise>
           </div>
@@ -397,6 +417,22 @@ export const GateArrayScene: React.FC = () => {
                 borderRadius: 18,
               }}
             />
+            <div
+              style={{
+                position: 'absolute',
+                left: 4,
+                top: -34,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                fontSize: 13,
+                letterSpacing: 2,
+                color: C.dim,
+              }}
+            >
+              <span style={{ color: C.accent }}>2 × 2</span>
+              <span>四张图案，四种反应</span>
+            </div>
             <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '380px 380px', gap: 18 }}>
               {ARRAY_ITEMS.map((item, i) => (
                 <CircuitCard key={item.id} item={item} index={i} entry={i * 8} />
@@ -406,7 +442,7 @@ export const GateArrayScene: React.FC = () => {
         </div>
       </AbsoluteFill>
 
-      {/* 结尾把问题抛给下一段：四块电路接起来是什么？ */}
+      {/* 结尾把问题抛给下一段：将不同的阵列组合起来，会得到什么？ */}
       <AbsoluteFill style={{ pointerEvents: 'none' }}>
         <div style={{ position: 'absolute', inset: 0, background: `rgba(5,8,12,${0.56 * closing})` }} />
         <div
@@ -424,7 +460,7 @@ export const GateArrayScene: React.FC = () => {
             textShadow: '0 2px 34px rgba(5,8,12,0.95), 0 0 24px rgba(108,245,210,0.15)',
           }}
         >
-          四块电路，接起来会是什么？
+          将不同的阵列组合起来，又会得到什么？
         </div>
       </AbsoluteFill>
     </Backdrop>
@@ -446,8 +482,8 @@ export const TuringMachineScene: React.FC = () => {
       <AbsoluteFill style={{ padding: '72px 96px', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 44 }}>
         <div style={{ width: 470, flexShrink: 0 }}>
           <Rise delay={0}>
-            <div style={{ fontSize: 16, letterSpacing: 7, color: C.dim }}>四块电路接起来</div>
-            <div style={{ marginTop: 6, fontSize: 34, fontWeight: 800, color: C.accent }}>是一台机器。</div>
+            <div style={{ fontSize: 16, letterSpacing: 7, color: C.dim }}>将不同的阵列组合起来</div>
+            <div style={{ marginTop: 6, fontSize: 34, fontWeight: 800, color: C.accent }}>会得到一台机器。</div>
             <div style={{ marginTop: 20 }}>
               <Eyebrow>2000 · Paul Rendell</Eyebrow>
               <Heading size={68}>图灵机</Heading>
@@ -455,7 +491,7 @@ export const TuringMachineScene: React.FC = () => {
           </Rise>
           <div style={{ opacity: textIn, transform: `translateY(${(1 - textIn) * 16}px)` }}>
             <div style={{ marginTop: 26, fontSize: 25, color: C.text, lineHeight: 1.7, opacity: 0.9 }}>
-              把门阵列接起来，就是一台图灵机。
+              把不同的阵列组合起来，就是一台图灵机。
             </div>
             <div style={{ marginTop: 16, fontSize: 22, color: C.dim, lineHeight: 1.65 }}>
               这四条规则，能算任何可计算的东西。
@@ -613,6 +649,8 @@ type Grand = {
   insetFocus?: string;
   /** 右下角的种子卡（太空填充者） */
   seed?: string;
+  /** 整屏视频的取景偏移（太空填充者把钻石移到画面中间） */
+  videoTransform?: string;
 };
 
 const GRANDS: Grand[] = [
@@ -626,11 +664,11 @@ const GRANDS: Grand[] = [
     credit: 'LifeWiki',
     pw: 8870,
     ph: 7352,
-    crop: { x: 3612, y: 3860, w: 480, h: 270 },
+    crop: { x: 3806, y: 3108, w: 480, h: 270 },
     gpf: 1,
     mode: 'inset',
     zoom: 4,
-    localLabel: '炮阵的密集区',
+    localLabel: '炮阵的核心区',
     insetZoom: 1.35,
     insetFocus: '50% 55%',
   },
@@ -648,6 +686,7 @@ const GRANDS: Grand[] = [
     gpf: 3,
     mode: 'full',
     seed: 'spacefiller-seed.png',
+    videoTransform: 'translate(500px, 300px) scale(1.35)',
   },
   {
     clip: 'clip-utm-live.mp4',
@@ -692,7 +731,13 @@ const GrandSegment: React.FC<{ g: Grand; i: number; opacity: number }> = ({ g, i
           <OffthreadVideo
             src={staticFile(g.clip)}
             muted
-            style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'saturate(1.1) brightness(1.05)' }}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              filter: 'saturate(1.1) brightness(1.05)',
+              transform: g.videoTransform,
+            }}
           />
         </AbsoluteFill>
       )}
