@@ -2451,6 +2451,19 @@ body.dragging-sort {
   color: var(--dim);
 }
 
+/* 版本号：确认听到的是新版，而不是缓存里的旧页面 */
+.sound-ver {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--dim);
+  text-align: right;
+}
+
+.sound-ver b {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .sound-live {
   margin-top: 2px;
   padding: 12px 14px;

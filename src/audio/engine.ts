@@ -44,6 +44,9 @@ export interface SoundSettings {
 const STORAGE_KEY = 'life-studio:sound';
 const DEFAULT_SETTINGS: SoundSettings = { muted: false, music: 0.7, sfx: 0.8 };
 
+/** 版本号：声音面板里会显示，用来确认你听到的确实是新版而不是缓存里的旧页面 */
+export const AUDIO_VERSION = 'v4 · 鼓点底 + 长笛只在律动期';
+
 const TICK_MS = 30;
 /** 提前多久把音符排进音频线程 */
 const LOOKAHEAD = 0.18;
@@ -379,13 +382,22 @@ export class SoundEngine {
     const time = now + 0.06;
     const beatDur = 60 / this.tempo;
     if (this.mode === 'void') {
-      this.bassNote(33, time, 8, 0.022);
+      this.bassNote(33, time, 8, 0.028);
       return;
     }
     const chord = CHORDS[PROGRESSION[this.chordIdx]!]!;
     const cosmic = this.mode === 'cosmic';
-    this.pad(chord.pad, time, beatDur * 4 * (cosmic ? 1.6 : 1.05), cosmic ? 0.022 : this.mode === 'bloom' ? 0.13 : 0.085 + 0.035 * this.groove, cosmic ? 1.8 : 0.8);
-    this.bassNote(chord.bass, time, beatDur * (cosmic ? 5 : 2.4), cosmic ? 0.075 : 0.14);
+    // 平时不铺 pad：底色是鼓和低音；律动期和悠远才把和声铺回来
+    if (cosmic || this.groove > 0.12) {
+      this.pad(
+        chord.pad,
+        time,
+        beatDur * 4 * (cosmic ? 1.6 : 1.05),
+        cosmic ? 0.022 : 0.1 + 0.04 * this.groove,
+        cosmic ? 1.8 : 0.8,
+      );
+    }
+    this.bassNote(chord.bass, time, beatDur * (cosmic ? 5 : 2.4), cosmic ? 0.075 : 0.16);
   }
 
   // ── 目标参数（随模式平滑过渡） ──────────────────────────────
@@ -461,12 +473,12 @@ export class SoundEngine {
   private scheduleStep(step: number, time: number): void {
     const mode = this.mode;
 
-    // ── 死寂：不铺和声，只有一记很深的长音 + 一下一下的微弱心跳
+    // ── 死寂：不铺和声，只有一下一下的心跳（间隔很长表示微弱，但音量要听得见）
     if (mode === 'void') {
-      if (step % 8 === 0) this.kick(time, 0.055);
-      if (step % 8 === 1) this.kick(time, 0.03);
-      if (step % 32 === 0) this.bassNote(33, time, 8, 0.022);
-      if (step % 64 === 40 && Math.random() < 0.5) this.pluck(81, time, 0.014, 2.2, 0.25);
+      if (step % 16 === 0) this.kick(time, 0.22);
+      if (step % 16 === 1) this.kick(time, 0.14);
+      if (step % 32 === 0) this.bassNote(33, time, 8, 0.028);
+      if (step % 64 === 40 && Math.random() < 0.5) this.pluck(81, time, 0.016, 2.2, 0.25);
       return;
     }
 
@@ -475,17 +487,19 @@ export class SoundEngine {
     const chordEvery = 16;
     const chordName = PROGRESSION[this.chordIdx]!;
     const chord = CHORDS[chordName]!;
+    const grooveNow = this.groove;
 
-    // ── 和声：每小节换一次，pad 一直铺着（悠远时铺得更长、更慢）
+    // ── 和声：平时不铺 pad（底色就是鼓 + 低音），律动期和悠远才把和声铺回来
     if (step % chordEvery === 0) {
       // 刚在切模式时铺过就跳过，避免两层 pad 叠在一起突然变响
       if (time - this.lastPadAt > 0.7) {
         const cosmic = mode === 'cosmic';
-        const dur = beatDur * 4 * (cosmic ? 1.6 : 1.05);
-        // 平时 pad 压到很低，只当一层背景；律动期再抬回来
-        const gain = cosmic ? 0.022 : mode === 'bloom' ? 0.13 : 0.085 + 0.035 * this.groove;
-        this.pad(chord.pad, time, dur, gain, cosmic ? 1.8 : 0.8);
-        this.bassNote(chord.bass, time, beatDur * (cosmic ? 5 : 2.4), cosmic ? 0.075 : 0.14);
+        if (cosmic || grooveNow > 0.12) {
+          const dur = beatDur * 4 * (cosmic ? 1.6 : 1.05);
+          const gain = cosmic ? 0.022 : 0.1 + 0.04 * grooveNow;
+          this.pad(chord.pad, time, dur, gain, cosmic ? 1.8 : 0.8);
+        }
+        this.bassNote(chord.bass, time, beatDur * (cosmic ? 5 : 2.4), cosmic ? 0.075 : 0.16);
       }
       this.chordIdx = (this.chordIdx + 1) % PROGRESSION.length;
     }
@@ -504,11 +518,11 @@ export class SoundEngine {
     // ── 动次打次：这才是底色。正拍 1、3 底鼓，2、4 军鼓，八分踩镲
     const drums = this.drumEnergy;
     if (drums > 0.02) {
-      if (inBar === 0 || inBar === 8) this.kick(time, 0.13 + 0.15 * drums);
-      if (inBar === 4 || inBar === 12) this.snare(time, 0.04 + 0.06 * drums);
-      if (inBar % 2 === 1) this.hat(time, 0.008 + 0.024 * drums, inBar % 4 === 1 ? 0.25 : -0.22);
+      if (inBar === 0 || inBar === 8) this.kick(time, 0.22 + 0.18 * drums);
+      if (inBar === 4 || inBar === 12) this.snare(time, 0.07 + 0.08 * drums);
+      if (inBar % 2 === 1) this.hat(time, 0.012 + 0.03 * drums, inBar % 4 === 1 ? 0.25 : -0.22);
       // 绽放时补两下弱拍底鼓，推得更急
-      if (drums > 0.7 && (inBar === 6 || inBar === 14)) this.kick(time, 0.06 + 0.06 * drums);
+      if (drums > 0.7 && (inBar === 6 || inBar === 14)) this.kick(time, 0.09 + 0.07 * drums);
     }
 
     // ── 低音：每小节的根音在和声块里，这里只补绽放的反拍

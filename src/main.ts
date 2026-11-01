@@ -16,7 +16,7 @@ import { parsePatternText, toRle } from './core/rle.ts';
 import { Store, uid, type SnapshotRecord, type ClipRecord } from './core/storage.ts';
 import { Viewport } from './view/viewport.ts';
 import { Renderer, makeThumb, paintWorldPreview, type Ghost, type ShapePreview } from './render/renderer.ts';
-import { sound } from './audio/engine.ts';
+import { sound, AUDIO_VERSION } from './audio/engine.ts';
 
 // ──────────────────────────────────────────────────────────────────────────
 // DOM 小工具
@@ -4174,7 +4174,10 @@ function openSoundSettings(): void {
           <span>音乐跟着画布走：没有细胞时只有一下一下的微弱心跳；放入细胞后是动次打次的鼓点（正拍底鼓 + 2、4 拍军鼓 + 踩镲），长笛只在律动期进来；连着放图案、连着画细胞会进入律动期（长笛 + 桶鼓 + 拍手 + 切分低音），停手几秒后自己回到鼓点；镜头拉远到世界之外时变成悠远的长混响。</span>
         </div>
 
+        <div class="sound-ver">音频版本 <b>${AUDIO_VERSION}</b>　·　听到的如果不是这个版本，按 <kbd>Ctrl</kbd>+<kbd>F5</kbd> 强制刷新</div>
+
         <div class="btn-row" style="justify-content:flex-end;margin-top:12px">
+          <button type="button" class="btn" id="snd-demo">试听律动</button>
           <button type="button" class="btn" id="snd-test">试听音效</button>
           <button type="button" class="btn primary" id="snd-done">完成</button>
         </div>
@@ -4216,6 +4219,12 @@ function openSoundSettings(): void {
       sound.unlock();
       sound.sfx('stamp');
       window.setTimeout(() => sound.sfx('birth'), 140);
+    });
+    // 试听律动：直接推一段律动期，方便确认"鼓点 + 长笛"真的生效了
+    body.querySelector('#snd-demo')!.addEventListener('click', () => {
+      sound.unlock();
+      sound.kickGroove(1.5);
+      toast('律动期触发：鼓点 + 长笛，约 5 秒后回到正常');
     });
     body.querySelector('#snd-done')!.addEventListener('click', () => closeModal());
 
@@ -4617,6 +4626,7 @@ function bindUi(): void {
 async function boot(): Promise<void> {
   sound.init();
   applySoundButton();
+  console.info(`生命游戏 · 音频 ${AUDIO_VERSION}`);
   store = new Store();
   try {
     await store.init();

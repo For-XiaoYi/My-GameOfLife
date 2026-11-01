@@ -2459,6 +2459,19 @@ body.dragging-sort {
   color: var(--dim);
 }
 
+/* 版本号：确认听到的是新版，而不是缓存里的旧页面 */
+.sound-ver {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--dim);
+  text-align: right;
+}
+
+.sound-ver b {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 .sound-live {
   margin-top: 2px;
   padding: 12px 14px;
@@ -5410,6 +5423,7 @@ body.dragging-sort {
   // src/audio/engine.ts
   var STORAGE_KEY = "life-studio:sound";
   var DEFAULT_SETTINGS = { muted: false, music: 0.7, sfx: 0.8 };
+  var AUDIO_VERSION = "v4 · 鼓点底 + 长笛只在律动期";
   var TICK_MS = 30;
   var LOOKAHEAD = 0.18;
   var clamp2 = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
@@ -5693,13 +5707,21 @@ body.dragging-sort {
       const time = now + 0.06;
       const beatDur = 60 / this.tempo;
       if (this.mode === "void") {
-        this.bassNote(33, time, 8, 0.022);
+        this.bassNote(33, time, 8, 0.028);
         return;
       }
       const chord = CHORDS[PROGRESSION[this.chordIdx]];
       const cosmic = this.mode === "cosmic";
-      this.pad(chord.pad, time, beatDur * 4 * (cosmic ? 1.6 : 1.05), cosmic ? 0.022 : this.mode === "bloom" ? 0.13 : 0.085 + 0.035 * this.groove, cosmic ? 1.8 : 0.8);
-      this.bassNote(chord.bass, time, beatDur * (cosmic ? 5 : 2.4), cosmic ? 0.075 : 0.14);
+      if (cosmic || this.groove > 0.12) {
+        this.pad(
+          chord.pad,
+          time,
+          beatDur * 4 * (cosmic ? 1.6 : 1.05),
+          cosmic ? 0.022 : 0.1 + 0.04 * this.groove,
+          cosmic ? 1.8 : 0.8
+        );
+      }
+      this.bassNote(chord.bass, time, beatDur * (cosmic ? 5 : 2.4), cosmic ? 0.075 : 0.16);
     }
     // ── 目标参数（随模式平滑过渡） ──────────────────────────────
     tempoTarget() {
@@ -5757,10 +5779,10 @@ body.dragging-sort {
     scheduleStep(step, time) {
       const mode = this.mode;
       if (mode === "void") {
-        if (step % 8 === 0) this.kick(time, 0.055);
-        if (step % 8 === 1) this.kick(time, 0.03);
-        if (step % 32 === 0) this.bassNote(33, time, 8, 0.022);
-        if (step % 64 === 40 && Math.random() < 0.5) this.pluck(81, time, 0.014, 2.2, 0.25);
+        if (step % 16 === 0) this.kick(time, 0.22);
+        if (step % 16 === 1) this.kick(time, 0.14);
+        if (step % 32 === 0) this.bassNote(33, time, 8, 0.028);
+        if (step % 64 === 40 && Math.random() < 0.5) this.pluck(81, time, 0.016, 2.2, 0.25);
         return;
       }
       const beatDur = 60 / this.tempo;
@@ -5768,13 +5790,16 @@ body.dragging-sort {
       const chordEvery = 16;
       const chordName = PROGRESSION[this.chordIdx];
       const chord = CHORDS[chordName];
+      const grooveNow = this.groove;
       if (step % chordEvery === 0) {
         if (time - this.lastPadAt > 0.7) {
           const cosmic = mode === "cosmic";
-          const dur = beatDur * 4 * (cosmic ? 1.6 : 1.05);
-          const gain = cosmic ? 0.022 : mode === "bloom" ? 0.13 : 0.085 + 0.035 * this.groove;
-          this.pad(chord.pad, time, dur, gain, cosmic ? 1.8 : 0.8);
-          this.bassNote(chord.bass, time, beatDur * (cosmic ? 5 : 2.4), cosmic ? 0.075 : 0.14);
+          if (cosmic || grooveNow > 0.12) {
+            const dur = beatDur * 4 * (cosmic ? 1.6 : 1.05);
+            const gain = cosmic ? 0.022 : 0.1 + 0.04 * grooveNow;
+            this.pad(chord.pad, time, dur, gain, cosmic ? 1.8 : 0.8);
+          }
+          this.bassNote(chord.bass, time, beatDur * (cosmic ? 5 : 2.4), cosmic ? 0.075 : 0.16);
         }
         this.chordIdx = (this.chordIdx + 1) % PROGRESSION.length;
       }
@@ -5789,10 +5814,10 @@ body.dragging-sort {
       }
       const drums = this.drumEnergy;
       if (drums > 0.02) {
-        if (inBar === 0 || inBar === 8) this.kick(time, 0.13 + 0.15 * drums);
-        if (inBar === 4 || inBar === 12) this.snare(time, 0.04 + 0.06 * drums);
-        if (inBar % 2 === 1) this.hat(time, 8e-3 + 0.024 * drums, inBar % 4 === 1 ? 0.25 : -0.22);
-        if (drums > 0.7 && (inBar === 6 || inBar === 14)) this.kick(time, 0.06 + 0.06 * drums);
+        if (inBar === 0 || inBar === 8) this.kick(time, 0.22 + 0.18 * drums);
+        if (inBar === 4 || inBar === 12) this.snare(time, 0.07 + 0.08 * drums);
+        if (inBar % 2 === 1) this.hat(time, 0.012 + 0.03 * drums, inBar % 4 === 1 ? 0.25 : -0.22);
+        if (drums > 0.7 && (inBar === 6 || inBar === 14)) this.kick(time, 0.09 + 0.07 * drums);
       }
       if (mode === "bloom" && inBar % 4 === 2) {
         this.bassNote(chord.bass + 12, time, beatDur * 0.35, 0.05 + 0.03 * this.pulse);
@@ -9737,7 +9762,10 @@ body.dragging-sort {
           <span>音乐跟着画布走：没有细胞时只有一下一下的微弱心跳；放入细胞后是动次打次的鼓点（正拍底鼓 + 2、4 拍军鼓 + 踩镲），长笛只在律动期进来；连着放图案、连着画细胞会进入律动期（长笛 + 桶鼓 + 拍手 + 切分低音），停手几秒后自己回到鼓点；镜头拉远到世界之外时变成悠远的长混响。</span>
         </div>
 
+        <div class="sound-ver">音频版本 <b>${AUDIO_VERSION}</b>　·　听到的如果不是这个版本，按 <kbd>Ctrl</kbd>+<kbd>F5</kbd> 强制刷新</div>
+
         <div class="btn-row" style="justify-content:flex-end;margin-top:12px">
+          <button type="button" class="btn" id="snd-demo">试听律动</button>
           <button type="button" class="btn" id="snd-test">试听音效</button>
           <button type="button" class="btn primary" id="snd-done">完成</button>
         </div>
@@ -9775,6 +9803,11 @@ body.dragging-sort {
         sound.unlock();
         sound.sfx("stamp");
         window.setTimeout(() => sound.sfx("birth"), 140);
+      });
+      body.querySelector("#snd-demo").addEventListener("click", () => {
+        sound.unlock();
+        sound.kickGroove(1.5);
+        toast("律动期触发：鼓点 + 长笛，约 5 秒后回到正常");
       });
       body.querySelector("#snd-done").addEventListener("click", () => closeModal());
       const modeEl = body.querySelector("#snd-mode");
@@ -10123,6 +10156,7 @@ body.dragging-sort {
   async function boot() {
     sound.init();
     applySoundButton();
+    console.info(`生命游戏 · 音频 ${AUDIO_VERSION}`);
     store = new Store();
     try {
       await store.init();
