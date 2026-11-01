@@ -10,11 +10,12 @@
 | --- | --- |
 | 玩一局 / 发给别人 | 根目录的 `生命游戏.html`（单文件，双击即开） |
 | 看线上版 | `docs/index.html`（GitHub Pages 发布的就是它） |
-| 改玩法与交互 | `src/main.ts`（约 160 KB，界面、工具、快捷键都在这里） |
+| 改玩法与交互 | `src/main.ts`（约 171 KB，界面、工具、快捷键都在这里） |
 | 改演化规则 / 性能 | `src/core/world.ts`（位并行演化） |
 | 改时间回溯 | `src/core/history.ts` |
 | 改存档、快照、片段 | `src/core/storage.ts` |
 | 改图案库的分类与模型 | `src/core/library.ts`、`src/core/patterns.ts`、`src/core/pattern-data.ts` |
+| 改背景音乐 / 音效 | `src/audio/engine.ts`（现场合成的自适应配乐与音效） |
 | 改配色与布局 | `src/style.css` |
 | 加内置图案 | 写 `tools/patterns/*.rle` → `node scripts/gen-patterns.mjs` |
 | 改宣传片 | `promo/src/`，见 README「在自己电脑上改这支片子」 |
@@ -27,8 +28,8 @@
 
 | 目录 | 放什么 | 文件数 | 上传 |
 | --- | --- | --- | --- |
-| `src/` | 游戏源码：入口与界面、演化、回溯、渲染、存储、图案 | 11 | ✅ |
-| `src/core/` `src/render/` `src/view/` | 依次是规则核心、离屏渲染、相机换算 | — | ✅ |
+| `src/` | 游戏源码：入口与界面、演化、回溯、渲染、存储、图案、音频 | 12 | ✅ |
+| `src/core/` `src/render/` `src/view/` `src/audio/` | 依次是规则核心、离屏渲染、相机换算、自适应配乐与音效 | — | ✅ |
 | `scripts/` | 构建、自检、发布、CDP 截图、宣传片脚本 | 23 | ✅ |
 | `tools/patterns/` | 20 个内置图案的 RLE + 1 个宣传片专用的图灵机；`gen-patterns.mjs` 只认 META 里列出的内置图案 | 21 | ✅ |
 | `assets/` | README 与发布页的图：截图、海报、分镜图；宣传片成片也在这一层 | 4 | ✅（成片走 Release） |
@@ -60,7 +61,7 @@
 4. **体积策略**：单文件超过 12 MB 不进仓库树，改走 Release 附件；`assets/promo.mp4` 固定走 Release（否则每次 clone 都要拖一个大视频）；
 5. 规则一改，同步 `scripts/inventory.mjs` 顶部的常量，否则它末尾会报「规则漂移」。
 
-按现状：工作区 **142** 个文件，**140** 个会上传（约 53.1 MB），1 个走 Release 附件、1 个是 60 秒竖版配乐的 wav 中间产物（入库的是 `douyin.mp3` / `score.mp3` / `score-v11.mp3` / `score-v12.mp3`）。
+按现状：工作区 **143** 个文件，**141** 个会上传（约 53.2 MB），1 个走 Release 附件、1 个是 60 秒竖版配乐的 wav 中间产物（入库的是 `douyin.mp3` / `score.mp3` / `score-v11.mp3` / `score-v12.mp3`）。
 上传是全量重传（每次重新上传所有 blob），一次约 2–3 分钟——后续会改成只传变化的文件。
 
 ## 不在文件树里的东西（浏览器本地数据）

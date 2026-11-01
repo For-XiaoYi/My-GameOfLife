@@ -2405,6 +2405,157 @@ body.dragging-sort {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- 声音设置 ---------- */
+/* 静音时喇叭只留一个叉 */
+#btn-sound .slash {
+  display: none;
+}
+
+#btn-sound.off .wave {
+  display: none;
+}
+
+#btn-sound.off .slash {
+  display: inline;
+}
+
+#btn-sound.off {
+  color: var(--dim);
+}
+
+.sound-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sound-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sound-row .set-label {
+  flex: 0 0 48px;
+  margin: 0;
+}
+
+.sound-row input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 80px;
+}
+
+.sound-val {
+  flex: 0 0 44px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.sound-note {
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+.sound-live {
+  margin-top: 2px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.028);
+}
+
+.sound-live-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sound-mode {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  transition: color 0.4s;
+}
+
+/* 四个状态各有一个色调：死寂灰、平静青、绽放金、悠远蓝 */
+.sound-mode[data-mode='void'] {
+  color: #6b818c;
+}
+
+.sound-mode[data-mode='calm'] {
+  color: var(--accent);
+}
+
+.sound-mode[data-mode='bloom'] {
+  color: #ffd9a0;
+}
+
+.sound-mode[data-mode='cosmic'] {
+  color: #9fd8ff;
+}
+
+.sound-tempo {
+  font-size: 12px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.sound-live-meta {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.sound-bars {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sound-bar-label {
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.sound-bar {
+  position: relative;
+  display: block;
+  height: 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.sound-bar b {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(108, 245, 210, 0.55), #ffd9a0);
+  transition: width 0.25s linear;
+}
+
+.sound-bars .sound-bar + .sound-bar-label + .sound-bar b {
+  background: linear-gradient(90deg, rgba(108, 245, 210, 0.4), #9fd8ff);
+}
+
+@media (max-width: 520px) {
+  .sound-row .set-label {
+    flex-basis: 40px;
+  }
+  .sound-note {
+    display: none;
+  }
+}
 </style>
   </head>
   <body>
@@ -2435,6 +2586,14 @@ body.dragging-sort {
         </div>
 
         <div class="top-actions">
+          <button class="iconbtn" id="btn-sound" data-tip="声音：音乐与音效" aria-label="声音设置">
+            <svg viewBox="0 0 24 24">
+              <path d="M4 9.6h3.1L12 5.7v12.6L7.1 14.4H4z" />
+              <path class="wave" d="M15.2 9.3a3.8 3.8 0 0 1 0 5.4" />
+              <path class="wave" d="M17.9 6.8a7.4 7.4 0 0 1 0 10.4" />
+              <path class="slash" d="M15.2 9.6l4.8 4.8M20 9.6l-4.8 4.8" />
+            </svg>
+          </button>
           <button class="iconbtn" id="btn-settings" data-tip="画布设置：比例 / 尺寸 / 边界" aria-label="画布设置">
             <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>
           </button>
@@ -5243,6 +5402,802 @@ body.dragging-sort {
     return canvas2.toDataURL("image/png");
   }
 
+  // src/audio/engine.ts
+  var STORAGE_KEY = "life-studio:sound";
+  var DEFAULT_SETTINGS = { muted: false, music: 0.7, sfx: 0.8 };
+  var TICK_MS = 30;
+  var LOOKAHEAD = 0.18;
+  var clamp2 = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
+  var midiHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
+  var CHORDS = {
+    Am: { pad: [57, 60, 64, 69], bass: 33, arp: [69, 72, 76, 81] },
+    F: { pad: [53, 57, 60, 65], bass: 29, arp: [65, 69, 72, 77] },
+    C: { pad: [48, 55, 60, 64], bass: 36, arp: [64, 67, 72, 76] },
+    G: { pad: [55, 59, 62, 67], bass: 31, arp: [67, 71, 74, 79] }
+  };
+  var PROGRESSION = ["Am", "F", "C", "G"];
+  var SoundEngine = class {
+    settings = { ...DEFAULT_SETTINGS };
+    /** 给界面看的实时状态 */
+    mode = "void";
+    tempo = 96;
+    pulse = 0;
+    space = 0;
+    rate = 0;
+    population = 0;
+    ctx = null;
+    musicBus = null;
+    sfxBus = null;
+    reverbIn = null;
+    analyser = null;
+    noiseBuf = null;
+    unlocked = false;
+    visible = true;
+    timer = null;
+    // 调度状态
+    nextStep = 0;
+    step = 0;
+    chordIdx = 0;
+    padHz = 900;
+    drumEnergy = 0;
+    arpEnergy = 0;
+    /** 上一次真正铺 pad 的时刻，避免切模式时和按小节排的 pad 撞在一起 */
+    lastPadAt = 0;
+    // 环境采样
+    lastPop = 0;
+    lastSampleAt = 0;
+    prevRate = 0;
+    accel = 0;
+    zeroSince = 0;
+    editSpike = 0;
+    // 绘画音效节流
+    lastPaintAt = 0;
+    paintAccum = 0;
+    // ── 生命周期 ────────────────────────────────────────────────
+    /** 读本地设置；不创建 AudioContext（要等一个用户手势） */
+    init() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const v = JSON.parse(raw);
+          this.settings = {
+            muted: !!v.muted,
+            music: clamp2(Number(v.music ?? DEFAULT_SETTINGS.music), 0, 1),
+            sfx: clamp2(Number(v.sfx ?? DEFAULT_SETTINGS.sfx), 0, 1)
+          };
+        }
+      } catch {
+      }
+    }
+    /** 有没有真正把音频跑起来（浏览器可能要等到用户手势） */
+    get active() {
+      return !!this.ctx && this.ctx.state === "running";
+    }
+    get supported() {
+      return typeof window !== "undefined" && !!(window.AudioContext || webkitCtor());
+    }
+    /**
+     * 解锁音频。浏览器要求用户手势之后才能出声，所以第一次点按/按键时调用，
+     * 之后再调用只是 resume。失败就安静地退回无声，不影响游戏。
+     */
+    unlock() {
+      if (!this.supported) return;
+      try {
+        if (!this.ctx) {
+          const Ctor = window.AudioContext ?? webkitCtor();
+          if (!Ctor) return;
+          this.ctx = new Ctor();
+          this.buildGraph();
+          this.unlocked = true;
+        }
+        void this.ctx.resume();
+        this.applyVolumes();
+        this.startScheduler();
+      } catch {
+        this.ctx = null;
+        this.unlocked = false;
+      }
+    }
+    /** 切到后台就挂起音频，回来再恢复（省电，也避免调度器被节流后音画错位） */
+    setPageVisible(visible) {
+      this.visible = visible;
+      const ctx = this.ctx;
+      if (!ctx) return;
+      try {
+        if (!visible) void ctx.suspend();
+        else if (this.unlocked) void ctx.resume();
+      } catch {
+      }
+    }
+    setSettings(patch) {
+      this.settings = {
+        muted: patch.muted ?? this.settings.muted,
+        music: patch.music !== void 0 ? clamp2(patch.music, 0, 1) : this.settings.music,
+        sfx: patch.sfx !== void 0 ? clamp2(patch.sfx, 0, 1) : this.settings.sfx
+      };
+      this.save();
+      this.applyVolumes();
+    }
+    toggleMute() {
+      this.setSettings({ muted: !this.settings.muted });
+      return this.settings.muted;
+    }
+    save() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.settings));
+      } catch {
+      }
+    }
+    buildGraph() {
+      const ctx = this.ctx;
+      if (!ctx) return;
+      const master = ctx.createGain();
+      master.gain.value = 0.9;
+      const comp = ctx.createDynamicsCompressor();
+      comp.threshold.value = -16;
+      comp.knee.value = 18;
+      comp.ratio.value = 3;
+      comp.attack.value = 4e-3;
+      comp.release.value = 0.22;
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 1024;
+      master.connect(comp);
+      comp.connect(analyser);
+      analyser.connect(ctx.destination);
+      const musicBus = ctx.createGain();
+      musicBus.gain.value = 0;
+      musicBus.connect(master);
+      const sfxBus = ctx.createGain();
+      sfxBus.gain.value = 0;
+      sfxBus.connect(master);
+      const len = Math.floor(ctx.sampleRate * 2.6);
+      const ir = ctx.createBuffer(2, len, ctx.sampleRate);
+      for (let ch = 0; ch < 2; ch++) {
+        const data = ir.getChannelData(ch);
+        let lp = 0;
+        for (let i = 0; i < len; i++) {
+          const t = i / len;
+          const n = Math.random() * 2 - 1;
+          lp = lp * 0.72 + n * 0.28;
+          data[i] = lp * Math.pow(1 - t, 2.4);
+        }
+      }
+      const conv = ctx.createConvolver();
+      conv.buffer = ir;
+      const reverbIn = ctx.createGain();
+      reverbIn.gain.value = 0.32;
+      reverbIn.connect(conv);
+      conv.connect(musicBus);
+      const noiseLen = Math.floor(ctx.sampleRate * 1.2);
+      const noise = ctx.createBuffer(1, noiseLen, ctx.sampleRate);
+      const nd = noise.getChannelData(0);
+      for (let i = 0; i < noiseLen; i++) nd[i] = Math.random() * 2 - 1;
+      this.musicBus = musicBus;
+      this.sfxBus = sfxBus;
+      this.reverbIn = reverbIn;
+      this.analyser = analyser;
+      this.noiseBuf = noise;
+    }
+    applyVolumes() {
+      const ctx = this.ctx;
+      if (!ctx || !this.musicBus || !this.sfxBus) return;
+      const now = ctx.currentTime;
+      const mute = this.settings.muted ? 0 : 1;
+      const musicGain = Math.pow(this.settings.music, 1.7) * 0.62 * mute;
+      const sfxGain = Math.pow(this.settings.sfx, 1.7) * 0.85 * mute;
+      this.musicBus.gain.setTargetAtTime(musicGain, now, 0.12);
+      this.sfxBus.gain.setTargetAtTime(sfxGain, now, 0.06);
+    }
+    /**
+     * 音符播完就把这条链路从音频图上摘掉。
+     * 不摘的话，挂机几个小时会攒下几万个空转的 gain / filter 节点；
+     * Chrome 会自动回收"已经结束的音源"，但下游节点不会自己走。
+     */
+    free(src, ...rest) {
+      src.onended = () => {
+        try {
+          src.disconnect();
+        } catch {
+        }
+        for (const n of rest) {
+          try {
+            n.disconnect();
+          } catch {
+          }
+        }
+      };
+    }
+    // ── 环境感知 ────────────────────────────────────────────────
+    /**
+     * 主循环每隔约 200ms 喂一次画布状态。
+     * 增长率 g = dP/dt，加速度 a = dg/dt，都做指数平滑；用 max(400, 人口) 归一化，
+     * 于是"放下一个五格滑翔机"和"一张大网自然波动"的响应是同一量级。
+     */
+    observe(population, scale) {
+      const now = performance.now();
+      const dt = this.lastSampleAt ? (now - this.lastSampleAt) / 1e3 : 0;
+      if (dt > 0.04 && dt < 2) {
+        const rawRate = (population - this.lastPop) / dt;
+        this.rate = this.rate * 0.7 + rawRate * 0.3;
+        const rawAccel = (this.rate - this.prevRate) / dt;
+        this.prevRate = this.rate;
+        this.accel = this.accel * 0.72 + rawAccel * 0.28;
+      }
+      this.lastPop = population;
+      this.lastSampleAt = now;
+      this.population = population;
+      if (population === 0) {
+        if (!this.zeroSince) this.zeroSince = now;
+      } else {
+        this.zeroSince = 0;
+      }
+      if (this.editSpike > 0) this.editSpike = Math.max(0, this.editSpike - dt * 0.9);
+      const denom = Math.max(400, population);
+      const growth = Math.max(0, this.rate) / denom;
+      const push = Math.max(0, this.accel) / denom;
+      const target = clamp2(growth * 7 + push * 5 + this.editSpike * 0.55, 0, 1);
+      this.pulse += (target - this.pulse) * (target > this.pulse ? 0.34 : 0.09);
+      const spaceTarget = clamp2((0.55 - scale) / 0.3, 0, 1);
+      this.space += (spaceTarget - this.space) * 0.22;
+      const empty = population === 0 && now - this.zeroSince > 1200;
+      const nextMode = this.space > 0.55 ? "cosmic" : empty ? "void" : this.pulse > 0.35 ? "bloom" : "calm";
+      if (nextMode !== this.mode) {
+        this.mode = nextMode;
+        this.onModeChange();
+      }
+    }
+    /**
+     * 切模式时立刻给出一个"新音色"，而不是等下一小节。
+     * 否则拉远镜头之后最多要等十几秒才听到悠远，交互上像是坏了。
+     */
+    onModeChange() {
+      const ctx = this.ctx;
+      if (!ctx || ctx.state !== "running" || !this.visible) return;
+      const now = ctx.currentTime;
+      if (now - this.lastPadAt < 1.6) return;
+      const time = now + 0.06;
+      const beatDur = 60 / this.tempo;
+      if (this.mode === "void") {
+        this.bassNote(33, time, 8, 0.022);
+        return;
+      }
+      const chord = CHORDS[PROGRESSION[this.chordIdx]];
+      const cosmic = this.mode === "cosmic";
+      this.pad(chord.pad, time, beatDur * 4 * (cosmic ? 2.2 : 1.05), cosmic ? 0.04 : this.mode === "bloom" ? 0.13 : 0.12, cosmic ? 2.4 : 0.8);
+      this.bassNote(chord.bass, time, beatDur * (cosmic ? 8 : 2.4), 0.14);
+    }
+    // ── 目标参数（随模式平滑过渡） ──────────────────────────────
+    tempoTarget() {
+      if (this.mode === "cosmic") return 64;
+      if (this.mode === "void") return 58;
+      if (this.mode === "bloom") return 108 + 42 * this.pulse;
+      return 102;
+    }
+    padTarget() {
+      if (this.mode === "cosmic") return 620;
+      if (this.mode === "bloom") return 900 + 750 * this.pulse;
+      return 900;
+    }
+    drumTarget() {
+      if (this.mode === "bloom") return 0.3 + 0.7 * this.pulse;
+      if (this.mode === "calm") return this.pulse > 0.2 ? 0.35 : 0;
+      return 0;
+    }
+    arpTarget() {
+      if (this.mode === "void") return 0;
+      if (this.mode === "cosmic") return 0.42;
+      return this.mode === "bloom" ? 0.92 : 0.56;
+    }
+    /** 混响送出量：越远越湿 */
+    reverbTarget() {
+      return this.mode === "cosmic" ? 0.62 : this.mode === "void" ? 0.5 : 0.3;
+    }
+    // ── 调度器 ──────────────────────────────────────────────────
+    startScheduler() {
+      if (this.timer !== null) return;
+      const ctx = this.ctx;
+      if (!ctx) return;
+      this.nextStep = ctx.currentTime + 0.1;
+      this.timer = window.setInterval(() => this.tick(), TICK_MS);
+    }
+    tick() {
+      const ctx = this.ctx;
+      if (!ctx || ctx.state !== "running" || !this.visible) return;
+      if (this.nextStep < ctx.currentTime) this.nextStep = ctx.currentTime + 0.05;
+      const horizon = ctx.currentTime + LOOKAHEAD;
+      let guard = 0;
+      while (this.nextStep < horizon && guard++ < 64) {
+        this.scheduleStep(this.step, this.nextStep);
+        this.nextStep += 60 / this.tempo / 4;
+        this.step++;
+      }
+      const k = 0.07;
+      this.tempo += (this.tempoTarget() - this.tempo) * k;
+      this.padHz += (this.padTarget() - this.padHz) * k;
+      this.drumEnergy += (this.drumTarget() - this.drumEnergy) * k;
+      this.arpEnergy += (this.arpTarget() - this.arpEnergy) * k;
+      if (this.reverbIn) {
+        this.reverbIn.gain.setTargetAtTime(this.reverbTarget(), ctx.currentTime, 0.4);
+      }
+    }
+    /** 一个十六分音符步 */
+    scheduleStep(step, time) {
+      const mode = this.mode;
+      if (mode === "void") {
+        if (step % 32 === 0) this.bassNote(33, time, 8, 0.022);
+        if (step % 64 === 40 && Math.random() < 0.5) this.pluck(81, time, 0.014, 2.2, 0.25);
+        return;
+      }
+      const beatDur = 60 / this.tempo;
+      const inBar = step % 16;
+      const chordEvery = mode === "cosmic" ? 32 : 16;
+      const chordName = PROGRESSION[this.chordIdx];
+      const chord = CHORDS[chordName];
+      if (step % chordEvery === 0) {
+        if (time - this.lastPadAt > 0.7) {
+          const cosmic = mode === "cosmic";
+          const dur = beatDur * 4 * (cosmic ? 2.2 : 1.05);
+          const gain = cosmic ? 0.04 : mode === "bloom" ? 0.13 : 0.12;
+          this.pad(chord.pad, time, dur, gain, cosmic ? 2.4 : 0.8);
+          this.bassNote(chord.bass, time, beatDur * (cosmic ? 8 : 2.4), 0.14);
+        }
+        this.chordIdx = (this.chordIdx + 1) % PROGRESSION.length;
+      }
+      if (mode === "cosmic") {
+        if (step % 8 === 0) {
+          const notes = chord.arp;
+          const n = notes[step / 8 % notes.length] + 24;
+          this.pluck(n, time, 0.026, 2.4, step / 8 % 2 ? 0.3 : -0.3);
+        }
+        if (inBar === 0 && Math.random() < 0.5) this.shimmer(chord.arp[0] + 24, time, 0.02);
+        return;
+      }
+      if (mode === "bloom" && inBar % 4 === 2) {
+        this.bassNote(chord.bass + 12, time, beatDur * 0.35, 0.05 + 0.03 * this.pulse);
+      }
+      const arpEvery = this.arpEnergy > 0.75 ? 2 : 4;
+      if (inBar % arpEvery === 0) {
+        const idx = Math.floor(step / arpEvery) % chord.arp.length;
+        const note = chord.arp[idx] + (mode === "bloom" ? 12 : 0);
+        const gain = (mode === "bloom" ? 0.05 : 0.045) * (0.55 + this.arpEnergy * 0.45);
+        this.pluck(note, time, gain, mode === "bloom" ? 5.6 : 7, [-0.3, 0.3, -0.1, 0.1][idx] ?? 0);
+      }
+      const drums = this.drumEnergy;
+      if (drums > 0.02) {
+        if (inBar % 8 === 0) this.kick(time, 0.16 + 0.2 * drums);
+        if (inBar % 8 === 4 && drums > 0.25) this.kick(time, 0.1 + 0.14 * drums);
+        if (drums > 0.3 && inBar % 2 === 1) this.hat(time, 0.018 + 0.03 * drums, inBar % 4 === 1 ? 0.25 : -0.2);
+        if (drums > 0.62 && (inBar === 4 || inBar === 12)) this.snare(time, 0.05 + 0.07 * drums);
+      }
+    }
+    // ── 乐器 ────────────────────────────────────────────────────
+    /** 叠三层略微失谐的锯齿波过低通，就是宣传片里的 pad */
+    pad(notes, time, dur, gain, attack) {
+      const ctx = this.ctx;
+      if (!ctx || !this.musicBus || !this.reverbIn) return;
+      this.lastPadAt = time;
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = this.padHz;
+      filter.Q.value = 0.5;
+      const g = ctx.createGain();
+      const peak = Math.max(2e-4, gain);
+      g.gain.setValueAtTime(1e-4, time);
+      g.gain.linearRampToValueAtTime(peak, time + attack);
+      g.gain.setValueAtTime(peak, time + Math.max(attack, dur * 0.62));
+      g.gain.exponentialRampToValueAtTime(1e-4, time + dur);
+      filter.connect(g);
+      g.connect(this.musicBus);
+      g.connect(this.reverbIn);
+      const oscs = [];
+      for (const note of notes) {
+        for (const detune of [-6, 6]) {
+          const o = ctx.createOscillator();
+          o.type = "sawtooth";
+          o.frequency.value = midiHz(note);
+          o.detune.value = detune;
+          o.connect(filter);
+          o.start(time);
+          o.stop(time + dur + 0.06);
+          oscs.push(o);
+        }
+      }
+      const first = oscs[0];
+      if (first) this.free(first, filter, g, ...oscs.slice(1));
+    }
+    pluck(note, time, gain, decay, pan) {
+      const ctx = this.ctx;
+      if (!ctx || !this.musicBus || !this.reverbIn) return;
+      const o = ctx.createOscillator();
+      o.type = "triangle";
+      o.frequency.value = midiHz(note);
+      const g = ctx.createGain();
+      const peak = Math.max(2e-4, gain);
+      g.gain.setValueAtTime(1e-4, time);
+      g.gain.exponentialRampToValueAtTime(peak, time + 6e-3);
+      g.gain.exponentialRampToValueAtTime(1e-4, time + 1.4 / decay);
+      const p = ctx.createStereoPanner();
+      p.pan.value = clamp2(pan, -1, 1);
+      o.connect(g);
+      g.connect(p);
+      p.connect(this.musicBus);
+      p.connect(this.reverbIn);
+      o.start(time);
+      o.stop(time + 1.6 / decay);
+      this.free(o, g, p);
+    }
+    bassNote(note, time, dur, gain) {
+      const ctx = this.ctx;
+      if (!ctx || !this.musicBus) return;
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.value = midiHz(note);
+      const sub = ctx.createOscillator();
+      sub.type = "sine";
+      sub.frequency.value = midiHz(note - 12);
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 220;
+      const g = ctx.createGain();
+      const peak = Math.max(2e-4, gain);
+      g.gain.setValueAtTime(1e-4, time);
+      g.gain.linearRampToValueAtTime(peak, time + 0.02);
+      g.gain.setValueAtTime(peak, time + dur * 0.7);
+      g.gain.exponentialRampToValueAtTime(1e-4, time + dur);
+      o.connect(lp);
+      sub.connect(lp);
+      lp.connect(g);
+      g.connect(this.musicBus);
+      if (this.reverbIn) g.connect(this.reverbIn);
+      o.start(time);
+      sub.start(time);
+      o.stop(time + dur + 0.05);
+      sub.stop(time + dur + 0.05);
+      this.free(o, sub, lp, g);
+    }
+    kick(time, gain) {
+      const ctx = this.ctx;
+      if (!ctx || !this.musicBus) return;
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.setValueAtTime(196, time);
+      o.frequency.exponentialRampToValueAtTime(46, time + 0.12);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(1e-4, time);
+      g.gain.exponentialRampToValueAtTime(gain, time + 4e-3);
+      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.34);
+      o.connect(g);
+      g.connect(this.musicBus);
+      o.start(time);
+      o.stop(time + 0.36);
+      this.free(o, g);
+    }
+    hat(time, gain, pan) {
+      const ctx = this.ctx;
+      if (!ctx || !this.musicBus || !this.noiseBuf) return;
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuf;
+      const hp = ctx.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = 7e3;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(gain, time);
+      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.05);
+      const p = ctx.createStereoPanner();
+      p.pan.value = clamp2(pan, -1, 1);
+      src.connect(hp);
+      hp.connect(g);
+      g.connect(p);
+      p.connect(this.musicBus);
+      src.start(time);
+      src.stop(time + 0.06);
+      this.free(src, hp, g, p);
+    }
+    snare(time, gain) {
+      const ctx = this.ctx;
+      if (!ctx || !this.musicBus || !this.noiseBuf) return;
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuf;
+      const bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = 1900;
+      bp.Q.value = 0.9;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(gain, time);
+      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.16);
+      src.connect(bp);
+      bp.connect(g);
+      g.connect(this.musicBus);
+      const body = ctx.createOscillator();
+      body.type = "sine";
+      body.frequency.value = 190;
+      const bg = ctx.createGain();
+      bg.gain.setValueAtTime(gain * 0.5, time);
+      bg.gain.exponentialRampToValueAtTime(1e-4, time + 0.1);
+      body.connect(bg);
+      bg.connect(this.musicBus);
+      src.start(time);
+      src.stop(time + 0.18);
+      body.start(time);
+      body.stop(time + 0.12);
+      this.free(src, bp, g);
+      this.free(body, bg);
+    }
+    /** 悠远模式下偶尔出现的高音闪光：慢起慢落，几乎全给混响 */
+    shimmer(note, time, gain) {
+      const ctx = this.ctx;
+      if (!ctx || !this.musicBus || !this.reverbIn) return;
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.value = midiHz(note);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(1e-4, time);
+      g.gain.linearRampToValueAtTime(gain, time + 1.2);
+      g.gain.exponentialRampToValueAtTime(1e-4, time + 3.6);
+      o.connect(g);
+      g.connect(this.musicBus);
+      g.connect(this.reverbIn);
+      o.start(time);
+      o.stop(time + 3.7);
+      this.free(o, g);
+    }
+    // ── 音效 ────────────────────────────────────────────────────
+    sfx(name) {
+      const ctx = this.ctx;
+      if (!ctx || !this.sfxBus || ctx.state !== "running") return;
+      if (this.settings.muted || this.settings.sfx <= 0.01) return;
+      if (name === "stamp") this.editSpike = 1;
+      const t = ctx.currentTime + 0.012;
+      try {
+        switch (name) {
+          case "birth":
+            this.sfxBirth(t);
+            break;
+          case "death":
+            this.sfxDeath(t, 1);
+            break;
+          case "erase":
+            this.sfxDeath(t, 0.6);
+            break;
+          case "stamp":
+            this.sfxStamp(t);
+            break;
+          case "clear":
+            this.sfxWhoosh(t, 0.6, 2200, 0.28);
+            this.sfxThump(t, 0.16);
+            break;
+          case "random":
+            this.sfxDice(t);
+            break;
+          case "undo":
+            this.sfxBlip(t, 660, 0.05);
+            this.sfxBlip(t + 0.07, 494, 0.04);
+            break;
+          case "redo":
+            this.sfxBlip(t, 494, 0.04);
+            this.sfxBlip(t + 0.07, 660, 0.05);
+            break;
+          case "play":
+            this.sfxBlip(t, 1180, 0.05);
+            break;
+          case "pause":
+            this.sfxBlip(t, 740, 0.05);
+            break;
+          case "whoosh":
+            this.sfxWhoosh(t, 0.45, 1800, 0.2);
+            break;
+          case "click":
+            this.sfxBlip(t, 1500, 0.035);
+            break;
+        }
+      } catch {
+      }
+    }
+    /**
+     * 画笔/橡皮：每落一格都会调一次，所以这里做节流，
+     * 并且用最近落了多少格来抬音高——一笔画得越长，声音越"爬升"。
+     */
+    paintTick(kind) {
+      const ctx = this.ctx;
+      if (!ctx || !this.sfxBus || ctx.state !== "running") return;
+      if (this.settings.muted || this.settings.sfx <= 0.01) return;
+      const now = ctx.currentTime;
+      this.paintAccum = Math.min(40, this.paintAccum + 1);
+      if (now - this.lastPaintAt < 0.045) return;
+      this.lastPaintAt = now;
+      const t = now + 8e-3;
+      if (kind === "remove") {
+        this.sfxBlip(t, 420, 0.05);
+      } else {
+        const hz = 1320 + Math.min(1400, this.paintAccum * 70);
+        this.sfxBlip(t, hz, 0.035 + Math.min(0.03, this.paintAccum * 2e-3));
+      }
+      this.paintAccum = 0;
+    }
+    sfxBlip(time, hz, gain) {
+      const ctx = this.ctx;
+      if (!ctx || !this.sfxBus) return;
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.value = hz;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(1e-4, time);
+      g.gain.exponentialRampToValueAtTime(gain, time + 4e-3);
+      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.09);
+      o.connect(g);
+      g.connect(this.sfxBus);
+      o.start(time);
+      o.stop(time + 0.11);
+      this.free(o, g);
+    }
+    /** 宣传片 birth.wav：880→1320Hz 的亮叮 + 一点噪声 */
+    sfxBirth(time) {
+      const ctx = this.ctx;
+      if (!ctx || !this.sfxBus) return;
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.setValueAtTime(880, time);
+      o.frequency.linearRampToValueAtTime(1320, time + 0.05);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(1e-4, time);
+      g.gain.exponentialRampToValueAtTime(0.16, time + 6e-3);
+      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.26);
+      const shimmerOsc = ctx.createOscillator();
+      shimmerOsc.type = "sine";
+      shimmerOsc.frequency.value = 2640;
+      const sg = ctx.createGain();
+      sg.gain.setValueAtTime(0.04, time);
+      sg.gain.exponentialRampToValueAtTime(1e-4, time + 0.16);
+      o.connect(g);
+      shimmerOsc.connect(sg);
+      g.connect(this.sfxBus);
+      sg.connect(this.sfxBus);
+      o.start(time);
+      shimmerOsc.start(time);
+      o.stop(time + 0.28);
+      shimmerOsc.stop(time + 0.18);
+      this.free(o, g);
+      this.free(shimmerOsc, sg);
+    }
+    /** 宣传片 death.wav：150→55Hz 的塌陷 + 一点漏气 */
+    sfxDeath(time, scale) {
+      const ctx = this.ctx;
+      if (!ctx || !this.sfxBus || !this.noiseBuf) return;
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.setValueAtTime(150, time);
+      o.frequency.exponentialRampToValueAtTime(55, time + 0.26);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(1e-4, time);
+      g.gain.exponentialRampToValueAtTime(0.2 * scale, time + 0.01);
+      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.3);
+      const lp = ctx.createBiquadFilter();
+      lp.type = "lowpass";
+      lp.frequency.value = 900;
+      o.connect(lp);
+      lp.connect(g);
+      g.connect(this.sfxBus);
+      o.start(time);
+      o.stop(time + 0.32);
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuf;
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.05 * scale, time);
+      ng.gain.exponentialRampToValueAtTime(1e-4, time + 0.12);
+      src.connect(ng);
+      ng.connect(this.sfxBus);
+      src.start(time);
+      src.stop(time + 0.14);
+      this.free(o, lp, g);
+      this.free(src, ng);
+    }
+    /** 放入图案：三个音往上一挑，像把种子按进土里 */
+    sfxStamp(time) {
+      const ctx = this.ctx;
+      const bus = this.sfxBus;
+      if (!ctx || !bus) return;
+      [69, 72, 76].forEach((note, i) => {
+        const t = time + i * 0.055;
+        const o = ctx.createOscillator();
+        o.type = "triangle";
+        o.frequency.value = midiHz(note);
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(1e-4, t);
+        g.gain.exponentialRampToValueAtTime(0.12, t + 5e-3);
+        g.gain.exponentialRampToValueAtTime(1e-4, t + 0.34);
+        o.connect(g);
+        g.connect(bus);
+        o.start(t);
+        o.stop(t + 0.36);
+        this.free(o, g);
+      });
+      this.sfxThump(time, 0.1);
+    }
+    sfxThump(time, gain) {
+      const ctx = this.ctx;
+      if (!ctx || !this.sfxBus) return;
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.setValueAtTime(120, time);
+      o.frequency.exponentialRampToValueAtTime(44, time + 0.3);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(1e-4, time);
+      g.gain.exponentialRampToValueAtTime(gain, time + 8e-3);
+      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.42);
+      o.connect(g);
+      g.connect(this.sfxBus);
+      o.start(time);
+      o.stop(time + 0.44);
+      this.free(o, g);
+    }
+    /** 随机播种：四颗骰子撞在一起，最后落定 */
+    sfxDice(time) {
+      const ctx = this.ctx;
+      if (!ctx || !this.sfxBus || !this.noiseBuf) return;
+      for (let i = 0; i < 4; i++) {
+        const t = time + i * 0.075 + Math.random() * 0.03;
+        const src = ctx.createBufferSource();
+        src.buffer = this.noiseBuf;
+        const hp = ctx.createBiquadFilter();
+        hp.type = "highpass";
+        hp.frequency.value = 1800 + Math.random() * 1200;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.09, t);
+        g.gain.exponentialRampToValueAtTime(1e-4, t + 0.05);
+        src.connect(hp);
+        hp.connect(g);
+        g.connect(this.sfxBus);
+        src.start(t);
+        src.stop(t + 0.06);
+        this.free(src, hp, g);
+      }
+      this.sfxThump(time + 0.42, 0.12);
+    }
+    /** 转场 whoosh：低通扫频的噪声 */
+    sfxWhoosh(time, dur, cut, gain) {
+      const ctx = this.ctx;
+      if (!ctx || !this.sfxBus || !this.noiseBuf) return;
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuf;
+      src.loop = true;
+      const bp = ctx.createBiquadFilter();
+      bp.type = "lowpass";
+      bp.frequency.setValueAtTime(cut * 0.3, time);
+      bp.frequency.linearRampToValueAtTime(cut, time + dur * 0.6);
+      bp.frequency.linearRampToValueAtTime(cut * 0.4, time + dur);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(1e-4, time);
+      g.gain.linearRampToValueAtTime(gain, time + dur * 0.35);
+      g.gain.exponentialRampToValueAtTime(1e-4, time + dur);
+      src.connect(bp);
+      bp.connect(g);
+      g.connect(this.sfxBus);
+      src.start(time);
+      src.stop(time + dur + 0.02);
+      this.free(src, bp, g);
+    }
+    // ── 给自动化测试用的探针 ────────────────────────────────────
+    /** 当前输出电平（0..1），用来确认"真的出声了"而不是只有对象 */
+    debugLevel() {
+      const ctx = this.ctx;
+      const analyser = this.analyser;
+      if (!ctx || !analyser || ctx.state !== "running") return 0;
+      const buf = new Float32Array(analyser.fftSize);
+      analyser.getFloatTimeDomainData(buf);
+      let sum = 0;
+      for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+      return Math.sqrt(sum / buf.length);
+    }
+    get contextState() {
+      return this.ctx ? this.ctx.state : "none";
+    }
+  };
+  function webkitCtor() {
+    const w = window;
+    return w.webkitAudioContext;
+  }
+  var sound = new SoundEngine();
+
   // src/main.ts
   var el = (id) => document.getElementById(id);
   var nf = new Intl.NumberFormat("en-US");
@@ -5287,6 +6242,7 @@ body.dragging-sort {
   var lastTs = 0;
   var uiDirty = true;
   var lastUi = 0;
+  var lastSoundSample = 0;
   var immersive = false;
   var fsTimer = 0;
   var lastActivity = 0;
@@ -5398,6 +6354,7 @@ body.dragging-sort {
     updateZoomBounds();
     uiDirty = true;
     markActivity();
+    sound.sfx("whoosh");
   }
   function sliderToSpeed(v) {
     return SPEED_MIN * Math.pow(SPEED_MAX / SPEED_MIN, v / 100);
@@ -5464,6 +6421,10 @@ body.dragging-sort {
       lastUi = ts;
       uiDirty = false;
       flushUi();
+    }
+    if (ts - lastSoundSample > 200) {
+      lastSoundSample = ts;
+      sound.observe(world.population, view.scale);
     }
     requestAnimationFrame(loop);
   }
@@ -5558,6 +6519,7 @@ body.dragging-sort {
     state.acc = 0;
     el("btn-play").textContent = on ? "❙❙" : "▶";
     el("btn-play").classList.toggle("primary", !on);
+    sound.sfx(on ? "play" : "pause");
   }
   var toastEl = el("toast");
   var toastTimer = 0;
@@ -5786,6 +6748,7 @@ body.dragging-sort {
       toast("没有可以撤销的操作了");
       return;
     }
+    sound.sfx("undo");
     if (entry.kind === "sel") {
       redoStack.push({ kind: "sel", rects: state.selection.map((r) => ({ ...r })), label: entry.label });
       restoreRects(entry.rects);
@@ -5802,6 +6765,7 @@ body.dragging-sort {
       toast("没有可以重做的操作了");
       return;
     }
+    sound.sfx("redo");
     if (entry.kind === "sel") {
       undoStack.push({ kind: "sel", rects: state.selection.map((r) => ({ ...r })), label: entry.label });
       restoreRects(entry.rects);
@@ -5824,6 +6788,7 @@ body.dragging-sort {
       if (world.get(wx, wy) === value) return;
       world.set(wx, wy, value);
       state.editPending = true;
+      sound.paintTick(value ? "add" : "remove");
       return;
     }
     const r = n - 1 >> 1;
@@ -5841,7 +6806,10 @@ body.dragging-sort {
         touched = true;
       }
     }
-    if (touched) state.editPending = true;
+    if (touched) {
+      state.editPending = true;
+      sound.paintTick(value ? "add" : "remove");
+    }
   }
   function paintLine(x0, y0, x1, y1, value) {
     let x = x0;
@@ -5892,6 +6860,7 @@ body.dragging-sort {
     stampPattern(world, pat, x, y, state.rotation, state.mirror);
     state.editPending = false;
     commitEdit();
+    sound.sfx("stamp");
     toast(`${pat.name} 已放置`);
   }
   function localPoint(e) {
@@ -6540,6 +7509,7 @@ body.dragging-sort {
       beginEdit("清空世界");
       world.clear();
       commitEdit();
+      sound.sfx("clear");
       toast("世界已清空");
     });
   }
@@ -6551,6 +7521,7 @@ body.dragging-sort {
       world.clear();
       world.randomize(0.28);
       commitEdit();
+      sound.sfx("random");
       toast("随机播种完成");
     });
   }
@@ -6923,6 +7894,7 @@ body.dragging-sort {
       }
     }
     commitEdit();
+    sound.sfx("erase");
     toast(`已删除 ${bmp.population} 个细胞`);
   }
   function openSavePreset() {
@@ -8000,6 +8972,7 @@ body.dragging-sort {
     uiDirty = true;
     markActivity();
     flushUi();
+    sound.sfx("whoosh");
     toast(`已载入「${rec.name}」`);
   }
   async function toggleRecord() {
@@ -8605,6 +9578,122 @@ body.dragging-sort {
     el("fs-pop").textContent = `人口 ${nf.format(world.population)}`;
     el("fs-play").textContent = state.playing ? "❙❙" : "▶";
   }
+  var MODE_LABEL = {
+    void: "死寂",
+    calm: "平静",
+    bloom: "绽放",
+    cosmic: "悠远"
+  };
+  function applySoundButton() {
+    const btn = el("btn-sound");
+    const silent = sound.settings.muted || sound.settings.music <= 1e-3 && sound.settings.sfx <= 1e-3;
+    btn.classList.toggle("off", silent);
+    btn.dataset.tip = silent ? "声音：已静音" : `声音：音乐 ${Math.round(sound.settings.music * 100)}% · 音效 ${Math.round(sound.settings.sfx * 100)}%`;
+    btn.setAttribute("aria-label", silent ? "声音：已静音" : "声音设置");
+  }
+  function openSoundSettings() {
+    sound.unlock();
+    openModal("声音", (body) => {
+      body.innerHTML = `
+      <div class="sound-wrap">
+        <div class="sound-row">
+          <span class="set-label">音乐</span>
+          <input type="range" id="snd-music" min="0" max="100" step="1" />
+          <b class="sound-val" id="snd-music-val"></b>
+        </div>
+        <div class="sound-row">
+          <span class="set-label">音效</span>
+          <input type="range" id="snd-sfx" min="0" max="100" step="1" />
+          <b class="sound-val" id="snd-sfx-val"></b>
+        </div>
+        <div class="sound-row">
+          <span class="set-label">总开关</span>
+          <button type="button" class="chip" id="snd-mute"></button>
+          <span class="sound-note">静音后音乐和音效一起停，设置会记住</span>
+        </div>
+
+        <div class="sound-live">
+          <div class="sound-live-head">
+            <span class="sound-mode" id="snd-mode">死寂</span>
+            <span class="sound-tempo" id="snd-tempo"></span>
+          </div>
+          <div class="sound-live-meta" id="snd-meta"></div>
+          <div class="sound-bars">
+            <span class="sound-bar-label">绽放</span>
+            <span class="sound-bar"><b id="snd-pulse"></b></span>
+            <span class="sound-bar-label">悠远</span>
+            <span class="sound-bar"><b id="snd-space"></b></span>
+          </div>
+        </div>
+
+        <div class="set-warn">
+          <span>音乐跟着画布走：没有细胞时只剩低沉的死寂；细胞突然增多（人口加速度变大）会一点点加速、进鼓；镜头拉到世界之外时变成悠远的长混响。</span>
+        </div>
+
+        <div class="btn-row" style="justify-content:flex-end;margin-top:12px">
+          <button type="button" class="btn" id="snd-test">试听音效</button>
+          <button type="button" class="btn primary" id="snd-done">完成</button>
+        </div>
+      </div>`;
+      const musicEl = body.querySelector("#snd-music");
+      const sfxEl = body.querySelector("#snd-sfx");
+      const musicVal = body.querySelector("#snd-music-val");
+      const sfxVal = body.querySelector("#snd-sfx-val");
+      const muteEl = body.querySelector("#snd-mute");
+      const syncControls = () => {
+        musicEl.value = String(Math.round(sound.settings.music * 100));
+        sfxEl.value = String(Math.round(sound.settings.sfx * 100));
+        musicVal.textContent = `${Math.round(sound.settings.music * 100)}%`;
+        sfxVal.textContent = `${Math.round(sound.settings.sfx * 100)}%`;
+        muteEl.textContent = sound.settings.muted ? "已静音" : "声音开";
+        muteEl.classList.toggle("on", !sound.settings.muted);
+      };
+      syncControls();
+      musicEl.addEventListener("input", () => {
+        sound.setSettings({ music: Number(musicEl.value) / 100 });
+        syncControls();
+        applySoundButton();
+      });
+      sfxEl.addEventListener("input", () => {
+        sound.setSettings({ sfx: Number(sfxEl.value) / 100 });
+        syncControls();
+        applySoundButton();
+      });
+      muteEl.addEventListener("click", () => {
+        sound.toggleMute();
+        syncControls();
+        applySoundButton();
+      });
+      body.querySelector("#snd-test").addEventListener("click", () => {
+        sound.unlock();
+        sound.sfx("stamp");
+        window.setTimeout(() => sound.sfx("birth"), 140);
+      });
+      body.querySelector("#snd-done").addEventListener("click", () => closeModal());
+      const modeEl = body.querySelector("#snd-mode");
+      const tempoEl = body.querySelector("#snd-tempo");
+      const metaEl = body.querySelector("#snd-meta");
+      const pulseEl = body.querySelector("#snd-pulse");
+      const spaceEl = body.querySelector("#snd-space");
+      const refresh = () => {
+        modeEl.textContent = MODE_LABEL[sound.mode] ?? sound.mode;
+        modeEl.dataset.mode = sound.mode;
+        tempoEl.textContent = `${Math.round(sound.tempo)} BPM`;
+        const rate = sound.rate;
+        const rateText = `${rate >= 0 ? "+" : ""}${Math.round(rate)} 细胞/秒`;
+        metaEl.textContent = `人口 ${nf.format(sound.population)} · 变化 ${rateText} · 缩放 ${fmtZoom(view.scale)}`;
+        pulseEl.style.width = `${Math.round(sound.pulse * 100)}%`;
+        spaceEl.style.width = `${Math.round(sound.space * 100)}%`;
+      };
+      refresh();
+      const timer = window.setInterval(refresh, 250);
+      modalCleanup = () => window.clearInterval(timer);
+    });
+  }
+  function fmtZoom(s) {
+    if (s >= 1) return `${(Math.round(s * 10) / 10).toFixed(1)}×`;
+    return `${(Math.round(s * 100) / 100).toFixed(2)}×`;
+  }
   function pokeFsBar() {
     const bar = el("fs-bar");
     bar.classList.remove("fade");
@@ -8865,6 +9954,7 @@ body.dragging-sort {
     });
     el("btn-record").addEventListener("click", () => void toggleRecord());
     el("btn-studio").addEventListener("click", () => openStudioBridge(0));
+    el("btn-sound").addEventListener("click", openSoundSettings);
     el("btn-fullscreen").addEventListener("click", toggleImmersive);
     el("btn-help").addEventListener("click", openHelp);
     el("btn-settings").addEventListener("click", openCanvasSettings);
@@ -8906,6 +9996,8 @@ body.dragging-sort {
     });
   }
   async function boot() {
+    sound.init();
+    applySoundButton();
     store = new Store();
     try {
       await store.init();
@@ -8971,6 +10063,9 @@ body.dragging-sort {
         },
         get library() {
           return library;
+        },
+        get sound() {
+          return sound;
         },
         step(n = 1) {
           for (let i = 0; i < n; i++) advanceOne();
@@ -9108,7 +10203,14 @@ body.dragging-sort {
     window.addEventListener("pagehide", () => void autoSaveNow());
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") void autoSaveNow();
+      sound.setPageVisible(document.visibilityState !== "hidden");
     });
+    const unlockSound = () => {
+      sound.unlock();
+      applySoundButton();
+    };
+    document.addEventListener("pointerdown", unlockSound, { once: true, capture: true });
+    window.addEventListener("keydown", unlockSound, { once: true });
     if (auto) toast(`已恢复上次的现场（第 ${nf.format(auto.gen)} 代）`);
   }
   void boot();

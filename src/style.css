@@ -2397,3 +2397,154 @@ body.dragging-sort {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- 声音设置 ---------- */
+/* 静音时喇叭只留一个叉 */
+#btn-sound .slash {
+  display: none;
+}
+
+#btn-sound.off .wave {
+  display: none;
+}
+
+#btn-sound.off .slash {
+  display: inline;
+}
+
+#btn-sound.off {
+  color: var(--dim);
+}
+
+.sound-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sound-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sound-row .set-label {
+  flex: 0 0 48px;
+  margin: 0;
+}
+
+.sound-row input[type='range'] {
+  flex: 1 1 auto;
+  min-width: 80px;
+}
+
+.sound-val {
+  flex: 0 0 44px;
+  text-align: right;
+  font-size: 12px;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.sound-note {
+  font-size: 11.5px;
+  color: var(--dim);
+}
+
+.sound-live {
+  margin-top: 2px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.028);
+}
+
+.sound-live-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sound-mode {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--accent);
+  transition: color 0.4s;
+}
+
+/* 四个状态各有一个色调：死寂灰、平静青、绽放金、悠远蓝 */
+.sound-mode[data-mode='void'] {
+  color: #6b818c;
+}
+
+.sound-mode[data-mode='calm'] {
+  color: var(--accent);
+}
+
+.sound-mode[data-mode='bloom'] {
+  color: #ffd9a0;
+}
+
+.sound-mode[data-mode='cosmic'] {
+  color: #9fd8ff;
+}
+
+.sound-tempo {
+  font-size: 12px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.sound-live-meta {
+  margin-top: 4px;
+  font-size: 11.5px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.sound-bars {
+  display: grid;
+  grid-template-columns: auto 1fr auto 1fr;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.sound-bar-label {
+  font-size: 11px;
+  color: var(--dim);
+  white-space: nowrap;
+}
+
+.sound-bar {
+  position: relative;
+  display: block;
+  height: 6px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+}
+
+.sound-bar b {
+  display: block;
+  height: 100%;
+  width: 0;
+  border-radius: 4px;
+  background: linear-gradient(90deg, rgba(108, 245, 210, 0.55), #ffd9a0);
+  transition: width 0.25s linear;
+}
+
+.sound-bars .sound-bar + .sound-bar-label + .sound-bar b {
+  background: linear-gradient(90deg, rgba(108, 245, 210, 0.4), #9fd8ff);
+}
+
+@media (max-width: 520px) {
+  .sound-row .set-label {
+    flex-basis: 40px;
+  }
+  .sound-note {
+    display: none;
+  }
+}

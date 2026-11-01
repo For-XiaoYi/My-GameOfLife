@@ -16,6 +16,7 @@ import { parsePatternText, toRle } from './core/rle.ts';
 import { Store, uid, type SnapshotRecord, type ClipRecord } from './core/storage.ts';
 import { Viewport } from './view/viewport.ts';
 import { Renderer, makeThumb, paintWorldPreview, type Ghost, type ShapePreview } from './render/renderer.ts';
+import { sound } from './audio/engine.ts';
 
 // ──────────────────────────────────────────────────────────────────────────
 // DOM 小工具
@@ -102,6 +103,7 @@ const state = {
 let lastTs = 0;
 let uiDirty = true;
 let lastUi = 0;
+let lastSoundSample = 0;
 let immersive = false;
 let fsTimer = 0;
 
@@ -262,6 +264,7 @@ function applyWorldShape(w: number, h: number, edge: EdgeMode): void {
   updateZoomBounds();
   uiDirty = true;
   markActivity();
+  sound.sfx('whoosh');
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -357,6 +360,13 @@ function loop(ts: number): void {
     uiDirty = false;
     flushUi();
   }
+
+  // 音乐每 200ms 取一次画布状态（人口 + 缩放），驱动和声/节奏
+  if (ts - lastSoundSample > 200) {
+    lastSoundSample = ts;
+    sound.observe(world.population, view.scale);
+  }
+
   requestAnimationFrame(loop);
 }
 
@@ -479,6 +489,8 @@ function setPlaying(on: boolean): void {
   state.acc = 0;
   el('btn-play').textContent = on ? '❙❙' : '▶';
   el('btn-play').classList.toggle('primary', !on);
+  // 启动时、以及打开弹窗导致的自动暂停都不该有声音：只有 unlocked 之后才会响
+  sound.sfx(on ? 'play' : 'pause');
 }
 
 const toastEl = el('toast');
@@ -783,6 +795,7 @@ function undoEdit(): void {
     toast('没有可以撤销的操作了');
     return;
   }
+  sound.sfx('undo');
   if (entry.kind === 'sel') {
     redoStack.push({ kind: 'sel', rects: state.selection.map((r) => ({ ...r })), label: entry.label });
     restoreRects(entry.rects);
@@ -800,6 +813,7 @@ function redoEdit(): void {
     toast('没有可以重做的操作了');
     return;
   }
+  sound.sfx('redo');
   if (entry.kind === 'sel') {
     undoStack.push({ kind: 'sel', rects: state.selection.map((r) => ({ ...r })), label: entry.label });
     restoreRects(entry.rects);
@@ -823,6 +837,7 @@ function paintCell(x: number, y: number, value: number): void {
     if (world.get(wx, wy) === value) return;
     world.set(wx, wy, value);
     state.editPending = true;
+    sound.paintTick(value ? 'add' : 'remove');
     return;
   }
   const r = (n - 1) >> 1;
@@ -840,7 +855,10 @@ function paintCell(x: number, y: number, value: number): void {
       touched = true;
     }
   }
-  if (touched) state.editPending = true;
+  if (touched) {
+    state.editPending = true;
+    sound.paintTick(value ? 'add' : 'remove');
+  }
 }
 
 function paintLine(x0: number, y0: number, x1: number, y1: number, value: number): void {
@@ -894,6 +912,7 @@ function placePattern(p: { x: number; y: number }): void {
   stampPattern(world, pat, x, y, state.rotation, state.mirror);
   state.editPending = false;
   commitEdit();
+  sound.sfx('stamp');
   toast(`${pat.name} 已放置`);
 }
 
@@ -1656,6 +1675,7 @@ function clearWorld(): void {
     beginEdit('清空世界');
     world.clear();
     commitEdit();
+    sound.sfx('clear');
     toast('世界已清空');
   });
 }
@@ -1668,6 +1688,7 @@ function randomWorld(): void {
     world.clear();
     world.randomize(0.28);
     commitEdit();
+    sound.sfx('random');
     toast('随机播种完成');
   });
 }
@@ -2112,6 +2133,7 @@ function deleteSelection(): void {
     }
   }
   commitEdit();
+  sound.sfx('erase');
   toast(`已删除 ${bmp.population} 个细胞`);
 }
 
@@ -3388,6 +3410,7 @@ function loadSnapshot(rec: SnapshotRecord): void {
   uiDirty = true;
   markActivity();
   flushUi();
+  sound.sfx('whoosh');
   toast(`已载入「${rec.name}」`);
 }
 
@@ -4080,6 +4103,138 @@ function updateFsBar(): void {
   el('fs-play').textContent = state.playing ? '❙❙' : '▶';
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// 声音设置
+// ──────────────────────────────────────────────────────────────────────────
+const MODE_LABEL: Record<string, string> = {
+  void: '死寂',
+  calm: '平静',
+  bloom: '绽放',
+  cosmic: '悠远',
+};
+
+/** 顶栏喇叭图标：静音时把波纹换成叉 */
+function applySoundButton(): void {
+  const btn = el('btn-sound');
+  const silent = sound.settings.muted || (sound.settings.music <= 0.001 && sound.settings.sfx <= 0.001);
+  btn.classList.toggle('off', silent);
+  btn.dataset.tip = silent
+    ? '声音：已静音'
+    : `声音：音乐 ${Math.round(sound.settings.music * 100)}% · 音效 ${Math.round(sound.settings.sfx * 100)}%`;
+  btn.setAttribute('aria-label', silent ? '声音：已静音' : '声音设置');
+}
+
+function openSoundSettings(): void {
+  sound.unlock();
+  openModal('声音', (body) => {
+    body.innerHTML = `
+      <div class="sound-wrap">
+        <div class="sound-row">
+          <span class="set-label">音乐</span>
+          <input type="range" id="snd-music" min="0" max="100" step="1" />
+          <b class="sound-val" id="snd-music-val"></b>
+        </div>
+        <div class="sound-row">
+          <span class="set-label">音效</span>
+          <input type="range" id="snd-sfx" min="0" max="100" step="1" />
+          <b class="sound-val" id="snd-sfx-val"></b>
+        </div>
+        <div class="sound-row">
+          <span class="set-label">总开关</span>
+          <button type="button" class="chip" id="snd-mute"></button>
+          <span class="sound-note">静音后音乐和音效一起停，设置会记住</span>
+        </div>
+
+        <div class="sound-live">
+          <div class="sound-live-head">
+            <span class="sound-mode" id="snd-mode">死寂</span>
+            <span class="sound-tempo" id="snd-tempo"></span>
+          </div>
+          <div class="sound-live-meta" id="snd-meta"></div>
+          <div class="sound-bars">
+            <span class="sound-bar-label">绽放</span>
+            <span class="sound-bar"><b id="snd-pulse"></b></span>
+            <span class="sound-bar-label">悠远</span>
+            <span class="sound-bar"><b id="snd-space"></b></span>
+          </div>
+        </div>
+
+        <div class="set-warn">
+          <span>音乐跟着画布走：没有细胞时只剩低沉的死寂；细胞突然增多（人口加速度变大）会一点点加速、进鼓；镜头拉到世界之外时变成悠远的长混响。</span>
+        </div>
+
+        <div class="btn-row" style="justify-content:flex-end;margin-top:12px">
+          <button type="button" class="btn" id="snd-test">试听音效</button>
+          <button type="button" class="btn primary" id="snd-done">完成</button>
+        </div>
+      </div>`;
+
+    const musicEl = body.querySelector<HTMLInputElement>('#snd-music')!;
+    const sfxEl = body.querySelector<HTMLInputElement>('#snd-sfx')!;
+    const musicVal = body.querySelector<HTMLElement>('#snd-music-val')!;
+    const sfxVal = body.querySelector<HTMLElement>('#snd-sfx-val')!;
+    const muteEl = body.querySelector<HTMLButtonElement>('#snd-mute')!;
+
+    const syncControls = (): void => {
+      musicEl.value = String(Math.round(sound.settings.music * 100));
+      sfxEl.value = String(Math.round(sound.settings.sfx * 100));
+      musicVal.textContent = `${Math.round(sound.settings.music * 100)}%`;
+      sfxVal.textContent = `${Math.round(sound.settings.sfx * 100)}%`;
+      muteEl.textContent = sound.settings.muted ? '已静音' : '声音开';
+      muteEl.classList.toggle('on', !sound.settings.muted);
+    };
+    syncControls();
+
+    musicEl.addEventListener('input', () => {
+      sound.setSettings({ music: Number(musicEl.value) / 100 });
+      syncControls();
+      applySoundButton();
+    });
+    sfxEl.addEventListener('input', () => {
+      sound.setSettings({ sfx: Number(sfxEl.value) / 100 });
+      syncControls();
+      applySoundButton();
+    });
+    muteEl.addEventListener('click', () => {
+      sound.toggleMute();
+      syncControls();
+      applySoundButton();
+    });
+
+    body.querySelector('#snd-test')!.addEventListener('click', () => {
+      sound.unlock();
+      sound.sfx('stamp');
+      window.setTimeout(() => sound.sfx('birth'), 140);
+    });
+    body.querySelector('#snd-done')!.addEventListener('click', () => closeModal());
+
+    // 实时状态：让"音乐为什么变了"看得见
+    const modeEl = body.querySelector<HTMLElement>('#snd-mode')!;
+    const tempoEl = body.querySelector<HTMLElement>('#snd-tempo')!;
+    const metaEl = body.querySelector<HTMLElement>('#snd-meta')!;
+    const pulseEl = body.querySelector<HTMLElement>('#snd-pulse')!;
+    const spaceEl = body.querySelector<HTMLElement>('#snd-space')!;
+    const refresh = (): void => {
+      modeEl.textContent = MODE_LABEL[sound.mode] ?? sound.mode;
+      modeEl.dataset.mode = sound.mode;
+      tempoEl.textContent = `${Math.round(sound.tempo)} BPM`;
+      const rate = sound.rate;
+      const rateText = `${rate >= 0 ? '+' : ''}${Math.round(rate)} 细胞/秒`;
+      metaEl.textContent = `人口 ${nf.format(sound.population)} · 变化 ${rateText} · 缩放 ${fmtZoom(view.scale)}`;
+      pulseEl.style.width = `${Math.round(sound.pulse * 100)}%`;
+      spaceEl.style.width = `${Math.round(sound.space * 100)}%`;
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 250);
+    modalCleanup = () => window.clearInterval(timer);
+  });
+}
+
+function fmtZoom(s: number): string {
+  if (s >= 1) return `${(Math.round(s * 10) / 10).toFixed(1)}×`;
+  return `${(Math.round(s * 100) / 100).toFixed(2)}×`;
+}
+
 function pokeFsBar(): void {
   const bar = el('fs-bar');
   bar.classList.remove('fade');
@@ -4377,6 +4532,7 @@ function bindUi(): void {
 
   el('btn-record').addEventListener('click', () => void toggleRecord());
   el('btn-studio').addEventListener('click', () => openStudioBridge(0));
+  el('btn-sound').addEventListener('click', openSoundSettings);
   el('btn-fullscreen').addEventListener('click', toggleImmersive);
   el('btn-help').addEventListener('click', openHelp);
   el('btn-settings').addEventListener('click', openCanvasSettings);
@@ -4429,6 +4585,8 @@ function bindUi(): void {
 // 启动
 // ──────────────────────────────────────────────────────────────────────────
 async function boot(): Promise<void> {
+  sound.init();
+  applySoundButton();
   store = new Store();
   try {
     await store.init();
@@ -4499,6 +4657,7 @@ async function boot(): Promise<void> {
       get view() { return view; },
       get store() { return store; },
       get library() { return library; },
+      get sound() { return sound; },
       step(n = 1) { for (let i = 0; i < n; i++) advanceOne(); },
       commit: () => commitEdit(),
       set(x: number, y: number, v: number) { world.set(x, y, v); },
@@ -4613,7 +4772,16 @@ async function boot(): Promise<void> {
   window.addEventListener('pagehide', () => void autoSaveNow());
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') void autoSaveNow();
+    sound.setPageVisible(document.visibilityState !== 'hidden');
   });
+
+  // 浏览器要求先有用户手势才能出声：第一次点按或按键时解锁，之后一直有效
+  const unlockSound = (): void => {
+    sound.unlock();
+    applySoundButton();
+  };
+  document.addEventListener('pointerdown', unlockSound, { once: true, capture: true });
+  window.addEventListener('keydown', unlockSound, { once: true });
 
   if (auto) toast(`已恢复上次的现场（第 ${nf.format(auto.gen)} 代）`);
 }
