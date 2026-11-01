@@ -2514,9 +2514,9 @@ body.dragging-sort {
 
 .sound-bars {
   display: grid;
-  grid-template-columns: auto 1fr auto 1fr;
+  grid-template-columns: auto 1fr;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
   margin-top: 10px;
 }
 
@@ -2544,7 +2544,12 @@ body.dragging-sort {
   transition: width 0.25s linear;
 }
 
-.sound-bars .sound-bar + .sound-bar-label + .sound-bar b {
+/* 三条强度条各有一个色调：绽放金、律动橙、悠远蓝 */
+#snd-groove {
+  background: linear-gradient(90deg, rgba(255, 217, 160, 0.55), #ff9d6c);
+}
+
+#snd-space {
   background: linear-gradient(90deg, rgba(108, 245, 210, 0.4), #9fd8ff);
 }
 
@@ -5423,8 +5428,21 @@ body.dragging-sort {
     tempo = 96;
     pulse = 0;
     space = 0;
+    /** 0..1 律动期：连续放图案 / 大量画细胞冲上去，停手后慢慢退回正常算法 */
+    groove = 0;
     rate = 0;
     population = 0;
+    /** 自动化测试用：各类音符排了多少次（resetDebugCounts 清零） */
+    debugCounts = {
+      kick: 0,
+      hat: 0,
+      snare: 0,
+      tom: 0,
+      clap: 0,
+      pluck: 0,
+      bass: 0,
+      pad: 0
+    };
     ctx = null;
     musicBus = null;
     sfxBus = null;
@@ -5450,6 +5468,7 @@ body.dragging-sort {
     accel = 0;
     zeroSince = 0;
     editSpike = 0;
+    grooveUntil = 0;
     // 绘画音效节流
     lastPaintAt = 0;
     paintAccum = 0;
@@ -5645,6 +5664,23 @@ body.dragging-sort {
         this.mode = nextMode;
         this.onModeChange();
       }
+      const grooveTarget = now < this.grooveUntil ? 1 : 0;
+      this.groove += (grooveTarget - this.groove) * (grooveTarget > this.groove ? 0.3 : 0.07);
+    }
+    /**
+     * 手动操作（放图案、连着画细胞）推进"律动期"。
+     * 一次操作 4~6 秒；期间再有操作就续上，停手后大约 4 秒淡回正常。
+     */
+    kickGroove(strength = 1) {
+      const now = performance.now();
+      const hold = 3600 + 1600 * Math.min(1, strength);
+      this.grooveUntil = Math.max(this.grooveUntil, now + hold);
+      this.groove = Math.min(1, this.groove + 0.3 * strength);
+    }
+    resetDebugCounts() {
+      for (const k of Object.keys(this.debugCounts)) {
+        this.debugCounts[k] = 0;
+      }
     }
     /**
      * 切模式时立刻给出一个"新音色"，而不是等下一小节。
@@ -5654,7 +5690,7 @@ body.dragging-sort {
       const ctx = this.ctx;
       if (!ctx || ctx.state !== "running" || !this.visible) return;
       const now = ctx.currentTime;
-      if (now - this.lastPadAt < 1.6) return;
+      if (now - this.lastPadAt < 0.35) return;
       const time = now + 0.06;
       const beatDur = 60 / this.tempo;
       if (this.mode === "void") {
@@ -5663,30 +5699,31 @@ body.dragging-sort {
       }
       const chord = CHORDS[PROGRESSION[this.chordIdx]];
       const cosmic = this.mode === "cosmic";
-      this.pad(chord.pad, time, beatDur * 4 * (cosmic ? 2.2 : 1.05), cosmic ? 0.04 : this.mode === "bloom" ? 0.13 : 0.12, cosmic ? 2.4 : 0.8);
-      this.bassNote(chord.bass, time, beatDur * (cosmic ? 8 : 2.4), 0.14);
+      this.pad(chord.pad, time, beatDur * 4 * (cosmic ? 1.6 : 1.05), cosmic ? 0.022 : this.mode === "bloom" ? 0.13 : 0.12, cosmic ? 1.8 : 0.8);
+      this.bassNote(chord.bass, time, beatDur * (cosmic ? 5 : 2.4), cosmic ? 0.075 : 0.14);
     }
     // ── 目标参数（随模式平滑过渡） ──────────────────────────────
     tempoTarget() {
       if (this.mode === "cosmic") return 64;
       if (this.mode === "void") return 58;
-      if (this.mode === "bloom") return 108 + 42 * this.pulse;
-      return 102;
+      const base = this.mode === "bloom" ? 108 + 42 * this.pulse : 102;
+      return base + 8 * this.groove;
     }
     padTarget() {
       if (this.mode === "cosmic") return 620;
       if (this.mode === "bloom") return 900 + 750 * this.pulse;
-      return 900;
+      return 900 + 260 * this.groove;
     }
     drumTarget() {
-      if (this.mode === "bloom") return 0.3 + 0.7 * this.pulse;
-      if (this.mode === "calm") return this.pulse > 0.2 ? 0.35 : 0;
+      if (this.mode === "bloom") return Math.min(1, 0.62 + 0.38 * this.pulse + 0.18 * this.groove);
+      if (this.mode === "calm") return Math.min(1, 0.45 + 0.2 * this.pulse + 0.25 * this.groove);
       return 0;
     }
     arpTarget() {
       if (this.mode === "void") return 0;
       if (this.mode === "cosmic") return 0.42;
-      return this.mode === "bloom" ? 0.92 : 0.56;
+      const base = this.mode === "bloom" ? 0.92 : 0.5;
+      return Math.min(1, base + 0.45 * this.groove);
     }
     /** 混响送出量：越远越湿 */
     reverbTarget() {
@@ -5703,6 +5740,10 @@ body.dragging-sort {
     tick() {
       const ctx = this.ctx;
       if (!ctx || ctx.state !== "running" || !this.visible) return;
+      if (this.settings.muted || this.settings.music <= 1e-3) {
+        this.nextStep = ctx.currentTime + 0.08;
+        return;
+      }
       if (this.nextStep < ctx.currentTime) this.nextStep = ctx.currentTime + 0.05;
       const horizon = ctx.currentTime + LOOKAHEAD;
       let guard = 0;
@@ -5724,38 +5765,40 @@ body.dragging-sort {
     scheduleStep(step, time) {
       const mode = this.mode;
       if (mode === "void") {
+        if (step % 8 === 0) this.kick(time, 0.055);
+        if (step % 8 === 1) this.kick(time, 0.03);
         if (step % 32 === 0) this.bassNote(33, time, 8, 0.022);
         if (step % 64 === 40 && Math.random() < 0.5) this.pluck(81, time, 0.014, 2.2, 0.25);
         return;
       }
       const beatDur = 60 / this.tempo;
       const inBar = step % 16;
-      const chordEvery = mode === "cosmic" ? 32 : 16;
+      const chordEvery = 16;
       const chordName = PROGRESSION[this.chordIdx];
       const chord = CHORDS[chordName];
       if (step % chordEvery === 0) {
         if (time - this.lastPadAt > 0.7) {
           const cosmic = mode === "cosmic";
-          const dur = beatDur * 4 * (cosmic ? 2.2 : 1.05);
-          const gain = cosmic ? 0.04 : mode === "bloom" ? 0.13 : 0.12;
-          this.pad(chord.pad, time, dur, gain, cosmic ? 2.4 : 0.8);
-          this.bassNote(chord.bass, time, beatDur * (cosmic ? 8 : 2.4), 0.14);
+          const dur = beatDur * 4 * (cosmic ? 1.6 : 1.05);
+          const gain = cosmic ? 0.022 : mode === "bloom" ? 0.13 : 0.12;
+          this.pad(chord.pad, time, dur, gain, cosmic ? 1.8 : 0.8);
+          this.bassNote(chord.bass, time, beatDur * (cosmic ? 5 : 2.4), cosmic ? 0.075 : 0.14);
         }
         this.chordIdx = (this.chordIdx + 1) % PROGRESSION.length;
       }
       if (mode === "cosmic") {
-        if (step % 8 === 0) {
+        if (step % 16 === 0) {
           const notes = chord.arp;
-          const n = notes[step / 8 % notes.length] + 24;
-          this.pluck(n, time, 0.026, 2.4, step / 8 % 2 ? 0.3 : -0.3);
+          const n = notes[step / 16 % notes.length] + 24;
+          this.pluck(n, time, 0.02, 2.4, step / 16 % 2 ? 0.3 : -0.3);
         }
-        if (inBar === 0 && Math.random() < 0.5) this.shimmer(chord.arp[0] + 24, time, 0.02);
+        if (inBar === 0 && Math.random() < 0.5) this.shimmer(chord.arp[0] + 24, time, 0.016);
         return;
       }
       if (mode === "bloom" && inBar % 4 === 2) {
         this.bassNote(chord.bass + 12, time, beatDur * 0.35, 0.05 + 0.03 * this.pulse);
       }
-      const arpEvery = this.arpEnergy > 0.75 ? 2 : 4;
+      const arpEvery = this.arpEnergy > 0.88 ? 1 : this.arpEnergy > 0.7 ? 2 : 4;
       if (inBar % arpEvery === 0) {
         const idx = Math.floor(step / arpEvery) % chord.arp.length;
         const note = chord.arp[idx] + (mode === "bloom" ? 12 : 0);
@@ -5764,10 +5807,17 @@ body.dragging-sort {
       }
       const drums = this.drumEnergy;
       if (drums > 0.02) {
-        if (inBar % 8 === 0) this.kick(time, 0.16 + 0.2 * drums);
-        if (inBar % 8 === 4 && drums > 0.25) this.kick(time, 0.1 + 0.14 * drums);
-        if (drums > 0.3 && inBar % 2 === 1) this.hat(time, 0.018 + 0.03 * drums, inBar % 4 === 1 ? 0.25 : -0.2);
-        if (drums > 0.62 && (inBar === 4 || inBar === 12)) this.snare(time, 0.05 + 0.07 * drums);
+        if (inBar % 8 === 0) this.kick(time, 0.12 + 0.16 * drums);
+        if (inBar % 8 === 4 && drums > 0.55) this.kick(time, 0.07 + 0.09 * drums);
+        if (inBar % 2 === 1) this.hat(time, 0.01 + 0.026 * drums, inBar % 4 === 1 ? 0.25 : -0.22);
+        if (drums > 0.55 && (inBar === 4 || inBar === 12)) this.snare(time, 0.035 + 0.05 * drums);
+      }
+      const g = this.groove;
+      if (g > 0.15) {
+        if (inBar % 4 === 2) this.tom(time, 156 - 16 * Math.floor(inBar / 4), 0.055 * g);
+        if (inBar === 4 || inBar === 12) this.clap(time, 0.05 * g);
+        if (inBar % 4 === 3) this.bassNote(chord.bass + 12, time, beatDur * 0.16, 0.05 * g);
+        if (inBar === 15) this.hat(time, 0.028 * g, -0.3);
       }
     }
     // ── 乐器 ────────────────────────────────────────────────────
@@ -5775,6 +5825,7 @@ body.dragging-sort {
     pad(notes, time, dur, gain, attack) {
       const ctx = this.ctx;
       if (!ctx || !this.musicBus || !this.reverbIn) return;
+      this.debugCounts.pad++;
       this.lastPadAt = time;
       const filter = ctx.createBiquadFilter();
       filter.type = "lowpass";
@@ -5808,6 +5859,7 @@ body.dragging-sort {
     pluck(note, time, gain, decay, pan) {
       const ctx = this.ctx;
       if (!ctx || !this.musicBus || !this.reverbIn) return;
+      this.debugCounts.pluck++;
       const o = ctx.createOscillator();
       o.type = "triangle";
       o.frequency.value = midiHz(note);
@@ -5829,6 +5881,7 @@ body.dragging-sort {
     bassNote(note, time, dur, gain) {
       const ctx = this.ctx;
       if (!ctx || !this.musicBus) return;
+      this.debugCounts.bass++;
       const o = ctx.createOscillator();
       o.type = "sine";
       o.frequency.value = midiHz(note);
@@ -5858,6 +5911,7 @@ body.dragging-sort {
     kick(time, gain) {
       const ctx = this.ctx;
       if (!ctx || !this.musicBus) return;
+      this.debugCounts.kick++;
       const o = ctx.createOscillator();
       o.type = "sine";
       o.frequency.setValueAtTime(196, time);
@@ -5875,6 +5929,7 @@ body.dragging-sort {
     hat(time, gain, pan) {
       const ctx = this.ctx;
       if (!ctx || !this.musicBus || !this.noiseBuf) return;
+      this.debugCounts.hat++;
       const src = ctx.createBufferSource();
       src.buffer = this.noiseBuf;
       const hp = ctx.createBiquadFilter();
@@ -5896,6 +5951,7 @@ body.dragging-sort {
     snare(time, gain) {
       const ctx = this.ctx;
       if (!ctx || !this.musicBus || !this.noiseBuf) return;
+      this.debugCounts.snare++;
       const src = ctx.createBufferSource();
       src.buffer = this.noiseBuf;
       const bp = ctx.createBiquadFilter();
@@ -5923,6 +5979,52 @@ body.dragging-sort {
       this.free(src, bp, g);
       this.free(body, bg);
     }
+    /** 桶鼓：比底鼓高、比军鼓低，律动期用来补反拍 */
+    tom(time, hz, gain) {
+      const ctx = this.ctx;
+      if (!ctx || !this.musicBus) return;
+      this.debugCounts.tom++;
+      const base = Math.max(70, hz);
+      const o = ctx.createOscillator();
+      o.type = "sine";
+      o.frequency.setValueAtTime(base, time);
+      o.frequency.exponentialRampToValueAtTime(base * 0.62, time + 0.16);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(1e-4, time);
+      g.gain.exponentialRampToValueAtTime(Math.max(2e-4, gain), time + 5e-3);
+      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.26);
+      o.connect(g);
+      g.connect(this.musicBus);
+      o.start(time);
+      o.stop(time + 0.28);
+      this.free(o, g);
+    }
+    /** 拍手：三下短噪声叠在一起，律动期替军鼓加一层"电子感" */
+    clap(time, gain) {
+      const ctx = this.ctx;
+      const bus = this.musicBus;
+      const noise = this.noiseBuf;
+      if (!ctx || !bus || !noise) return;
+      this.debugCounts.clap++;
+      for (let i = 0; i < 3; i++) {
+        const t = time + i * 0.011;
+        const src = ctx.createBufferSource();
+        src.buffer = noise;
+        const bp = ctx.createBiquadFilter();
+        bp.type = "bandpass";
+        bp.frequency.value = 1250;
+        bp.Q.value = 1.2;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(Math.max(2e-4, gain) * (i === 2 ? 1 : 0.65), t);
+        g.gain.exponentialRampToValueAtTime(1e-4, t + 0.09);
+        src.connect(bp);
+        bp.connect(g);
+        g.connect(bus);
+        src.start(t);
+        src.stop(t + 0.1);
+        this.free(src, bp, g);
+      }
+    }
     /** 悠远模式下偶尔出现的高音闪光：慢起慢落，几乎全给混响 */
     shimmer(note, time, gain) {
       const ctx = this.ctx;
@@ -5946,7 +6048,11 @@ body.dragging-sort {
       const ctx = this.ctx;
       if (!ctx || !this.sfxBus || ctx.state !== "running") return;
       if (this.settings.muted || this.settings.sfx <= 0.01) return;
-      if (name === "stamp") this.editSpike = 1;
+      if (name === "stamp") {
+        this.editSpike = 1;
+        this.kickGroove(1);
+      }
+      if (name === "random") this.kickGroove(1.5);
       const t = ctx.currentTime + 0.012;
       try {
         switch (name) {
@@ -6011,6 +6117,7 @@ body.dragging-sort {
       } else {
         const hz = 1320 + Math.min(1400, this.paintAccum * 70);
         this.sfxBlip(t, hz, 0.035 + Math.min(0.03, this.paintAccum * 2e-3));
+        this.kickGroove(0.2);
       }
       this.paintAccum = 0;
     }
@@ -7364,6 +7471,13 @@ body.dragging-sort {
         redoEdit();
         return;
       }
+    }
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "m") {
+      e.preventDefault();
+      const muted = sound.toggleMute();
+      applySoundButton();
+      toast(muted ? "已静音（Ctrl+M 恢复）" : "声音已开");
+      return;
     }
     if (e.code === "Space") {
       e.preventDefault();
@@ -9588,8 +9702,8 @@ body.dragging-sort {
     const btn = el("btn-sound");
     const silent = sound.settings.muted || sound.settings.music <= 1e-3 && sound.settings.sfx <= 1e-3;
     btn.classList.toggle("off", silent);
-    btn.dataset.tip = silent ? "声音：已静音" : `声音：音乐 ${Math.round(sound.settings.music * 100)}% · 音效 ${Math.round(sound.settings.sfx * 100)}%`;
-    btn.setAttribute("aria-label", silent ? "声音：已静音" : "声音设置");
+    btn.dataset.tip = silent ? "声音：已静音（点击恢复 · Shift+点击设置）" : `声音：音乐 ${Math.round(sound.settings.music * 100)}% · 音效 ${Math.round(sound.settings.sfx * 100)}%（点击静音 · Shift+点击设置）`;
+    btn.setAttribute("aria-label", silent ? "声音：已静音" : "声音：点击静音");
   }
   function openSoundSettings() {
     sound.unlock();
@@ -9621,13 +9735,15 @@ body.dragging-sort {
           <div class="sound-bars">
             <span class="sound-bar-label">绽放</span>
             <span class="sound-bar"><b id="snd-pulse"></b></span>
+            <span class="sound-bar-label">律动</span>
+            <span class="sound-bar"><b id="snd-groove"></b></span>
             <span class="sound-bar-label">悠远</span>
             <span class="sound-bar"><b id="snd-space"></b></span>
           </div>
         </div>
 
         <div class="set-warn">
-          <span>音乐跟着画布走：没有细胞时只剩低沉的死寂；细胞突然增多（人口加速度变大）会一点点加速、进鼓；镜头拉到世界之外时变成悠远的长混响。</span>
+          <span>音乐跟着画布走：没有细胞时只剩一下一下的微弱心跳；放入细胞后鼓点进来；连着放图案、连着画细胞会进入律动期（桶鼓 / 拍手 / 反拍低音），停手几秒后自己回到正常算法；镜头拉远到世界之外时变成悠远的长混响。</span>
         </div>
 
         <div class="btn-row" style="justify-content:flex-end;margin-top:12px">
@@ -9674,15 +9790,17 @@ body.dragging-sort {
       const tempoEl = body.querySelector("#snd-tempo");
       const metaEl = body.querySelector("#snd-meta");
       const pulseEl = body.querySelector("#snd-pulse");
+      const grooveEl = body.querySelector("#snd-groove");
       const spaceEl = body.querySelector("#snd-space");
       const refresh = () => {
         modeEl.textContent = MODE_LABEL[sound.mode] ?? sound.mode;
         modeEl.dataset.mode = sound.mode;
-        tempoEl.textContent = `${Math.round(sound.tempo)} BPM`;
+        tempoEl.textContent = `${Math.round(sound.tempo)} BPM${sound.groove > 0.35 ? " · 律动中" : ""}`;
         const rate = sound.rate;
         const rateText = `${rate >= 0 ? "+" : ""}${Math.round(rate)} 细胞/秒`;
         metaEl.textContent = `人口 ${nf.format(sound.population)} · 变化 ${rateText} · 缩放 ${fmtZoom(view.scale)}`;
         pulseEl.style.width = `${Math.round(sound.pulse * 100)}%`;
+        grooveEl.style.width = `${Math.round(sound.groove * 100)}%`;
         spaceEl.style.width = `${Math.round(sound.space * 100)}%`;
       };
       refresh();
@@ -9765,6 +9883,10 @@ body.dragging-sort {
         {
           keys: ["手机"],
           text: "单指绘制、双指捏合缩放、双指拖动平移；顶栏可以横向滑动看更多按钮"
+        },
+        {
+          keys: ["喇叭", "Ctrl+M"],
+          text: "点一下喇叭（或按 <kbd>Ctrl</kbd>+<kbd>M</kbd>）立刻静音，再点恢复；<kbd>Shift</kbd> + 点击喇叭（或右键）打开声音设置"
         }
       ]
     },
@@ -9954,7 +10076,19 @@ body.dragging-sort {
     });
     el("btn-record").addEventListener("click", () => void toggleRecord());
     el("btn-studio").addEventListener("click", () => openStudioBridge(0));
-    el("btn-sound").addEventListener("click", openSoundSettings);
+    el("btn-sound").addEventListener("click", (e) => {
+      if (e.shiftKey || e.altKey) {
+        openSoundSettings();
+        return;
+      }
+      const muted = sound.toggleMute();
+      applySoundButton();
+      toast(muted ? "已静音：再点一下喇叭恢复（Shift+点击调音量）" : "声音已开");
+    });
+    el("btn-sound").addEventListener("contextmenu", (e) => {
+      e.preventDefault();
+      openSoundSettings();
+    });
     el("btn-fullscreen").addEventListener("click", toggleImmersive);
     el("btn-help").addEventListener("click", openHelp);
     el("btn-settings").addEventListener("click", openCanvasSettings);
@@ -10167,6 +10301,7 @@ body.dragging-sort {
           beginEdit(`放置 ${p.name}`);
           stampPattern(world, p, x, y, 0, false);
           commitEdit();
+          sound.kickGroove(1);
           return patternSize(p, 0);
         },
         fit: () => fitContent(),

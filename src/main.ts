@@ -1515,6 +1515,15 @@ window.addEventListener('keydown', (e) => {
     }
   }
 
+  // Ctrl+M / Cmd+M：一键静音（音效和音乐一起）
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'm') {
+    e.preventDefault();
+    const muted = sound.toggleMute();
+    applySoundButton();
+    toast(muted ? '已静音（Ctrl+M 恢复）' : '声音已开');
+    return;
+  }
+
   if (e.code === 'Space') {
     e.preventDefault();
     if (e.repeat) return;
@@ -4119,9 +4128,9 @@ function applySoundButton(): void {
   const silent = sound.settings.muted || (sound.settings.music <= 0.001 && sound.settings.sfx <= 0.001);
   btn.classList.toggle('off', silent);
   btn.dataset.tip = silent
-    ? '声音：已静音'
-    : `声音：音乐 ${Math.round(sound.settings.music * 100)}% · 音效 ${Math.round(sound.settings.sfx * 100)}%`;
-  btn.setAttribute('aria-label', silent ? '声音：已静音' : '声音设置');
+    ? '声音：已静音（点击恢复 · Shift+点击设置）'
+    : `声音：音乐 ${Math.round(sound.settings.music * 100)}% · 音效 ${Math.round(sound.settings.sfx * 100)}%（点击静音 · Shift+点击设置）`;
+  btn.setAttribute('aria-label', silent ? '声音：已静音' : '声音：点击静音');
 }
 
 function openSoundSettings(): void {
@@ -4154,13 +4163,15 @@ function openSoundSettings(): void {
           <div class="sound-bars">
             <span class="sound-bar-label">绽放</span>
             <span class="sound-bar"><b id="snd-pulse"></b></span>
+            <span class="sound-bar-label">律动</span>
+            <span class="sound-bar"><b id="snd-groove"></b></span>
             <span class="sound-bar-label">悠远</span>
             <span class="sound-bar"><b id="snd-space"></b></span>
           </div>
         </div>
 
         <div class="set-warn">
-          <span>音乐跟着画布走：没有细胞时只剩低沉的死寂；细胞突然增多（人口加速度变大）会一点点加速、进鼓；镜头拉到世界之外时变成悠远的长混响。</span>
+          <span>音乐跟着画布走：没有细胞时只剩一下一下的微弱心跳；放入细胞后鼓点进来；连着放图案、连着画细胞会进入律动期（桶鼓 / 拍手 / 反拍低音），停手几秒后自己回到正常算法；镜头拉远到世界之外时变成悠远的长混响。</span>
         </div>
 
         <div class="btn-row" style="justify-content:flex-end;margin-top:12px">
@@ -4213,15 +4224,17 @@ function openSoundSettings(): void {
     const tempoEl = body.querySelector<HTMLElement>('#snd-tempo')!;
     const metaEl = body.querySelector<HTMLElement>('#snd-meta')!;
     const pulseEl = body.querySelector<HTMLElement>('#snd-pulse')!;
+    const grooveEl = body.querySelector<HTMLElement>('#snd-groove')!;
     const spaceEl = body.querySelector<HTMLElement>('#snd-space')!;
     const refresh = (): void => {
       modeEl.textContent = MODE_LABEL[sound.mode] ?? sound.mode;
       modeEl.dataset.mode = sound.mode;
-      tempoEl.textContent = `${Math.round(sound.tempo)} BPM`;
+      tempoEl.textContent = `${Math.round(sound.tempo)} BPM${sound.groove > 0.35 ? ' · 律动中' : ''}`;
       const rate = sound.rate;
       const rateText = `${rate >= 0 ? '+' : ''}${Math.round(rate)} 细胞/秒`;
       metaEl.textContent = `人口 ${nf.format(sound.population)} · 变化 ${rateText} · 缩放 ${fmtZoom(view.scale)}`;
       pulseEl.style.width = `${Math.round(sound.pulse * 100)}%`;
+      grooveEl.style.width = `${Math.round(sound.groove * 100)}%`;
       spaceEl.style.width = `${Math.round(sound.space * 100)}%`;
     };
     refresh();
@@ -4326,6 +4339,10 @@ const HELP_SECTIONS: HelpSection[] = [
       {
         keys: ['手机'],
         text: '单指绘制、双指捏合缩放、双指拖动平移；顶栏可以横向滑动看更多按钮',
+      },
+      {
+        keys: ['喇叭', 'Ctrl+M'],
+        text: '点一下喇叭（或按 <kbd>Ctrl</kbd>+<kbd>M</kbd>）立刻静音，再点恢复；<kbd>Shift</kbd> + 点击喇叭（或右键）打开声音设置',
       },
     ],
   },
@@ -4532,7 +4549,20 @@ function bindUi(): void {
 
   el('btn-record').addEventListener('click', () => void toggleRecord());
   el('btn-studio').addEventListener('click', () => openStudioBridge(0));
-  el('btn-sound').addEventListener('click', openSoundSettings);
+  // 点一下喇叭 = 一键静音；Shift/Alt + 点击、或者右键 = 打开声音设置
+  el('btn-sound').addEventListener('click', (e) => {
+    if (e.shiftKey || e.altKey) {
+      openSoundSettings();
+      return;
+    }
+    const muted = sound.toggleMute();
+    applySoundButton();
+    toast(muted ? '已静音：再点一下喇叭恢复（Shift+点击调音量）' : '声音已开');
+  });
+  el('btn-sound').addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    openSoundSettings();
+  });
   el('btn-fullscreen').addEventListener('click', toggleImmersive);
   el('btn-help').addEventListener('click', openHelp);
   el('btn-settings').addEventListener('click', openCanvasSettings);
@@ -4736,6 +4766,8 @@ async function boot(): Promise<void> {
         beginEdit(`放置 ${p.name}`);
         stampPattern(world, p, x, y, 0, false);
         commitEdit();
+        // 自动化测试也走"放图案"这条路径：同样算一次加入，给音乐推律动
+        sound.kickGroove(1);
         return patternSize(p, 0);
       },
       fit: () => fitContent(),
