@@ -2,7 +2,7 @@ import { AbsoluteFill, Img, OffthreadVideo, Sequence, interpolate, spring, stati
 import { LifeGrid } from '../components/LifeGrid';
 import { Backdrop, Eyebrow, Heading, Rise } from '../components/ui';
 import { C } from '../theme';
-import { GATE_DEMOS, type GateDemo } from '../lib/gates';
+import { AND_DEMO, GATE_DEMOS, XOR_DEMO, type GateDemo } from '../lib/gates';
 import { CIRCUITS, type CircuitDef } from '../lib/circuits';
 import { framesOf, getPattern, type Bitmap, type Frame } from '../lib/life';
 
@@ -10,25 +10,23 @@ import { framesOf, getPattern, type Bitmap, type Frame } from '../lib/life';
 export const BlackCaptionScene: React.FC = () => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
-  const a = spring({ frame: frame - 6, fps, config: { damping: 200, mass: 0.8 } });
-  const line = interpolate(frame, [20, 50], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const a = spring({ frame: frame - 4, fps, config: { damping: 200, mass: 0.8 } });
+  const line = interpolate(frame, [22, 56], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
     <AbsoluteFill style={{ background: '#05080c', color: C.text, justifyContent: 'center', alignItems: 'center' }}>
-      <div style={{ opacity: a, transform: `translateY(${(1 - a) * 18}px)`, textAlign: 'center' }}>
-        <div style={{ fontSize: 18, letterSpacing: 10, color: C.accent, marginBottom: 26 }}>问下去</div>
-        <div style={{ fontSize: 50, fontWeight: 700, letterSpacing: 2, lineHeight: 1.55 }}>
-          那有了逻辑，
-          <br />
-          我们可以拿它来做什么？
+      <div style={{ opacity: a, transform: `translateY(${(1 - a) * 16}px) scale(${0.985 + a * 0.015})`, textAlign: 'center' }}>
+        <div style={{ fontSize: 16, letterSpacing: 10, color: C.accent, marginBottom: 24 }}>问下去</div>
+        <div style={{ fontSize: 48, fontWeight: 700, letterSpacing: 2, lineHeight: 1.35 }}>
+          那有了逻辑，<span style={{ color: C.accent }}>我们可以拿它来做什么？</span>
         </div>
         <div
           style={{
-            width: 140 * line,
+            width: 132 * line,
             height: 2,
-            margin: '38px auto 0',
+            margin: '34px auto 0',
             background: C.accent,
-            opacity: 0.6,
+            opacity: 0.55,
           }}
         />
       </div>
@@ -204,7 +202,7 @@ export const GatesScene: React.FC = () => {
       <AbsoluteFill style={{ padding: '76px 120px', opacity: out }}>
         <Rise delay={0}>
           <Eyebrow>逻辑</Eyebrow>
-          <Heading size={46}>四种门，四种反应</Heading>
+          <Heading size={38}>不同的反应，定义不同的逻辑门</Heading>
           <div style={{ marginTop: 10, fontSize: 20, color: C.dim }}>
             都是细胞真的在跑 —— 为了让眼睛看清，每张卡循环同一组输入。
           </div>
@@ -255,6 +253,28 @@ const buildArrayItem = (c: CircuitDef, pad: number, px: number): ArrayItem => {
   return { ...c, board, px, gap, frames };
 };
 
+const HALF_ADDER = (() => {
+  const xor = XOR_DEMO.frames[3][0];
+  const and = AND_DEMO.frames[3][0];
+  const gap = 8;
+  const w = xor.w + gap + and.w;
+  const h = Math.max(xor.h, and.h);
+  const cells = new Array<number>(w * h).fill(0);
+  for (let y = 0; y < xor.h; y++) {
+    for (let x = 0; x < xor.w; x++) {
+      if (xor.cells[y * xor.w + x]) cells[y * w + x] = 1;
+    }
+  }
+  const ox = xor.w + gap;
+  const oy = Math.floor((h - and.h) / 2);
+  for (let y = 0; y < and.h; y++) {
+    for (let x = 0; x < and.w; x++) {
+      if (and.cells[y * and.w + x]) cells[(y + oy) * w + ox + x] = 1;
+    }
+  }
+  return { id: 'halfadder', name: '半加器', en: 'HALF ADDER', w, h, cells };
+})();
+
 const ARRAY_ITEMS: ArrayItem[] = [
   ...CIRCUITS.map((c) => buildArrayItem(c, (ARRAY_STYLE[c.id] ?? { pad: 4, px: 4 }).pad, (ARRAY_STYLE[c.id] ?? { pad: 4, px: 4 }).px)),
   buildArrayItem(
@@ -262,18 +282,7 @@ const ARRAY_ITEMS: ArrayItem[] = [
     4,
     8,
   ),
-  buildArrayItem(
-    {
-      id: 'gun',
-      name: '滑翔枪',
-      en: 'GOSPER GUN',
-      w: getPattern('gosperglidergun').w,
-      h: getPattern('gosperglidergun').h,
-      cells: getPattern('gosperglidergun').cells,
-    },
-    4,
-    6,
-  ),
+  buildArrayItem(HALF_ADDER, 4, 3),
 ];
 
 const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> = ({ item, index, entry }) => {
@@ -326,8 +335,9 @@ const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> =
           borderRadius: 10,
           background: 'rgba(5,9,14,0.75)',
           display: 'flex',
-          alignItems: 'center',
+          alignItems: 'flex-start',
           justifyContent: 'center',
+          paddingTop: 8,
           overflow: 'hidden',
         }}
       >
@@ -395,7 +405,7 @@ export const GateArrayScene: React.FC = () => {
 
             <Rise delay={84} style={{ marginTop: 28 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, maxWidth: 560 }}>
-                {['解复用器', '触发器', '存储单元', '面包触发器', '时钟', '滑翔枪'].map((n, i) => (
+                {['解复用器', '触发器', '存储单元', '面包触发器', '时钟', '半加器'].map((n, i) => (
                   <div
                     key={n}
                     style={{
@@ -416,7 +426,7 @@ export const GateArrayScene: React.FC = () => {
             </Rise>
             <Rise delay={98} style={{ marginTop: 14 }}>
               <div style={{ fontSize: 15, color: C.dim, lineHeight: 1.7, maxWidth: 560 }}>
-                都是 LifeWiki 收录的图案，每一格都按四条规则演化。
+                都是 LifeWiki 收录的图案，每一格都按三条规则演化。
               </div>
             </Rise>
           </div>
@@ -531,7 +541,7 @@ export const TuringMachineScene: React.FC = () => {
               把不同的阵列组合起来，就是一台图灵机。
             </div>
             <div style={{ marginTop: 16, fontSize: 22, color: C.dim, lineHeight: 1.65 }}>
-              这四条规则，能算任何可计算的东西。
+              这三条规则，能算任何可计算的东西。
             </div>
             <div style={{ marginTop: 44, display: 'flex', flexDirection: 'column', gap: 12 }}>
               {[
@@ -760,7 +770,7 @@ const GRANDS: Grand[] = [
     mode: 'inset',
     zoom: 4,
     localLabel: '元像素的内部',
-    insetZoom: 1.6,
+    insetZoom: 2.2,
     insetFocus: '50% 50%',
     backgroundFit: 'contain',
     insetZoomOut: true,

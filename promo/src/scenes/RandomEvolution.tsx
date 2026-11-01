@@ -59,9 +59,8 @@ export const RandomEvolutionScene: React.FC = () => {
   const poemOut = interpolate(frame, [118, 145], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const dieIn = interpolate(frame, [0, 24], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const tossT = Math.min(1, Math.max(0, (frame - 40) / 38));
-  // 从画面左侧抛进来：水平位移线性收回，垂直走抛物线；落点带一点阻尼回弹
-  const dieX = -250 * (1 - tossT);
-  const dieToss = -270 * 4 * tossT * (1 - tossT) + (tossT > 0.86 ? Math.sin((tossT - 0.86) * 22) * 8 : 0);
+  // 原地上抛：只走垂直抛物线，转一圈落回原处
+  const dieToss = -280 * 4 * tossT * (1 - tossT) + (tossT > 0.86 ? Math.sin((tossT - 0.86) * 22) * 8 : 0);
   const dieScale = 0.82 + 0.18 * tossT;
   const dieRoll = interpolate(frame, [40, 78], [0, 360], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const ringRot = frame * 0.18;
@@ -146,7 +145,7 @@ export const RandomEvolutionScene: React.FC = () => {
             border: `1.5px solid rgba(255,217,160,0.85)`,
             background: 'linear-gradient(145deg, rgba(24,23,22,0.96), rgba(8,10,13,0.96))',
             boxShadow: `0 0 70px rgba(255,217,160,0.22), inset 0 0 22px rgba(255,217,160,0.08)`,
-            transform: `translate(${dieX}px, ${dieToss}px) rotate(${dieRoll}deg) scale(${dieScale})`,
+            transform: `translateY(${dieToss}px) rotate(${dieRoll}deg) scale(${dieScale})`,
           }}
         >
           {diePips}

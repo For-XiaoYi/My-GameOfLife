@@ -58,7 +58,7 @@ export const TitleScene: React.FC = () => {
             letterSpacing: 6,
           }}
         >
-          四条规则，半个多世纪不熄的宇宙
+          三条规则，半个多世纪不熄的宇宙
         </div>
 
         <div style={{ opacity: lineIn, marginTop: 60, display: 'flex', gap: 14 }}>

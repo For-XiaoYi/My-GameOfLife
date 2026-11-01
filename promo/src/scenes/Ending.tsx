@@ -142,7 +142,7 @@ export const OutroScene: React.FC = () => {
             transform: `translateY(${(1 - subIn) * 12}px)`,
           }}
         >
-          四条规则，一个可以玩很久的宇宙
+          三条规则，一个可以玩很久的宇宙
         </div>
 
         <div

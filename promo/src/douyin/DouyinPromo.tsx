@@ -185,7 +185,7 @@ const RulesSceneV: React.FC = () => {
   return (
     <Backdrop>
       <EyebrowV>它是怎么运转的</EyebrowV>
-      <Title top={140} size={82}>它只有四条规则</Title>
+      <Title top={140} size={82}>它只有三条规则</Title>
       <div style={{ position: 'absolute', left: 64, right: 64, top: 280, fontSize: 26, color: C.dim, lineHeight: 1.6 }}>
         每个格子只有生或死，命运只看身边的 8 个邻居。
       </div>
@@ -586,7 +586,7 @@ const TuringSceneV: React.FC = () => {
         </div>
       </div>
       <div style={{ position: 'absolute', left: 64, right: 64, top: 1420, fontSize: 30, color: C.text, lineHeight: 1.6 }}>
-        这四条规则，能算任何可计算的东西。
+        这三条规则，能算任何可计算的东西。
       </div>
       <div style={{ position: 'absolute', left: 64, right: 64, top: 1600, fontSize: 22, color: C.dim }}>
         局部实时演化 · 整机位置见右上小图
