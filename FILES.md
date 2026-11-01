@@ -33,7 +33,7 @@
 | `tools/patterns/` | 20 个内置图案的 RLE + 1 个宣传片专用的图灵机；`gen-patterns.mjs` 只认 META 里列出的内置图案 | 21 | ✅ |
 | `assets/` | README 与发布页的图：截图、海报、分镜图；宣传片成片也在这一层 | 4 | ✅（成片走 Release） |
 | `docs/` | GitHub Pages 产物，构建自动生成，**不要手改** | 1 | ✅ |
-| `promo/` | Remotion 宣传片工程：横版 2:19 + 竖版 60s、场景、组件、素材、双配乐、动态 Life 片段；`public/pattern-turing.png`、`grand-*.png`、`spacefiller-seed.png` 由 RLE 生成 | 71 | ✅ |
+| `promo/` | Remotion 宣传片工程：横版 2:21 + 竖版 60s、场景、组件、素材、双配乐、动态 Life 片段；`public/pattern-turing.png`、`grand-*.png`、`spacefiller-seed.png` 由 RLE 生成 | 72 | ✅ |
 | `promo/out/` | 渲染中间产物（抽帧、storyboard、测试视频），可随时删 | 45 | ❌ |
 | `promo/node_modules/` | 宣传片依赖 | — | ❌ |
 
@@ -60,7 +60,7 @@
 4. **体积策略**：单文件超过 12 MB 不进仓库树，改走 Release 附件；`assets/promo.mp4` 固定走 Release（否则每次 clone 都要拖一个大视频）；
 5. 规则一改，同步 `scripts/inventory.mjs` 顶部的常量，否则它末尾会报「规则漂移」。
 
-按现状：工作区 **141** 个文件，**139** 个会上传（约 49.8 MB），1 个走 Release 附件、1 个是 60 秒竖版配乐的 wav 中间产物（入库的是 `douyin.mp3` / `score.mp3` / `score-v11.mp3`）。
+按现状：工作区 **142** 个文件，**140** 个会上传（约 53.1 MB），1 个走 Release 附件、1 个是 60 秒竖版配乐的 wav 中间产物（入库的是 `douyin.mp3` / `score.mp3` / `score-v11.mp3` / `score-v12.mp3`）。
 上传是全量重传（每次重新上传所有 blob），一次约 2–3 分钟——后续会改成只传变化的文件。
 
 ## 不在文件树里的东西（浏览器本地数据）

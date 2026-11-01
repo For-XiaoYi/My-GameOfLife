@@ -169,7 +169,7 @@ Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`
 （旧版）
 　·　首帧海报：[`assets/promo-poster.png`](assets/promo-poster.png)
 　·　一图看全片：[`assets/promo-storyboard.png`](assets/promo-storyboard.png)（12 个关键帧，带时间点）
-　·　本地最新渲染：`promo/out/promo-v12.mp4`（1920×1080，30fps，139 秒，带临时延长的配乐与音效）
+　·　本地最新渲染：`promo/out/promo-v13.mp4`（1920×1080，30fps，141 秒，带临时延长的配乐与音效）
 
 > 视频没放进仓库：几十 MB 的二进制塞进 git 会让每次 clone 都变慢，所以走 Release 附件，
 > 上面那个链接点开就能直接下载。`assets/` 里的海报和分镜图是普通文件，clone 下来就有。
@@ -178,8 +178,8 @@ Pages 线上自检（`check-pages*.mjs`）和发布脚本（`publish-github.mjs`
 滑翔机（一个只有五格的图形）→ 滑翔机（实机录像）→ 更进一步（滑翔枪预告）→ 滑翔枪（1970 ·
 无限增长）→ 碰撞/判断 → 黑屏「逻辑」→ 四种门 → 门阵列（LifeWiki 收录的图案）→ 图灵机 →
 宏大结构 → 随机演化 → 结尾。后半段从「门」一路推到「机器」：四张逻辑门卡片（与 / 或 / 非 /
-异或）每 1.5 秒进一张；门阵列是四张 LifeWiki 收录的图案（解复用器 / 触发器 / 存储单元 /
-面包触发器），标「LifeWiki 图案」，不再说「真实电路」；Rendell 的图灵机用模拟器算出局部演化，
+异或）每 1.5 秒进一张；门阵列是六张 LifeWiki 收录的图案（解复用器 / 触发器 / 存储单元 /
+面包触发器 / 时钟 / 滑翔枪），2×3 向上滚，标「LifeWiki 图案」；Rendell 的图灵机用模拟器算出局部演化，
 P59 炮阵、OTCA 元像素和通用图灵机用全图 + 实时小窗，太空填充者和栽培者整屏实时生长；
 大神们的作品 5 张按「P59 → 太空填充者 → 栽培者 1 → OTCA 元像素 → 通用图灵机」排，
 图灵机放最后，背景额外放大 1.18× 减少左边空白。
@@ -199,11 +199,19 @@ v11：震荡子标题改成与静物同款的「秩序的产物 + 92px 类名」
 「网页即开 / 单文件可下」。因为门阵列 +4 秒、大神展示 +10 秒，全片从 125 秒变成 139 秒；
 配乐暂时是把原 125 秒在阵列/大神段做 loop 延长的临时版（`score-v11.mp3`）。
 
-v12（当前版）：门阵列改成「利用门，可以设计出 / 不同功能的阵列」，右侧六种功能图案
+v12：门阵列改成「利用门，可以设计出 / 不同功能的阵列」，右侧六种功能图案
 （解复用器 / 触发器 / 存储单元 / 面包触发器 / 时钟 / 滑翔枪）按 2×3 排、整列慢慢向上滚；
 结尾提问时背景完全淡出、文字淡入；图灵机开场拆成「会得到 / 一台机器」两行，一台机器用 74px；
 P59 小窗改回 3612,3860,480,270；栽培者 1 和 OTCA 元像素都换成真的在演化的动态片段
 （栽培者整屏、OTCA 全图 + 局部小窗）；通用图灵机放到大神展示最后一张，背景放大 1.18×。
+
+v13（当前版）：门阵列场景 10→12 秒，右侧滚得更快，滚到第 3 行露出 3/4 才开始淡出，
+左侧文字和右侧一起淡出，中间提问再淡入；门阵列第一行「利用门，可以设计出」缩到 30px，
+第二行「不同功能的阵列」放大到 60px；碰撞段改成「于是，我们有了基础的逻辑」40px；
+OTCA 背景改成 contain 展示完整方形图案，右上角小窗从 1.6× 一路拉远到 1×；
+随机段的骰子改成从左抛入的抛物线；结尾换成「GitHub 开源 / 浏览器运行 / 本地化数据」。
+配乐为 12 秒门阵列段延长到 `score-v12.mp3`（141 秒），仍是临时拼接版。
+规则「三条还是四条」、四门是否足以构建计算机，这两条是讨论项，本版没有改画面。
 
 ## 抖音竖版（60 秒）
 
@@ -236,9 +244,9 @@ ffmpeg -i promo/public/music/score.wav -c:a libmp3lame -b:a 192k promo/public/mu
 node scripts/make-sfx.mjs         # 出生 / 死亡 / live / tick / whoosh / 碰撞 / 点击
 ```
 
-v11 的成片 139 秒，用的是临时拼接的 `music/score-v11.mp3`：把原 125 秒 `score.mp3` 在
-门阵列段 +4 秒、大神展示段 +10 秒做 loop 延长。原始 125 秒的 `score.mp3` 仍在，脚本没有改；
-等下一轮整体重排后再替换。配乐由 `src/Promo.tsx` 里的 `<Audio src={staticFile('music/score-v11.mp3')} />`
+v13 的成片 141 秒，用的是临时拼接的 `music/score-v12.mp3`：把原 125 秒 `score.mp3` 在
+门阵列段 +6 秒、大神展示段 +10 秒做 loop 延长。原始 125 秒的 `score.mp3` 仍在，脚本没有改；
+等下一轮整体重排后再替换。配乐由 `src/Promo.tsx` 里的 `<Audio src={staticFile('music/score-v12.mp3')} />`
 挂在时间线上；规则段的生死音效是 `RulesScene` 里单独挂的 `<Audio>`，不混进配乐。
 
 ## 在自己电脑上改这支片子
@@ -266,7 +274,7 @@ pnpm render                         # 直接出 out/promo.mp4
 | `promo/src/lib/gates.ts` | 四种门的真实反应帧（与 / 或 / 非 / 异或） |
 | `promo/src/lib/circuits.ts` | 四台真实小电路（解复用器 / 触发器 / 存储单元 / 面包触发器）的坐标数据 |
 | `promo/src/assets/patterns.json` | 20 个预设图案的位图，由 `scripts/dump-patterns.mjs` 从主程序里导出 |
-| `promo/public/` | 界面截图、背景汤、`pattern-turing.png`、`grand-*.png`（含 `grand-breeder.png` / `grand-otca.png`）、`spacefiller-seed.png`、`clip-random-loop.mp4`、`clip-random-loop-vertical.mp4`、`clip-*-live.mp4`（图灵机 / P59 / 太空填充者 / 通用图灵机 / 栽培者 / OTCA）、`sfx/*.wav`、`music/score.mp3`（2.9 MB）、`music/score-v11.mp3`（3.2 MB，139 秒临时版）、`music/douyin.mp3`（1.4 MB，60 秒竖版配乐） |
+| `promo/public/` | 界面截图、背景汤、`pattern-turing.png`、`grand-*.png`（含 `grand-breeder.png` / `grand-otca.png`）、`spacefiller-seed.png`、`clip-random-loop.mp4`、`clip-random-loop-vertical.mp4`、`clip-*-live.mp4`（图灵机 / P59 / 太空填充者 / 通用图灵机 / 栽培者 / OTCA）、`sfx/*.wav`、`music/score.mp3`（2.9 MB）、`music/score-v11.mp3`（3.2 MB，139 秒临时版）、`music/score-v12.mp3`（3.2 MB，141 秒临时版）、`music/douyin.mp3`（1.4 MB，60 秒竖版配乐） |
 | `scripts/make-music.mjs` | 生成 125 秒完整版配乐（wav 中间产物） |
 | `scripts/make-douyin-music.mjs` | 生成 60 秒竖版配乐（仪式合唱 / 太鼓 / 808 / 音乐盒） |
 | `scripts/make-sfx.mjs` | 出生 / 死亡 / live / tick / whoosh / 碰撞 / 点击音效 |
@@ -300,9 +308,9 @@ pnpm render                         # 直接出 out/promo.mp4
   **4×4 个世界（中间 3×3 + 周围半圈）**，**没有 UI**。录制时临时把 `view.minScale` 降到 0.1，
   否则 `setView` 会把 scale 夹在 fit/2，而 `ox/oy` 仍按更小的 scale 算，镜头末尾会横向漂移。
   要重录：`node scripts/record-clips.mjs random-loop`；录完用 ffmpeg 压到 12 MB 以内再入库。
-- 门阵列场景 10 秒：左侧「利用门，可以设计出 / 不同功能的阵列」，右侧六张卡 2×3 向上滚；
-  第 5 秒抛出「将不同的阵列组合起来，又会得到什么？」、背景同步完全淡出、文字淡入、停 5 秒；
+- 门阵列场景 12 秒：左侧「利用门，可以设计出」（30px）/「不同功能的阵列」（60px），
+  右侧六张卡 2×3 向上滚；滚到第 3 行露出 3/4 时左侧和右侧一起淡出，提问淡入、停 6 秒；
   图灵机开场拆成「会得到 / 一台机器」两行，一台机器用 74px。
-- 结尾只保留「网页即开 / 单文件可下」，不再提手机（手机能打开但 bug 多，暂时不写）。
-- 配乐：原 125 秒 `score.mp3` 在阵列段 +4 秒、大神段 +10 秒做了临时 loop 延长，输出
-  `score-v11.mp3`（139 秒）；这不是最终配乐，下一轮整体重排。
+- 结尾换成「GitHub 开源 / 浏览器运行 / 本地化数据」，不再提手机。
+- 配乐：原 125 秒 `score.mp3` 在阵列段 +6 秒、大神段 +10 秒做了临时 loop 延长，输出
+  `score-v12.mp3`（141 秒）；这不是最终配乐，下一轮整体重排。

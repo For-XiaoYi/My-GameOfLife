@@ -344,21 +344,21 @@ const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> =
 
 export const GateArrayScene: React.FC = () => {
   const frame = useCurrentFrame();
-  const fadeOut = interpolate(frame, [270, 300], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  // 六张卡三行，整列慢慢向上滚；第 5 秒抛问题，背景同步完全淡出
-  const scroll = interpolate(frame, [60, 300], [0, 416], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const closing = interpolate(frame, [150, 186], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const dim = interpolate(frame, [150, 230], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const fadeOut = interpolate(frame, [330, 360], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  // 六张卡三行，滚到第 3 行露出 3/4（scroll≈316）时才开始淡出；左侧和右侧一起淡
+  const scroll = interpolate(frame, [30, 210], [0, 416], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const closing = interpolate(frame, [167, 195], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const dim = interpolate(frame, [167, 225], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
     <Backdrop>
       <AbsoluteFill style={{ padding: '76px 110px', opacity: fadeOut }}>
         <div style={{ display: 'flex', gap: 44, alignItems: 'center', justifyContent: 'center', height: '100%' }}>
-          <div style={{ width: 760 }}>
+          <div style={{ width: 760, opacity: dim }}>
             <Rise delay={0}>
               <Eyebrow>从门到阵列</Eyebrow>
-              <div style={{ fontSize: 50, fontWeight: 800, letterSpacing: 2, lineHeight: 1.18 }}>利用门，可以设计出</div>
-              <div style={{ fontSize: 50, fontWeight: 800, letterSpacing: 2, lineHeight: 1.18, color: C.accent }}>
+              <div style={{ fontSize: 30, letterSpacing: 5, lineHeight: 1.3, color: C.dim }}>利用门，可以设计出</div>
+              <div style={{ fontSize: 60, fontWeight: 800, letterSpacing: 2, lineHeight: 1.1, color: C.accent }}>
                 不同功能的阵列
               </div>
               <div style={{ marginTop: 20, fontSize: 24, color: C.text, lineHeight: 1.7, opacity: 0.9 }}>
@@ -690,6 +690,10 @@ type Grand = {
   videoTransform?: string;
   /** 全图背景的额外放大倍数（通用图灵机用，减少左边空白） */
   backgroundScale?: number;
+  /** 全图背景的填充方式：cover 默认，contain 可展示完整方形图案（OTCA） */
+  backgroundFit?: 'cover' | 'contain';
+  /** 右上角小窗是否从近到远拉远（OTCA） */
+  insetZoomOut?: boolean;
 };
 
 const GRANDS: Grand[] = [
@@ -756,8 +760,10 @@ const GRANDS: Grand[] = [
     mode: 'inset',
     zoom: 4,
     localLabel: '元像素的内部',
-    insetZoom: 1.3,
+    insetZoom: 1.6,
     insetFocus: '50% 50%',
+    backgroundFit: 'contain',
+    insetZoomOut: true,
   },
   {
     clip: 'clip-utm-live.mp4',
@@ -805,7 +811,7 @@ const GrandSegment: React.FC<{ g: Grand; i: number; opacity: number }> = ({ g, i
             style={{
               width: '100%',
               height: '100%',
-              objectFit: 'cover',
+              objectFit: g.backgroundFit ?? 'cover',
               filter: 'saturate(1.06) brightness(0.92)',
               transform: `scale(${g.backgroundScale ?? 1})`,
             }}
@@ -853,6 +859,7 @@ const GrandSegment: React.FC<{ g: Grand; i: number; opacity: number }> = ({ g, i
               borderRadius: 14,
               overflow: 'hidden',
               border: `1px solid ${C.accentSoft}`,
+              background: '#05080c',
               boxShadow: '0 24px 70px rgba(0,0,0,0.6), 0 0 60px rgba(108,245,210,0.10)',
             }}
           >
@@ -863,7 +870,11 @@ const GrandSegment: React.FC<{ g: Grand; i: number; opacity: number }> = ({ g, i
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
-                transform: `scale(${1 + ((g.insetZoom ?? 1.15) - 1) * (f / SEG)})`,
+                transform: `scale(${
+                  g.insetZoomOut
+                    ? (g.insetZoom ?? 1.2) - ((g.insetZoom ?? 1.2) - 1) * (f / SEG)
+                    : 1 + ((g.insetZoom ?? 1.15) - 1) * (f / SEG)
+                })`,
                 transformOrigin: g.insetFocus ?? '50% 50%',
               }}
             />

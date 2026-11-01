@@ -327,7 +327,7 @@ export const SwitchScene: React.FC = () => {
               lines={[
                 { at: 118, text: '它们会精确抵消 —— 像什么都没发生过。' },
                 { at: 166, text: '两颗都到，输出 0；只到一颗，输出 1。', big: true },
-                { at: 214, text: '于是通过碰撞，我们有了基础的逻辑。', size: 34 },
+                { at: 214, text: '于是，我们有了基础的逻辑', size: 40 },
               ]}
             />
           </div>

@@ -157,8 +157,9 @@ export const OutroScene: React.FC = () => {
             opacity: chipsIn,
           }}
         >
-          <Chip>网页即开</Chip>
-          <Chip>单文件可下</Chip>
+          <Chip>GitHub 开源</Chip>
+          <Chip>浏览器运行</Chip>
+          <Chip>本地化数据</Chip>
         </div>
 
         {/* GitHub：图标 + 仓库地址 + 开源说明 */}
