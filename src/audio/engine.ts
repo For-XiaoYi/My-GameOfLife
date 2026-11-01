@@ -102,7 +102,6 @@ export class SoundEngine {
   private chordIdx = 0;
   private padHz = 900;
   private drumEnergy = 0;
-  private arpEnergy = 0;
   /** 上一次真正铺 pad 的时刻，避免切模式时和按小节排的 pad 撞在一起 */
   private lastPadAt = 0;
 
@@ -385,7 +384,7 @@ export class SoundEngine {
     }
     const chord = CHORDS[PROGRESSION[this.chordIdx]!]!;
     const cosmic = this.mode === 'cosmic';
-    this.pad(chord.pad, time, beatDur * 4 * (cosmic ? 1.6 : 1.05), cosmic ? 0.022 : this.mode === 'bloom' ? 0.13 : 0.12, cosmic ? 1.8 : 0.8);
+    this.pad(chord.pad, time, beatDur * 4 * (cosmic ? 1.6 : 1.05), cosmic ? 0.022 : this.mode === 'bloom' ? 0.13 : 0.085 + 0.035 * this.groove, cosmic ? 1.8 : 0.8);
     this.bassNote(chord.bass, time, beatDur * (cosmic ? 5 : 2.4), cosmic ? 0.075 : 0.14);
   }
 
@@ -402,20 +401,14 @@ export class SoundEngine {
   private padTarget(): number {
     if (this.mode === 'cosmic') return 620;
     if (this.mode === 'bloom') return 900 + 750 * this.pulse;
-    return 900 + 260 * this.groove;
+    // 平时把 pad 压暗一些，让鼓站在前面（"底色是动次打次"）
+    return 720 + 240 * this.groove;
   }
 
   private drumTarget(): number {
-    if (this.mode === 'bloom') return Math.min(1, 0.62 + 0.38 * this.pulse + 0.18 * this.groove);
-    if (this.mode === 'calm') return Math.min(1, 0.45 + 0.2 * this.pulse + 0.25 * this.groove);
+    if (this.mode === 'bloom') return Math.min(1, 0.72 + 0.28 * this.pulse + 0.15 * this.groove);
+    if (this.mode === 'calm') return Math.min(1, 0.55 + 0.2 * this.pulse + 0.2 * this.groove);
     return 0;
-  }
-
-  private arpTarget(): number {
-    if (this.mode === 'void') return 0;
-    if (this.mode === 'cosmic') return 0.42;
-    const base = this.mode === 'bloom' ? 0.92 : 0.5;
-    return Math.min(1, base + 0.45 * this.groove);
   }
 
   /** 混响送出量：越远越湿 */
@@ -459,7 +452,6 @@ export class SoundEngine {
     this.tempo += (this.tempoTarget() - this.tempo) * k;
     this.padHz += (this.padTarget() - this.padHz) * k;
     this.drumEnergy += (this.drumTarget() - this.drumEnergy) * k;
-    this.arpEnergy += (this.arpTarget() - this.arpEnergy) * k;
     if (this.reverbIn) {
       this.reverbIn.gain.setTargetAtTime(this.reverbTarget(), ctx.currentTime, 0.4);
     }
@@ -490,7 +482,8 @@ export class SoundEngine {
       if (time - this.lastPadAt > 0.7) {
         const cosmic = mode === 'cosmic';
         const dur = beatDur * 4 * (cosmic ? 1.6 : 1.05);
-        const gain = cosmic ? 0.022 : mode === 'bloom' ? 0.13 : 0.12;
+        // 平时 pad 压到很低，只当一层背景；律动期再抬回来
+        const gain = cosmic ? 0.022 : mode === 'bloom' ? 0.13 : 0.085 + 0.035 * this.groove;
         this.pad(chord.pad, time, dur, gain, cosmic ? 1.8 : 0.8);
         this.bassNote(chord.bass, time, beatDur * (cosmic ? 5 : 2.4), cosmic ? 0.075 : 0.14);
       }
@@ -508,32 +501,31 @@ export class SoundEngine {
       return;
     }
 
-    // ── 低音：平静时半小节一次，绽放时每拍都有存在感
+    // ── 动次打次：这才是底色。正拍 1、3 底鼓，2、4 军鼓，八分踩镲
+    const drums = this.drumEnergy;
+    if (drums > 0.02) {
+      if (inBar === 0 || inBar === 8) this.kick(time, 0.13 + 0.15 * drums);
+      if (inBar === 4 || inBar === 12) this.snare(time, 0.04 + 0.06 * drums);
+      if (inBar % 2 === 1) this.hat(time, 0.008 + 0.024 * drums, inBar % 4 === 1 ? 0.25 : -0.22);
+      // 绽放时补两下弱拍底鼓，推得更急
+      if (drums > 0.7 && (inBar === 6 || inBar === 14)) this.kick(time, 0.06 + 0.06 * drums);
+    }
+
+    // ── 低音：每小节的根音在和声块里，这里只补绽放的反拍
     if (mode === 'bloom' && inBar % 4 === 2) {
       this.bassNote(chord.bass + 12, time, beatDur * 0.35, 0.05 + 0.03 * this.pulse);
     }
 
-    // ── 琶音：平静八分音符，绽放/律动期十六分音符
-    const arpEvery = this.arpEnergy > 0.88 ? 1 : this.arpEnergy > 0.7 ? 2 : 4;
-    if (inBar % arpEvery === 0) {
-      const idx = Math.floor(step / arpEvery) % chord.arp.length;
-      const note = chord.arp[idx]! + (mode === 'bloom' ? 12 : 0);
-      const gain = (mode === 'bloom' ? 0.05 : 0.045) * (0.55 + this.arpEnergy * 0.45);
-      this.pluck(note, time, gain, mode === 'bloom' ? 5.6 : 7, [(-0.3), 0.3, -0.1, 0.1][idx] ?? 0);
-    }
-
-    // ── 鼓组：放入细胞之后就有稳定的底鼓 + 踩镲，人口加速时再加密
-    const drums = this.drumEnergy;
-    if (drums > 0.02) {
-      if (inBar % 8 === 0) this.kick(time, 0.12 + 0.16 * drums);
-      if (inBar % 8 === 4 && drums > 0.55) this.kick(time, 0.07 + 0.09 * drums);
-      if (inBar % 2 === 1) this.hat(time, 0.01 + 0.026 * drums, inBar % 4 === 1 ? 0.25 : -0.22);
-      if (drums > 0.55 && (inBar === 4 || inBar === 12)) this.snare(time, 0.035 + 0.05 * drums);
-    }
-
-    // ── 律动期：桶鼓、拍手、反拍低音，像一段小型的"加花"
+    // ── 长笛（三角波 pluck）：平时完全不响，只在律动期进来
     const g = this.groove;
     if (g > 0.15) {
+      const every = g > 0.6 ? 1 : 2;
+      if (inBar % every === 0) {
+        const idx = Math.floor(step / every) % chord.arp.length;
+        const note = chord.arp[idx]! + (mode === 'bloom' ? 12 : 0);
+        this.pluck(note, time, 0.04 * (0.55 + g * 0.45), 6.5, [(-0.3), 0.3, -0.1, 0.1][idx] ?? 0);
+      }
+      // 律动期再加桶鼓、拍手、切分低音，像一段小型的"加花"
       if (inBar % 4 === 2) this.tom(time, 156 - 16 * Math.floor(inBar / 4), 0.055 * g);
       if (inBar === 4 || inBar === 12) this.clap(time, 0.05 * g);
       if (inBar % 4 === 3) this.bassNote(chord.bass + 12, time, beatDur * 0.16, 0.05 * g);
