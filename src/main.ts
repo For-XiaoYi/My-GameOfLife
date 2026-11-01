@@ -106,6 +106,29 @@ let immersive = false;
 let fsTimer = 0;
 
 // ──────────────────────────────────────────────────────────────────────────
+// 按需重绘
+//
+// 画布是 2D canvas：内容会一直留在上面，不动就没必要每帧重画。
+// 之前主循环无条件 60fps 全屏重绘，暂停状态下主线程仍有近一半时间在画东西。
+// 现在的策略：
+//   · 有操作（指针 / 键盘 / 世界变化 / 播放 / 拖拽 / 有选区）→ 保持满帧；
+//   · 完全静止 → 每 250ms 补一帧兜底（4fps），肉眼看不出来，CPU 几乎归零。
+// 兜底帧是故意的：万一哪条改动路径忘了 markActivity，最多 250ms 后画面仍是新的。
+// ──────────────────────────────────────────────────────────────────────────
+/** 最近一次"画面可能要变"的时刻。 */
+let lastActivity = 0;
+/** 上一帧真正重画主画布的时刻。 */
+let lastRender = 0;
+/** 静止时的兜底重画间隔。 */
+const IDLE_RENDER_MS = 250;
+/** 操作结束后继续保持满帧的时长（悬停幽灵、惯性手感）。 */
+const ACTIVE_MS = 1200;
+
+function markActivity(): void {
+  lastActivity = performance.now();
+}
+
+// ──────────────────────────────────────────────────────────────────────────
 // 回溯深度：代数上限（内存上限固定 32MB，两者先到先算）
 // ──────────────────────────────────────────────────────────────────────────
 const HISTORY_DEPTH_KEY = 'life-studio:history-depth';
@@ -238,6 +261,7 @@ function applyWorldShape(w: number, h: number, edge: EdgeMode): void {
   view.fit(world.width, world.height, renderer.cssW, renderer.cssH);
   updateZoomBounds();
   uiDirty = true;
+  markActivity();
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -310,9 +334,23 @@ function loop(ts: number): void {
     state.acc = 0;
   }
 
-  renderer.sync();
-  const overlay = buildOverlay();
-  renderer.render(view, { grid: state.display >= 1, bounds: state.display === 2 }, overlay);
+  // 世界脏区刷到离屏位图；确实改了内容就当成本帧有活动
+  if (renderer.sync()) markActivity();
+
+  // 这些状态下画面每帧都可能变，必须满帧重绘
+  const now = performance.now();
+  const active =
+    state.playing ||
+    state.drag !== null ||
+    state.pinch !== null ||
+    moveState !== null ||
+    state.selection.length > 0 ||
+    now - lastActivity < ACTIVE_MS;
+
+  if (active || now - lastRender >= IDLE_RENDER_MS) {
+    lastRender = now;
+    renderer.render(view, { grid: state.display >= 1, bounds: state.display === 2 }, buildOverlay());
+  }
 
   if (uiDirty && ts - lastUi > 80) {
     lastUi = ts;
@@ -1032,6 +1070,7 @@ function setTool(tool: ToolName): void {
     btn.classList.toggle('active', btn.dataset.tool === tool);
   }
   updateHint();
+  markActivity();
 }
 
 const BRUSH_MAX = 31;
@@ -1041,6 +1080,7 @@ function adjustBrushSize(delta: number): void {
   if (next === state.brushSize) return;
   state.brushSize = next;
   updateHint();
+  markActivity();
 }
 
 function updateHint(): void {
@@ -1076,16 +1116,28 @@ function updateHint(): void {
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 canvas.addEventListener('pointerdown', (e) => {
+  markActivity();
   const p = localPoint(e);
   state.pointers.set(e.pointerId, p);
 
   if (state.pointers.size === 2) {
-    if (state.drag && state.drag.kind === 'paint' && state.editPending) {
+    // 第二根手指按下 = 这是双指手势，不是画画。
+    // 第一根手指按下时已经落了一笔，若不撤掉，每次捏合都会在世界里多出一个细胞。
+    // 只撤"还没拖动过"的那一笔：真画了一路再补第二根手指，说明是有意画的，保留。
+    const d = state.drag;
+    if (d && d.kind === 'paint' && !d.moved && editBase) {
+      const base = editBase;
+      editBase = null;
+      state.editPending = false;
+      world.loadPacked(base.packed, base.population, world.gen);
+      uiDirty = true;
+    } else if (d && d.kind === 'paint' && state.editPending) {
       commitEdit();
       state.editPending = false;
     }
     state.drag = null;
     state.pinch = null;
+    markActivity();
     return;
   }
   if (state.pointers.size > 2) return;
@@ -1239,6 +1291,7 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 window.addEventListener('pointermove', (e) => {
+  markActivity();
   const p = localPoint(e);
 
   if (state.pointers.has(e.pointerId)) state.pointers.set(e.pointerId, p);
@@ -1299,6 +1352,7 @@ window.addEventListener('pointermove', (e) => {
 });
 
 function endPointer(e: PointerEvent): void {
+  markActivity();
   state.pointers.delete(e.pointerId);
   if (state.pointers.size < 2) state.pinch = null;
 
@@ -1366,6 +1420,7 @@ canvas.addEventListener(
   'wheel',
   (e) => {
     e.preventDefault();
+    markActivity();
     const p = localPoint(e);
     const sizeTool = state.tool === 'brush' || state.tool === 'erase';
     // 滚轮默认缩放；画笔/橡皮下 Ctrl+滚轮改笔刷大小（Alt/Shift 也行）
@@ -1385,6 +1440,7 @@ canvas.addEventListener(
 // 键盘
 // ──────────────────────────────────────────────────────────────────────────
 window.addEventListener('keydown', (e) => {
+  markActivity();
   const t = e.target as HTMLElement | null;
   // 确认框开着的时候，键盘只服务于它
   if (confirmOpen()) {
@@ -1539,6 +1595,7 @@ function stepOnce(dir: number): void {
     if (world.gen > st.minGen) history.seek(world.gen - 1);
   }
   renderer.sync();
+  markActivity();
   flushUi();
 }
 
@@ -1619,6 +1676,7 @@ function toggleDisplay(): void {
   // 三态：0 关闭 → 1 只画网格 → 2 网格 + 世界边界 → 回到 0
   state.display = ((state.display + 1) % 3) as 0 | 1 | 2;
   applyDisplayButton();
+  markActivity();
 }
 
 function applyDisplayButton(): void {
@@ -1718,6 +1776,10 @@ function selectPattern(id: string): void {
     btn.classList.toggle('active', btn.dataset.id === id);
   }
   setTool('stamp');
+  // 手机上图案库是浮在画布上的抽屉：选完就收起来，否则选完还得再找一次收起按钮
+  if (window.innerWidth <= 700 && !el('palette').classList.contains('collapsed')) {
+    setPaletteCollapsed(true);
+  }
 }
 
 /** 取消选中：贴图工具下光标不再跟着一个幽灵图案。 */
@@ -3324,6 +3386,7 @@ function loadSnapshot(rec: SnapshotRecord): void {
   syncShapeFromWorld();
   view.setView(rec.view);
   uiDirty = true;
+  markActivity();
   flushUi();
   toast(`已载入「${rec.name}」`);
 }
@@ -4308,6 +4371,7 @@ function bindUi(): void {
     if (state.playing) setPlaying(false);
     history.seek(Number(tl.value));
     renderer.sync();
+    markActivity();
     flushUi();
   });
 
@@ -4529,6 +4593,7 @@ async function boot(): Promise<void> {
     view.panBy(renderer.cssW / 2 - p0.x, renderer.cssH / 2 - p0.y);
     updateZoomBounds();
     uiDirty = true;
+    markActivity();
   }).observe(stageEl);
 
   initTooltips();

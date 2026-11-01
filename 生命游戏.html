@@ -1979,6 +1979,45 @@ kbd {
   }
 }
 
+/* 窄屏手机（≤ 520px）：播放键和「回溯 / 录制」挤在同一行放不下，
+   播放键独占一行，「回溯 + 录制」另起一行靠右，底栏变成四行。 */
+@media (max-width: 520px) {
+  .play {
+    grid-column: 1 / -1;
+    order: 0;
+  }
+  .rec {
+    grid-column: 1 / -1;
+    order: 1;
+    justify-self: end;
+  }
+  .speed {
+    order: 2;
+  }
+  .timeline {
+    order: 3;
+  }
+}
+
+/* 小屏手机（≤ 430px）：顶栏放不下 logo + 统计 + 5 个按钮，
+   先让 logo 让位，再把图标与统计收紧一点，保证「帮助」不被切到屏幕外。 */
+@media (max-width: 430px) {
+  #topbar {
+    gap: 8px;
+    padding: 0 8px;
+  }
+  .brand {
+    display: none;
+  }
+  .iconbtn {
+    width: 28px;
+    height: 28px;
+  }
+  .stat {
+    padding: 4px 7px;
+  }
+}
+
 /* ---------- 自绘下拉（替代原生 select） ---------- */
 .menubtn {
   display: inline-flex;
@@ -4730,6 +4769,14 @@ body.dragging-sort {
     img = null;
     buf = null;
     world = null;
+    /**
+     * 环绕模式铺砖用的纹理。
+     * createPattern 每帧新建是浪费，但也不能一直缓存：Chrome 用的是画布在
+     * createPattern 那一刻的快照，离屏画布之后再更新，旧 pattern 不会跟着变。
+     * 所以只在"离屏内容没变"的帧之间复用（悬停/幽灵预览这类重画），一旦
+     * paintRect 写入了新像素就丢掉重建。
+     */
+    tilePattern = null;
     dpr = 1;
     cssW = 0;
     cssH = 0;
@@ -4745,6 +4792,7 @@ body.dragging-sort {
       this.off.height = world2.height;
       this.img = this.offCtx.createImageData(world2.width, world2.height);
       this.buf = new Uint32Array(this.img.data.buffer);
+      this.tilePattern = null;
       this.paintAll();
     }
     resize(cssW, cssH, dpr = window.devicePixelRatio || 1) {
@@ -4793,14 +4841,19 @@ body.dragging-sort {
         }
       }
       this.offCtx.putImageData(img, 0, 0, ax0, ay0, ax1 - ax0, ay1 - ay0);
+      this.tilePattern = null;
     }
-    /** 把世界标脏的区域刷到离屏画布。 */
+    /**
+     * 把世界标脏的区域刷到离屏画布。
+     * 返回是否真的重画了——主循环靠它判断这一帧要不要重画主画布。
+     */
     sync() {
       const w = this.world;
-      if (!w) return;
+      if (!w) return false;
       const d = w.consumeDirty();
-      if (!d) return;
+      if (!d) return false;
       this.paintRect(d.x0, d.y0, d.x1, d.y1);
+      return true;
     }
     render(view2, opts, overlay) {
       const ctx = this.ctx;
@@ -4931,7 +4984,11 @@ body.dragging-sort {
       ctx.save();
       ctx.translate(nx, ny);
       ctx.scale(scale, scale);
-      const pattern = ctx.createPattern(this.off, "repeat");
+      let pattern = this.tilePattern;
+      if (!pattern) {
+        pattern = ctx.createPattern(this.off, "repeat");
+        this.tilePattern = pattern;
+      }
       if (pattern) {
         ctx.fillStyle = pattern;
         ctx.imageSmoothingEnabled = scale < 1;
@@ -5172,6 +5229,13 @@ body.dragging-sort {
   var lastUi = 0;
   var immersive = false;
   var fsTimer = 0;
+  var lastActivity = 0;
+  var lastRender = 0;
+  var IDLE_RENDER_MS = 250;
+  var ACTIVE_MS = 1200;
+  function markActivity() {
+    lastActivity = performance.now();
+  }
   var HISTORY_DEPTH_KEY = "life-studio:history-depth";
   var HISTORY_DEPTHS = [0, 500, 1e3, 3e3, 1e4, 2e4];
   var HISTORY_BYTES = 32 * 1024 * 1024;
@@ -5273,6 +5337,7 @@ body.dragging-sort {
     view.fit(world.width, world.height, renderer.cssW, renderer.cssH);
     updateZoomBounds();
     uiDirty = true;
+    markActivity();
   }
   function sliderToSpeed(v) {
     return SPEED_MIN * Math.pow(SPEED_MAX / SPEED_MIN, v / 100);
@@ -5328,9 +5393,13 @@ body.dragging-sort {
     } else {
       state.acc = 0;
     }
-    renderer.sync();
-    const overlay = buildOverlay();
-    renderer.render(view, { grid: state.display >= 1, bounds: state.display === 2 }, overlay);
+    if (renderer.sync()) markActivity();
+    const now = performance.now();
+    const active = state.playing || state.drag !== null || state.pinch !== null || moveState !== null || state.selection.length > 0 || now - lastActivity < ACTIVE_MS;
+    if (active || now - lastRender >= IDLE_RENDER_MS) {
+      lastRender = now;
+      renderer.render(view, { grid: state.display >= 1, bounds: state.display === 2 }, buildOverlay());
+    }
     if (uiDirty && ts - lastUi > 80) {
       lastUi = ts;
       uiDirty = false;
@@ -5884,6 +5953,7 @@ body.dragging-sort {
       btn.classList.toggle("active", btn.dataset.tool === tool);
     }
     updateHint();
+    markActivity();
   }
   var BRUSH_MAX = 31;
   function adjustBrushSize(delta) {
@@ -5891,6 +5961,7 @@ body.dragging-sort {
     if (next === state.brushSize) return;
     state.brushSize = next;
     updateHint();
+    markActivity();
   }
   function updateHint() {
     const draw = el("hint").querySelector('[data-hint="draw"]');
@@ -5923,15 +5994,24 @@ body.dragging-sort {
   }
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   canvas.addEventListener("pointerdown", (e) => {
+    markActivity();
     const p = localPoint(e);
     state.pointers.set(e.pointerId, p);
     if (state.pointers.size === 2) {
-      if (state.drag && state.drag.kind === "paint" && state.editPending) {
+      const d = state.drag;
+      if (d && d.kind === "paint" && !d.moved && editBase) {
+        const base = editBase;
+        editBase = null;
+        state.editPending = false;
+        world.loadPacked(base.packed, base.population, world.gen);
+        uiDirty = true;
+      } else if (d && d.kind === "paint" && state.editPending) {
         commitEdit();
         state.editPending = false;
       }
       state.drag = null;
       state.pinch = null;
+      markActivity();
       return;
     }
     if (state.pointers.size > 2) return;
@@ -6074,6 +6154,7 @@ body.dragging-sort {
     paintCell(wp.x, wp.y, erase ? 0 : 1);
   });
   window.addEventListener("pointermove", (e) => {
+    markActivity();
     const p = localPoint(e);
     if (state.pointers.has(e.pointerId)) state.pointers.set(e.pointerId, p);
     if (state.pointers.size === 2) {
@@ -6127,6 +6208,7 @@ body.dragging-sort {
     }
   });
   function endPointer(e) {
+    markActivity();
     state.pointers.delete(e.pointerId);
     if (state.pointers.size < 2) state.pinch = null;
     const d = state.drag;
@@ -6189,6 +6271,7 @@ body.dragging-sort {
     "wheel",
     (e) => {
       e.preventDefault();
+      markActivity();
       const p = localPoint(e);
       const sizeTool = state.tool === "brush" || state.tool === "erase";
       if (sizeTool && (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey)) {
@@ -6203,6 +6286,7 @@ body.dragging-sort {
     { passive: false }
   );
   window.addEventListener("keydown", (e) => {
+    markActivity();
     const t = e.target;
     if (confirmOpen()) {
       if (e.key === "Escape") {
@@ -6345,6 +6429,7 @@ body.dragging-sort {
       if (world.gen > st.minGen) history.seek(world.gen - 1);
     }
     renderer.sync();
+    markActivity();
     flushUi();
   }
   function freeArea() {
@@ -6412,6 +6497,7 @@ body.dragging-sort {
   function toggleDisplay() {
     state.display = (state.display + 1) % 3;
     applyDisplayButton();
+    markActivity();
   }
   function applyDisplayButton() {
     const btn = el("tgl-grid");
@@ -6498,6 +6584,9 @@ body.dragging-sort {
       btn.classList.toggle("active", btn.dataset.id === id);
     }
     setTool("stamp");
+    if (window.innerWidth <= 700 && !el("palette").classList.contains("collapsed")) {
+      setPaletteCollapsed(true);
+    }
   }
   function deselectPattern() {
     state.patternId = "";
@@ -7849,6 +7938,7 @@ body.dragging-sort {
     syncShapeFromWorld();
     view.setView(rec.view);
     uiDirty = true;
+    markActivity();
     flushUi();
     toast(`已载入「${rec.name}」`);
   }
@@ -8710,6 +8800,7 @@ body.dragging-sort {
       if (state.playing) setPlaying(false);
       history.seek(Number(tl.value));
       renderer.sync();
+      markActivity();
       flushUi();
     });
     el("btn-record").addEventListener("click", () => void toggleRecord());
@@ -8939,6 +9030,7 @@ body.dragging-sort {
       view.panBy(renderer.cssW / 2 - p0.x, renderer.cssH / 2 - p0.y);
       updateZoomBounds();
       uiDirty = true;
+      markActivity();
     }).observe(stageEl);
     initTooltips();
     updateZoomBounds();

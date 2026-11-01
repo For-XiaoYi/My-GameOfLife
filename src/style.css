@@ -1971,6 +1971,45 @@ kbd {
   }
 }
 
+/* 窄屏手机（≤ 520px）：播放键和「回溯 / 录制」挤在同一行放不下，
+   播放键独占一行，「回溯 + 录制」另起一行靠右，底栏变成四行。 */
+@media (max-width: 520px) {
+  .play {
+    grid-column: 1 / -1;
+    order: 0;
+  }
+  .rec {
+    grid-column: 1 / -1;
+    order: 1;
+    justify-self: end;
+  }
+  .speed {
+    order: 2;
+  }
+  .timeline {
+    order: 3;
+  }
+}
+
+/* 小屏手机（≤ 430px）：顶栏放不下 logo + 统计 + 5 个按钮，
+   先让 logo 让位，再把图标与统计收紧一点，保证「帮助」不被切到屏幕外。 */
+@media (max-width: 430px) {
+  #topbar {
+    gap: 8px;
+    padding: 0 8px;
+  }
+  .brand {
+    display: none;
+  }
+  .iconbtn {
+    width: 28px;
+    height: 28px;
+  }
+  .stat {
+    padding: 4px 7px;
+  }
+}
+
 /* ---------- 自绘下拉（替代原生 select） ---------- */
 .menubtn {
   display: inline-flex;
