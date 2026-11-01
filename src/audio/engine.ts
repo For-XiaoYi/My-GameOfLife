@@ -45,7 +45,7 @@ const STORAGE_KEY = 'life-studio:sound';
 const DEFAULT_SETTINGS: SoundSettings = { muted: false, music: 0.7, sfx: 0.8 };
 
 /** 版本号：声音面板里会显示，用来确认你听到的确实是新版而不是缓存里的旧页面 */
-export const AUDIO_VERSION = 'v4 · 鼓点底 + 长笛只在律动期';
+export const AUDIO_VERSION = 'v6 · 宣传片律动 + 重心跳';
 
 const TICK_MS = 30;
 /** 提前多久把音符排进音频线程 */
@@ -86,6 +86,7 @@ export class SoundEngine {
     pluck: 0,
     bass: 0,
     pad: 0,
+    heart: 0,
   };
 
   private ctx: AudioContext | null = null;
@@ -403,29 +404,27 @@ export class SoundEngine {
   // ── 目标参数（随模式平滑过渡） ──────────────────────────────
 
   private tempoTarget(): number {
-    if (this.mode === 'cosmic') return 64;
-    if (this.mode === 'void') return 58;
-    const base = this.mode === 'bloom' ? 108 + 42 * this.pulse : 102;
-    // 律动期整体再抬一点，听起来像"被推起来了"
-    return base + 8 * this.groove;
+    // 空世界的心跳按 75 BPM 走（0.8 秒一轮 lub-dub）
+    if (this.mode === 'void') return 75;
+    if (this.mode === 'cosmic') return 84;
+    return this.mode === 'bloom' ? 120 + 10 * this.pulse : 120;
   }
 
   private padTarget(): number {
-    if (this.mode === 'cosmic') return 620;
-    if (this.mode === 'bloom') return 900 + 750 * this.pulse;
-    // 平时把 pad 压暗一些，让鼓站在前面（"底色是动次打次"）
-    return 720 + 240 * this.groove;
+    if (this.mode === 'cosmic') return 700;
+    if (this.mode === 'bloom') return 1000 + 500 * this.pulse;
+    return 900;
   }
 
   private drumTarget(): number {
-    if (this.mode === 'bloom') return Math.min(1, 0.72 + 0.28 * this.pulse + 0.15 * this.groove);
-    if (this.mode === 'calm') return Math.min(1, 0.55 + 0.2 * this.pulse + 0.2 * this.groove);
+    if (this.mode === 'bloom') return Math.min(1, 0.75 + 0.25 * this.pulse);
+    if (this.mode === 'calm') return 0.35;
     return 0;
   }
 
   /** 混响送出量：越远越湿 */
   private reverbTarget(): number {
-    return this.mode === 'cosmic' ? 0.62 : this.mode === 'void' ? 0.5 : 0.3;
+    return this.mode === 'cosmic' ? 0.6 : this.mode === 'void' ? 0.55 : 0.26;
   }
 
   // ── 调度器 ──────────────────────────────────────────────────
@@ -472,78 +471,74 @@ export class SoundEngine {
   /** 一个十六分音符步 */
   private scheduleStep(step: number, time: number): void {
     const mode = this.mode;
+    const beatDur = 60 / this.tempo;
+    const inBar = step % 16;
+    const chordName = PROGRESSION[this.chordIdx]!;
+    const chord = CHORDS[chordName]!;
 
-    // ── 死寂：不铺和声，只有一下一下的心跳（间隔很长表示微弱，但音量要听得见）
+    // ── 空世界：很重的心跳（lub-dub，0.8 秒一轮）+ 一层低声场
     if (mode === 'void') {
-      if (step % 16 === 0) this.kick(time, 0.22);
-      if (step % 16 === 1) this.kick(time, 0.14);
-      if (step % 32 === 0) this.bassNote(33, time, 8, 0.028);
-      if (step % 64 === 40 && Math.random() < 0.5) this.pluck(81, time, 0.016, 2.2, 0.25);
+      if (step % 4 === 0) this.heartbeat(time, 0.62);
+      if (step % 4 === 1) this.heartbeat(time, 0.4);
+      if (step % 32 === 0) this.bassNote(33, time, 7, 0.05);
       return;
     }
 
-    const beatDur = 60 / this.tempo;
-    const inBar = step % 16;
-    const chordEvery = 16;
-    const chordName = PROGRESSION[this.chordIdx]!;
-    const chord = CHORDS[chordName]!;
-    const grooveNow = this.groove;
-
-    // ── 和声：平时不铺 pad（底色就是鼓 + 低音），律动期和悠远才把和声铺回来
-    if (step % chordEvery === 0) {
-      // 刚在切模式时铺过就跳过，避免两层 pad 叠在一起突然变响
+    // ── 和声：每小节一次（参考 A 的 pad 铺底，没有转场音效）
+    if (inBar === 0) {
       if (time - this.lastPadAt > 0.7) {
         const cosmic = mode === 'cosmic';
-        if (cosmic || grooveNow > 0.12) {
-          const dur = beatDur * 4 * (cosmic ? 1.6 : 1.05);
-          const gain = cosmic ? 0.022 : 0.1 + 0.04 * grooveNow;
-          this.pad(chord.pad, time, dur, gain, cosmic ? 1.8 : 0.8);
-        }
-        this.bassNote(chord.bass, time, beatDur * (cosmic ? 5 : 2.4), cosmic ? 0.075 : 0.16);
+        const dur = beatDur * 4 * (cosmic ? 1.8 : 1.04);
+        const gain = cosmic ? 0.05 : mode === 'bloom' ? 0.11 : 0.1;
+        this.pad(chord.pad, time, dur, gain, cosmic ? 1.6 : 0.5);
       }
       this.chordIdx = (this.chordIdx + 1) % PROGRESSION.length;
     }
 
+    // ── 悠远：pad + 很稀疏的高音，没有鼓
     if (mode === 'cosmic') {
-      // 悠远：很稀疏的高音，慢慢亮起来又慢慢散掉
-      if (step % 16 === 0) {
+      if (step % 8 === 0) {
         const notes = chord.arp;
-        const n = notes[(step / 16) % notes.length]! + 24;
-        this.pluck(n, time, 0.02, 2.4, ((step / 16) % 2 ? 0.3 : -0.3));
+        this.pluck(notes[(step / 8) % notes.length]! + 24, time, 0.02, 2.2, (step / 8) % 2 ? 0.3 : -0.3);
       }
-      if (inBar === 0 && Math.random() < 0.5) this.shimmer(chord.arp[0]! + 24, time, 0.016);
+      if (inBar === 0 && Math.random() < 0.4) this.shimmer(chord.arp[0]! + 24, time, 0.014);
       return;
     }
 
-    // ── 动次打次：这才是底色。正拍 1、3 底鼓，2、4 军鼓，八分踩镲
+    // ── 参考 A 的脉冲：每一拍一记低音 + 底鼓，反拍再补一记轻的低音
+    if (inBar % 4 === 0) {
+      this.bassNote(chord.bass, time, beatDur * 0.48, 0.22);
+      this.kick(time, 0.18);
+    }
+    if (inBar % 4 === 2) this.bassNote(chord.bass + 12, time, beatDur * 0.3, 0.055);
+
+    // ── 琶音：平静八分、绽放十六分
+    const arpEvery = mode === 'bloom' ? 1 : 2;
+    if (inBar % arpEvery === 0) {
+      const idx = Math.floor(step / arpEvery) % chord.arp.length;
+      this.pluck(
+        chord.arp[idx]!,
+        time,
+        (mode === 'bloom' ? 0.045 : 0.04) * (0.8 + 0.4 * this.pulse),
+        mode === 'bloom' ? 6 : 7,
+        [(-0.25), 0.25, -0.1, 0.1][idx] ?? 0,
+      );
+    }
+
+    // ── 绽放：踩镲十六分 + 军鼓；平静只留很轻的反拍踩镲
     const drums = this.drumEnergy;
-    if (drums > 0.02) {
-      if (inBar === 0 || inBar === 8) this.kick(time, 0.22 + 0.18 * drums);
-      if (inBar === 4 || inBar === 12) this.snare(time, 0.07 + 0.08 * drums);
-      if (inBar % 2 === 1) this.hat(time, 0.012 + 0.03 * drums, inBar % 4 === 1 ? 0.25 : -0.22);
-      // 绽放时补两下弱拍底鼓，推得更急
-      if (drums > 0.7 && (inBar === 6 || inBar === 14)) this.kick(time, 0.09 + 0.07 * drums);
+    if (mode === 'bloom') {
+      if (inBar % 2 === 1) this.hat(time, 0.014 + 0.016 * drums, inBar % 4 === 1 ? 0.22 : -0.2);
+      if (inBar === 4 || inBar === 12) this.snare(time, 0.05 + 0.03 * drums);
+    } else if (inBar % 8 === 4) {
+      this.hat(time, 0.008, -0.2);
     }
 
-    // ── 低音：每小节的根音在和声块里，这里只补绽放的反拍
-    if (mode === 'bloom' && inBar % 4 === 2) {
-      this.bassNote(chord.bass + 12, time, beatDur * 0.35, 0.05 + 0.03 * this.pulse);
-    }
-
-    // ── 长笛（三角波 pluck）：平时完全不响，只在律动期进来
+    // ── 律动期：很小幅度的加花，不改变"平淡"的整体
     const g = this.groove;
-    if (g > 0.15) {
-      const every = g > 0.6 ? 1 : 2;
-      if (inBar % every === 0) {
-        const idx = Math.floor(step / every) % chord.arp.length;
-        const note = chord.arp[idx]! + (mode === 'bloom' ? 12 : 0);
-        this.pluck(note, time, 0.04 * (0.55 + g * 0.45), 6.5, [(-0.3), 0.3, -0.1, 0.1][idx] ?? 0);
-      }
-      // 律动期再加桶鼓、拍手、切分低音，像一段小型的"加花"
-      if (inBar % 4 === 2) this.tom(time, 156 - 16 * Math.floor(inBar / 4), 0.055 * g);
-      if (inBar === 4 || inBar === 12) this.clap(time, 0.05 * g);
-      if (inBar % 4 === 3) this.bassNote(chord.bass + 12, time, beatDur * 0.16, 0.05 * g);
-      if (inBar === 15) this.hat(time, 0.028 * g, -0.3);
+    if (g > 0.25) {
+      if (inBar === 14) this.tom(time, 140, 0.03 * g);
+      if (inBar === 12) this.clap(time, 0.025 * g);
     }
   }
 
@@ -658,6 +653,60 @@ export class SoundEngine {
     o.start(time);
     o.stop(time + 0.36);
     this.free(o, g);
+  }
+
+  /**
+   * 空世界的心跳：比普通底鼓更低、更重、更长。
+   * 三层叠起来——78→42Hz 的主体、33Hz 的超低、一下低通噪声的"咚"。
+   */
+  private heartbeat(time: number, gain: number): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.musicBus) return;
+    this.debugCounts.heart++;
+
+    const o = ctx.createOscillator();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(78, time);
+    o.frequency.exponentialRampToValueAtTime(42, time + 0.14);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.0001, time);
+    g.gain.exponentialRampToValueAtTime(gain, time + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, time + 0.55);
+    o.connect(g);
+    g.connect(this.musicBus);
+    o.start(time);
+    o.stop(time + 0.6);
+
+    const sub = ctx.createOscillator();
+    sub.type = 'sine';
+    sub.frequency.value = 33;
+    const sg = ctx.createGain();
+    sg.gain.setValueAtTime(0.0001, time);
+    sg.gain.exponentialRampToValueAtTime(gain * 0.55, time + 0.012);
+    sg.gain.exponentialRampToValueAtTime(0.0001, time + 0.5);
+    sub.connect(sg);
+    sg.connect(this.musicBus);
+    sub.start(time);
+    sub.stop(time + 0.55);
+
+    if (this.noiseBuf) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.noiseBuf;
+      const lp = ctx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 320;
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(gain * 0.5, time);
+      ng.gain.exponentialRampToValueAtTime(0.0001, time + 0.09);
+      src.connect(lp);
+      lp.connect(ng);
+      ng.connect(this.musicBus);
+      src.start(time);
+      src.stop(time + 0.1);
+      this.free(src, lp, ng);
+    }
+
+    this.free(o, sub, g, sg);
   }
 
   private hat(time: number, gain: number, pan: number): void {
