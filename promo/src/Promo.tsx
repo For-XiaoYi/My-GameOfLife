@@ -57,11 +57,11 @@ export const SCENES: SceneDef[] = [
   { key: 'switch', dur: 300, node: <SwitchScene /> },
   { key: 'black-caption', dur: 90, node: <BlackCaptionScene /> },
   { key: 'gates', dur: 300, node: <GatesScene /> },
-  { key: 'array', dur: 360, node: <GateArrayScene /> },
-  { key: 'turing', dur: 270, node: <TuringMachineScene /> },
+  { key: 'array', dur: 300, node: <GateArrayScene /> },
+  { key: 'turing', dur: 210, node: <TuringMachineScene /> },
   { key: 'grand', dur: 750, node: <GrandStructuresScene /> },
   { key: 'random', dur: 420, node: <RandomEvolutionScene /> },
-  { key: 'outro', dur: 360, node: <OutroScene /> },
+  { key: 'outro', dur: 270, node: <OutroScene /> },
 ];
 
 export const FPS = 30;
@@ -79,7 +79,7 @@ export const Promo: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: '#05080c' }}>
       {/* 整片配乐：scripts/make-music.mjs 合成，段落与场景对齐，结尾硬收 */}
-      <Audio src={staticFile('music/score-v12.mp3')} volume={1} />
+      <Audio src={staticFile('music/score-v13.mp3')} volume={1} />
       {SCENES.map((s) => {
         const from = at;
         at += s.dur;

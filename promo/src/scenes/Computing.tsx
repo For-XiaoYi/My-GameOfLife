@@ -285,7 +285,7 @@ const ARRAY_ITEMS: ArrayItem[] = [
     8,
     true,
   ),
-  buildArrayItem(HALF_ADDER, 4, 3, true),
+  buildArrayItem(HALF_ADDER, 4, 2, true),
 ];
 
 const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> = ({ item, index, entry }) => {
@@ -357,7 +357,7 @@ const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> =
 
 export const GateArrayScene: React.FC = () => {
   const frame = useCurrentFrame();
-  const fadeOut = interpolate(frame, [330, 360], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const fadeOut = interpolate(frame, [270, 300], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   // 卡改成 330 高后，三行内容 1026、视口 778；滚到第 3 行露出 3/4（scroll≈166）时开始淡出
   const scroll = interpolate(frame, [30, 210], [0, 248], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
   const closing = interpolate(frame, [150, 180], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
@@ -718,6 +718,8 @@ type Grand = {
   backgroundFit?: 'cover' | 'contain';
   /** 右上角小窗是否从近到远拉远（OTCA） */
   insetZoomOut?: boolean;
+  /** 小窗演示时镜头再上移多少 px（P59 先上移再开始） */
+  insetPanY?: number;
 };
 
 const GRANDS: Grand[] = [
@@ -739,6 +741,7 @@ const GRANDS: Grand[] = [
     insetZoom: 1.5,
     insetFocus: '50% 55%',
     insetZoomOut: true,
+    insetPanY: 46,
   },
   {
     clip: 'clip-spacefiller-live.mp4',
@@ -899,7 +902,7 @@ const GrandSegment: React.FC<{ g: Grand; i: number; opacity: number }> = ({ g, i
                   g.insetZoomOut
                     ? (g.insetZoom ?? 1.2) - ((g.insetZoom ?? 1.2) - 1) * (f / SEG)
                     : 1 + ((g.insetZoom ?? 1.15) - 1) * (f / SEG)
-                })`,
+                }) translateY(${((g.insetPanY ?? 0) * f) / SEG}px)`,
                 transformOrigin: g.insetFocus ?? '50% 50%',
               }}
             />
