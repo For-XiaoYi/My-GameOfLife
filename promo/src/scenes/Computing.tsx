@@ -4,7 +4,7 @@ import { Backdrop, Eyebrow, Heading, Rise } from '../components/ui';
 import { C } from '../theme';
 import { GATE_DEMOS, type GateDemo } from '../lib/gates';
 import { CIRCUITS, type CircuitDef } from '../lib/circuits';
-import { framesOf, type Bitmap, type Frame } from '../lib/life';
+import { framesOf, getPattern, type Bitmap, type Frame } from '../lib/life';
 
 // ── 黑屏字幕：电路段结束后，把问题抛给下一章 ───────────────────────────────
 export const BlackCaptionScene: React.FC = () => {
@@ -240,8 +240,7 @@ type ArrayItem = CircuitDef & {
   frames: Frame[];
 };
 
-const ARRAY_ITEMS: ArrayItem[] = CIRCUITS.map((c) => {
-  const { pad, px } = ARRAY_STYLE[c.id] ?? { pad: 4, px: 4 };
+const buildArrayItem = (c: CircuitDef, pad: number, px: number): ArrayItem => {
   const gap = 1;
   const w = c.w + pad * 2;
   const h = c.h + pad * 2;
@@ -254,7 +253,28 @@ const ARRAY_ITEMS: ArrayItem[] = CIRCUITS.map((c) => {
   const board: Bitmap = { w, h, cells };
   const frames = framesOf(`circuit-${c.id}`, board, 90, { wrapX: false, wrapY: false });
   return { ...c, board, px, gap, frames };
-});
+};
+
+const ARRAY_ITEMS: ArrayItem[] = [
+  ...CIRCUITS.map((c) => buildArrayItem(c, (ARRAY_STYLE[c.id] ?? { pad: 4, px: 4 }).pad, (ARRAY_STYLE[c.id] ?? { pad: 4, px: 4 }).px)),
+  buildArrayItem(
+    { id: 'clock', name: '时钟', en: 'CLOCK', w: getPattern('pulsar').w, h: getPattern('pulsar').h, cells: getPattern('pulsar').cells },
+    4,
+    8,
+  ),
+  buildArrayItem(
+    {
+      id: 'gun',
+      name: '滑翔枪',
+      en: 'GOSPER GUN',
+      w: getPattern('gosperglidergun').w,
+      h: getPattern('gosperglidergun').h,
+      cells: getPattern('gosperglidergun').cells,
+    },
+    4,
+    6,
+  ),
+];
 
 const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> = ({ item, index, entry }) => {
   const frame = useCurrentFrame();
@@ -325,9 +345,10 @@ const CircuitCard: React.FC<{ item: ArrayItem; index: number; entry: number }> =
 export const GateArrayScene: React.FC = () => {
   const frame = useCurrentFrame();
   const fadeOut = interpolate(frame, [270, 300], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  // 四张卡 1 秒一张；全部出完后第 5 秒抛问题，留 5 秒读完
-  const closing = interpolate(frame, [150, 174], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  const dim = interpolate(frame, [150, 210], [1, 0.18], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  // 六张卡三行，整列慢慢向上滚；第 5 秒抛问题，背景同步完全淡出
+  const scroll = interpolate(frame, [60, 300], [0, 416], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const closing = interpolate(frame, [150, 186], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const dim = interpolate(frame, [150, 230], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
     <Backdrop>
@@ -336,20 +357,23 @@ export const GateArrayScene: React.FC = () => {
           <div style={{ width: 760 }}>
             <Rise delay={0}>
               <Eyebrow>从门到阵列</Eyebrow>
-              <Heading size={52}>把门排成阵列</Heading>
+              <div style={{ fontSize: 50, fontWeight: 800, letterSpacing: 2, lineHeight: 1.18 }}>利用门，可以设计出</div>
+              <div style={{ fontSize: 50, fontWeight: 800, letterSpacing: 2, lineHeight: 1.18, color: C.accent }}>
+                不同功能的阵列
+              </div>
               <div style={{ marginTop: 20, fontSize: 24, color: C.text, lineHeight: 1.7, opacity: 0.9 }}>
                 一颗滑翔机是一个比特，一排门是一条信号线。
               </div>
               <div style={{ marginTop: 10, fontSize: 21, color: C.dim, lineHeight: 1.7 }}>
-                右边不是画出来的符号 —— 是 LifeWiki 上收录的真实图案。
+                右边不是画出来的符号 —— 是 LifeWiki 上收录的六种功能图案。
               </div>
             </Rise>
 
-            <Rise delay={50} style={{ marginTop: 54 }}>
+            <Rise delay={50} style={{ marginTop: 44 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                 {[
                   { t: '逻辑门', n: '4 种反应' },
-                  { t: '门阵列', n: 'LifeWiki 图案', on: true },
+                  { t: '门阵列', n: '6 种功能', on: true },
                 ].map((s, i) => (
                   <div key={s.t} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
                     <div
@@ -369,9 +393,9 @@ export const GateArrayScene: React.FC = () => {
               </div>
             </Rise>
 
-            <Rise delay={84} style={{ marginTop: 30 }}>
+            <Rise delay={84} style={{ marginTop: 28 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, maxWidth: 560 }}>
-                {['解复用器', '触发器', '存储单元', '面包触发器'].map((n, i) => (
+                {['解复用器', '触发器', '存储单元', '面包触发器', '时钟', '滑翔枪'].map((n, i) => (
                   <div
                     key={n}
                     style={{
@@ -390,7 +414,7 @@ export const GateArrayScene: React.FC = () => {
                 ))}
               </div>
             </Rise>
-            <Rise delay={98} style={{ marginTop: 16 }}>
+            <Rise delay={98} style={{ marginTop: 14 }}>
               <div style={{ fontSize: 15, color: C.dim, lineHeight: 1.7, maxWidth: 560 }}>
                 都是 LifeWiki 收录的图案，每一格都按四条规则演化。
               </div>
@@ -404,7 +428,7 @@ export const GateArrayScene: React.FC = () => {
               height: 778,
               flexShrink: 0,
               opacity: dim,
-              transform: `scale(${1 - 0.03 * closing})`,
+              transform: `scale(${1 - 0.02 * closing})`,
             }}
           >
             <div
@@ -430,13 +454,23 @@ export const GateArrayScene: React.FC = () => {
                 color: C.dim,
               }}
             >
-              <span style={{ color: C.accent }}>2 × 2</span>
-              <span>四张图案，四种反应</span>
+              <span style={{ color: C.accent }}>2 × 3</span>
+              <span>六张图案，六种功能</span>
             </div>
-            <div style={{ position: 'relative', display: 'grid', gridTemplateColumns: '380px 380px', gap: 18 }}>
-              {ARRAY_ITEMS.map((item, i) => (
-                <CircuitCard key={item.id} item={item} index={i} entry={i * 30} />
-              ))}
+            <div style={{ position: 'absolute', inset: 0, overflow: 'hidden' }}>
+              <div
+                style={{
+                  position: 'relative',
+                  display: 'grid',
+                  gridTemplateColumns: '380px 380px',
+                  gap: 18,
+                  transform: `translateY(${-scroll}px)`,
+                }}
+              >
+                {ARRAY_ITEMS.map((item, i) => (
+                  <CircuitCard key={item.id} item={item} index={i} entry={i * 18} />
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -483,10 +517,13 @@ export const TuringMachineScene: React.FC = () => {
         <div style={{ width: 470, flexShrink: 0 }}>
           <Rise delay={0}>
             <div style={{ fontSize: 16, letterSpacing: 7, color: C.dim }}>将不同的阵列组合起来</div>
-            <div style={{ marginTop: 6, fontSize: 34, fontWeight: 800, color: C.accent }}>会得到一台机器。</div>
-            <div style={{ marginTop: 20 }}>
+            <div style={{ marginTop: 22, fontSize: 28, letterSpacing: 5, color: C.dim }}>会得到</div>
+            <div style={{ marginTop: 2, fontSize: 74, lineHeight: 1.04, fontWeight: 800, letterSpacing: 7, color: C.accent }}>
+              一台机器
+            </div>
+            <div style={{ marginTop: 28 }}>
               <Eyebrow>2000 · Paul Rendell</Eyebrow>
-              <Heading size={68}>图灵机</Heading>
+              <Heading size={64}>图灵机</Heading>
             </div>
           </Rise>
           <div style={{ opacity: textIn, transform: `translateY(${(1 - textIn) * 16}px)` }}>
@@ -651,6 +688,8 @@ type Grand = {
   seed?: string;
   /** 整屏视频的取景偏移（太空填充者把钻石移到画面中间） */
   videoTransform?: string;
+  /** 全图背景的额外放大倍数（通用图灵机用，减少左边空白） */
+  backgroundScale?: number;
 };
 
 const GRANDS: Grand[] = [
@@ -664,11 +703,11 @@ const GRANDS: Grand[] = [
     credit: 'LifeWiki',
     pw: 8870,
     ph: 7352,
-    crop: { x: 7488, y: 3328, w: 480, h: 270 },
+    crop: { x: 3612, y: 3860, w: 480, h: 270 },
     gpf: 1,
     mode: 'inset',
     zoom: 4,
-    localLabel: '炮阵的密集区',
+    localLabel: '炮阵的交叉区',
     insetZoom: 1.35,
     insetFocus: '50% 55%',
   },
@@ -689,6 +728,38 @@ const GRANDS: Grand[] = [
     videoTransform: 'translate(500px, 300px) scale(1.35)',
   },
   {
+    clip: 'clip-breeder-live.mp4',
+    img: 'grand-breeder.png',
+    name: '栽培者 1',
+    en: 'Breeder 1',
+    stat: '749 × 338 格',
+    note: '四个滑翔机工厂，越造越快',
+    credit: 'Bill Gosper · 1970s',
+    pw: 749,
+    ph: 338,
+    crop: { x: 0, y: 0, w: 749, h: 338 },
+    gpf: 2,
+    mode: 'full',
+  },
+  {
+    clip: 'clip-otca-live.mp4',
+    img: 'grand-otca.png',
+    name: 'OTCA 元像素',
+    en: 'OTCA metapixel',
+    stat: '2,058 × 2,058 格',
+    note: '一个细胞里，再放一个宇宙',
+    credit: 'Brice Due · 2006',
+    pw: 2058,
+    ph: 2058,
+    crop: { x: 789, y: 894, w: 480, h: 270 },
+    gpf: 1,
+    mode: 'inset',
+    zoom: 4,
+    localLabel: '元像素的内部',
+    insetZoom: 1.3,
+    insetFocus: '50% 50%',
+  },
+  {
     clip: 'clip-utm-live.mp4',
     img: 'grand-utm.png',
     name: '通用图灵机',
@@ -705,32 +776,7 @@ const GRANDS: Grand[] = [
     localLabel: '机器头部',
     insetZoom: 1.55,
     insetFocus: '58% 42%',
-  },
-  {
-    img: 'grand-breeder.png',
-    name: '栽培者 1',
-    en: 'Breeder 1',
-    stat: '749 × 338 格',
-    note: '第一个被证明会二次增长的图案',
-    credit: 'Bill Gosper · 1970s',
-    pw: 749,
-    ph: 338,
-    crop: { x: 0, y: 0, w: 749, h: 338 },
-    gpf: 0,
-    mode: 'image',
-  },
-  {
-    img: 'grand-otca.png',
-    name: 'OTCA 元像素',
-    en: 'OTCA metapixel',
-    stat: '2,058 × 2,058 格',
-    note: '一个细胞里，再放一个宇宙',
-    credit: 'Brice Due · 2006',
-    pw: 2058,
-    ph: 2058,
-    crop: { x: 0, y: 0, w: 2058, h: 2058 },
-    gpf: 0,
-    mode: 'image',
+    backgroundScale: 1.18,
   },
 ];
 
@@ -756,7 +802,13 @@ const GrandSegment: React.FC<{ g: Grand; i: number; opacity: number }> = ({ g, i
         <AbsoluteFill style={{ overflow: 'hidden', transform: `scale(${z}) translateX(${tx}px)` }}>
           <Img
             src={staticFile(g.img)}
-            style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'saturate(1.06) brightness(0.92)' }}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'cover',
+              filter: 'saturate(1.06) brightness(0.92)',
+              transform: `scale(${g.backgroundScale ?? 1})`,
+            }}
           />
         </AbsoluteFill>
       ) : (
