@@ -1,13 +1,14 @@
-import { AbsoluteFill, Audio, Sequence, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 import { Backdrop, Eyebrow, Heading } from '../components/ui';
 import { C } from '../theme';
 
 /**
- * 规则演示：5×5 方阵。通用说法是三条（B3/S23）：
- * 死 / 活 / 生。死亡这一条用「孤单」和「拥挤」两个例子来演示。
+ * 规则演示：5×5 方阵，逐条演示四条规则。
+ * 每一段都是「数邻居 → 判定 → 中心格真的发生生死变化」，
+ * 死亡会缩小并炸成碎片，诞生会从无到有弹出并扩散光环，存活则稳定脉动。
  */
 
-const PHASE_DUR = 75;
+const PHASE_DUR = 80;
 const JUDGE = 32;
 
 type Verdict = 'lonely' | 'live' | 'born' | 'crowded';
@@ -30,18 +31,6 @@ const PHASES: Phase[] = [
     neighbors: [[1, 1]],
   },
   {
-    rule: '邻居超过 3 —— 拥挤而死',
-    verdict: 'crowded',
-    count: 4,
-    centerAlive: true,
-    neighbors: [
-      [1, 1],
-      [3, 1],
-      [1, 3],
-      [3, 3],
-    ],
-  },
-  {
     rule: '邻居是 2 或 3 —— 继续存活',
     verdict: 'live',
     count: 2,
@@ -62,13 +51,18 @@ const PHASES: Phase[] = [
       [1, 3],
     ],
   },
-];
-
-/** 三条规则：死亡把「太少」和「太多」并成同一条 */
-const RULES = [
-  { text: '邻居少于 2 或超过 3 —— 死', color: '#ff6b6b', start: 0, dur: 150 },
-  { text: '邻居是 2 或 3 —— 活', color: '#6cf5d2', start: 150, dur: 75 },
-  { text: '死格子周围正好 3 个 —— 生', color: '#9bff9b', start: 225, dur: 75 },
+  {
+    rule: '邻居超过 3 —— 拥挤而死',
+    verdict: 'crowded',
+    count: 4,
+    centerAlive: true,
+    neighbors: [
+      [1, 1],
+      [3, 1],
+      [1, 3],
+      [3, 3],
+    ],
+  },
 ];
 
 const VERDICT: Record<Verdict, { glyph: string; color: string; title: string; note: string }> = {
@@ -289,9 +283,6 @@ export const RulesScene: React.FC = () => {
   const phase = PHASES[index];
   const local = frame - index * PHASE_DUR;
   const v = VERDICT[phase.verdict];
-  const ruleIndex = frame < 150 ? 0 : frame < 225 ? 1 : 2;
-  const rule = RULES[ruleIndex];
-  const ruleProgress = Math.min(1, Math.max(0, (frame - rule.start) / rule.dur));
 
   const neighborIn = (i: number) =>
     spring({ frame: local - 4 - i * 4, fps, config: { damping: 14, mass: 0.5, stiffness: 170 } });
@@ -300,36 +291,26 @@ export const RulesScene: React.FC = () => {
   const countIn = spring({ frame: local - 8, fps, config: { damping: 200 } });
 
   return (
-    <>
-      {/* 四条规则的判定瞬间：死/生/活各一个合成音效（单独一层，和配乐分开） */}
-      {PHASES.map((p, i) => {
-        const file = p.verdict === 'born' ? 'birth' : p.verdict === 'live' ? 'live' : 'death';
-        // 四条都要听得见；出生最亮，死亡最重，存活是一记双音确认
-        const volume = p.verdict === 'born' ? 0.92 : p.verdict === 'live' ? 0.78 : 0.95;
-        return (
-          <Sequence key={p.verdict} from={i * PHASE_DUR + JUDGE + 2} durationInFrames={30}>
-            <Audio src={staticFile(`sfx/${file}.wav`)} volume={volume} />
-          </Sequence>
-        );
-      })}
-      <Backdrop>
+    <Backdrop>
       <AbsoluteFill style={{ padding: '0 116px', justifyContent: 'center' }}>
         <div style={{ display: 'flex', gap: 84, alignItems: 'center' }}>
           {/* 左：标题 + 四条规则 */}
           <div style={{ width: 820 }}>
             <Eyebrow>它是怎么运转的</Eyebrow>
-            <Heading size={58}>只有三条规则</Heading>
-            <div style={{ marginTop: 14, fontSize: 24, color: C.dim, lineHeight: 1.6, maxWidth: 720 }}>
-              每个格子只有生或死，命运只看身边的 8 个邻居。
-            </div>
+            <Heading size={56}>
+              每个格子只有生或死，
+              <br />
+              命运只看身边的 8 个邻居
+            </Heading>
 
-            <div style={{ marginTop: 38, display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {RULES.map((r, i) => {
-                const active = i === ruleIndex;
+            <div style={{ marginTop: 48, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {PHASES.map((p, i) => {
+                const active = i === index;
                 const s = spring({ frame: frame - 20 - i * 7, fps, config: { damping: 200 } });
+                const vv = VERDICT[p.verdict];
                 return (
                   <div
-                    key={r.text}
+                    key={p.rule}
                     style={{
                       position: 'relative',
                       display: 'flex',
@@ -339,8 +320,8 @@ export const RulesScene: React.FC = () => {
                       transform: `translateX(${(1 - s) * -20 + (active ? 8 : 0)}px)`,
                       padding: '15px 18px',
                       borderRadius: 14,
-                      border: `1px solid ${active ? `${r.color}66` : 'transparent'}`,
-                      background: active ? `${r.color}14` : 'transparent',
+                      border: `1px solid ${active ? `${vv.color}66` : 'transparent'}`,
+                      background: active ? `${vv.color}14` : 'transparent',
                       overflow: 'hidden',
                     }}
                   >
@@ -355,12 +336,12 @@ export const RulesScene: React.FC = () => {
                         fontSize: 17,
                         fontWeight: 800,
                         color: active ? '#05100e' : C.dim,
-                        background: active ? r.color : 'rgba(255,255,255,0.06)',
+                        background: active ? vv.color : 'rgba(255,255,255,0.06)',
                       }}
                     >
                       {i + 1}
                     </div>
-                    <div style={{ fontSize: 26, color: active ? C.text : C.dim }}>{r.text}</div>
+                    <div style={{ fontSize: 26, color: active ? C.text : C.dim }}>{p.rule}</div>
                     {active && (
                       <div
                         style={{
@@ -368,8 +349,8 @@ export const RulesScene: React.FC = () => {
                           left: 0,
                           bottom: 0,
                           height: 2,
-                          width: `${(active ? ruleProgress : 0) * 100}%`,
-                          background: r.color,
+                          width: `${(local / PHASE_DUR) * 100}%`,
+                          background: vv.color,
                           opacity: 0.6,
                         }}
                       />
@@ -380,7 +361,7 @@ export const RulesScene: React.FC = () => {
             </div>
 
             <div style={{ marginTop: 34, fontSize: 20, color: C.dim, lineHeight: 1.7, maxWidth: 720 }}>
-              就这三条。没有总设计师，也没有随机数 —— 所有秩序都是它们一代代筛出来的。
+              就这四条。没有总设计师，也没有随机数 —— 所有秩序都是它们一代代筛出来的。
             </div>
           </div>
 
@@ -534,7 +515,6 @@ export const RulesScene: React.FC = () => {
           </div>
         </div>
       </AbsoluteFill>
-      </Backdrop>
-    </>
+    </Backdrop>
   );
 };

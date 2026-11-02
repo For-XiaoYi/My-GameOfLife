@@ -2,30 +2,14 @@ import type { ReactNode } from 'react';
 import { AbsoluteFill, Audio, Sequence, staticFile, useCurrentFrame } from 'remotion';
 import { TitleScene } from './scenes/Intro';
 import { RulesScene } from './scenes/Rules';
-import {
-  StillsScene,
-  OscillatorsScene,
-  GliderStaticScene,
-  GunScene,
-  GunTeaserScene,
-  InsertScene,
-} from './scenes/Anatomy';
-import { SwitchScene } from './scenes/Switch';
-import {
-  BlackCaptionScene,
-  GatesScene,
-  GateArrayScene,
-  TuringMachineScene,
-  GrandStructuresScene,
-} from './scenes/Computing';
-import { RandomEvolutionScene } from './scenes/RandomEvolution';
+import { StillsScene, OscillatorsScene, GliderStaticScene, GunScene, CircuitsScene, InsertScene } from './scenes/Anatomy';
 import { OutroScene } from './scenes/Ending';
 
 type SceneDef = { key: string; dur: number; node: ReactNode };
 
 /**
- * v8 结构：规则 → 组件（静物 / 振荡子 / 滑翔机 / 滑翔枪 / 判断）→ 黑屏提问
- * → 逻辑门 → 真实电路阵列 → 动态图灵机 → 动态宏大结构 → 重做随机 → 结尾。
+ * 结构：先讲规则，再逐个拆解组件（静物 → 滑翔机 → 滑翔枪 → 逻辑电路），
+ * 功能不再单独成段，而是以"实机演示"短片穿插在组件之间。
  */
 export const SCENES: SceneDef[] = [
   { key: 'title', dur: 120, node: <TitleScene /> },
@@ -35,33 +19,19 @@ export const SCENES: SceneDef[] = [
   { key: 'glider-static', dur: 120, node: <GliderStaticScene /> },
   {
     key: 'glider-live',
-    dur: 150,
+    dur: 270,
     node: (
       <InsertScene
         file="clip-glider.mp4"
         step="接着：把它放进画布"
         caption="选中、落子、按下播放 —— 它自己就走了"
-        steps={[
-          { at: 10, text: '选中' },
-          { at: 38, text: '落子' },
-          { at: 62, text: '按下播放' },
-          { at: 80, text: '它自己就走了' },
-        ]}
-        startFrom={0}
-        outAt={150}
+        startFrom={52}
       />
     ),
   },
-  { key: 'gun-teaser', dur: 120, node: <GunTeaserScene /> },
   { key: 'gun', dur: 240, node: <GunScene /> },
-  { key: 'switch', dur: 300, node: <SwitchScene /> },
-  { key: 'black-caption', dur: 90, node: <BlackCaptionScene /> },
-  { key: 'gates', dur: 300, node: <GatesScene /> },
-  { key: 'array', dur: 300, node: <GateArrayScene /> },
-  { key: 'turing', dur: 210, node: <TuringMachineScene /> },
-  { key: 'grand', dur: 750, node: <GrandStructuresScene /> },
-  { key: 'random', dur: 420, node: <RandomEvolutionScene /> },
-  { key: 'outro', dur: 270, node: <OutroScene /> },
+  { key: 'circuits', dur: 300, node: <CircuitsScene /> },
+  { key: 'outro', dur: 165, node: <OutroScene /> },
 ];
 
 export const FPS = 30;
@@ -79,7 +49,7 @@ export const Promo: React.FC = () => {
   return (
     <AbsoluteFill style={{ background: '#05080c' }}>
       {/* 整片配乐：scripts/make-music.mjs 合成，段落与场景对齐，结尾硬收 */}
-      <Audio src={staticFile('music/score-v13.mp3')} volume={1} />
+      <Audio src={staticFile('music/score.wav')} volume={1} />
       {SCENES.map((s) => {
         const from = at;
         at += s.dur;

@@ -1,4 +1,4 @@
-import { AbsoluteFill, Audio, OffthreadVideo, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
+import { AbsoluteFill, OffthreadVideo, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 import { LifeGrid } from '../components/LifeGrid';
 import { Backdrop, Eyebrow, Heading, Rise } from '../components/ui';
 import { C, FONT } from '../theme';
@@ -11,6 +11,42 @@ const toBitmap = (rows: string[]): Bitmap => {
   rows.forEach((r, y) => [...r].forEach((ch, x) => (cells[y * w + x] = ch === 'O' ? 1 : 0)));
   return { w, h, cells };
 };
+
+/** 往已有画布上叠加一个图案（placeBitmap 会新建空画布，不能叠第二层） */
+const mergeInto = (base: Bitmap, bm: Bitmap, ox: number, oy: number): Bitmap => {
+  const out: Bitmap = { w: base.w, h: base.h, cells: base.cells.slice() };
+  for (let y = 0; y < bm.h; y++) {
+    for (let x = 0; x < bm.w; x++) {
+      if (bm.cells[y * bm.w + x]) out.cells[(oy + y) * out.w + (ox + x)] = 1;
+    }
+  }
+  return out;
+};
+
+/** 大字计数器：让"时间在走"和"画面没变"形成对撞 */
+const BigCounter: React.FC<{ gen: number; label: string; color?: string; size?: number }> = ({
+  gen,
+  label,
+  color = C.accent,
+  size = 64,
+}) => (
+  <div style={{ textAlign: 'right' }}>
+    <div style={{ fontSize: 18, color: C.dim, letterSpacing: 4 }}>{label}</div>
+    <div
+      style={{
+        fontSize: size,
+        fontWeight: 800,
+        color,
+        fontVariantNumeric: 'tabular-nums',
+        letterSpacing: 1,
+        lineHeight: 1.05,
+        textShadow: `0 0 30px ${color}33`,
+      }}
+    >
+      {Math.max(0, Math.floor(gen)).toLocaleString('en-US')}
+    </div>
+  </div>
+);
 
 /** 逐段出现的叙述：旧句子变暗，新句子亮起，引导注意力 */
 const Lines: React.FC<{ lines: { at: number; text: string; big?: boolean }[]; width?: number }> = ({
@@ -47,122 +83,6 @@ const Lines: React.FC<{ lines: { at: number; text: string; big?: boolean }[]; wi
   );
 };
 
-/** 参数小卡：给数据一个落点，免得左下半边空着 */
-const StatTile: React.FC<{ k: string; v: string; u?: string }> = ({ k, v, u }) => (
-  <div
-    style={{
-      flex: 1,
-      padding: '13px 18px 14px',
-      borderRadius: 14,
-      border: `1px solid ${C.line}`,
-      background: 'rgba(10,16,23,0.72)',
-    }}
-  >
-    <div style={{ fontSize: 15, letterSpacing: 3, color: C.dim }}>{k}</div>
-    <div
-      style={{
-        marginTop: 5,
-        fontSize: 32,
-        fontWeight: 800,
-        lineHeight: 1.1,
-        fontVariantNumeric: 'tabular-nums',
-      }}
-    >
-      {v}
-      {u && <span style={{ marginLeft: 6, fontSize: 15, fontWeight: 400, color: C.dim }}>{u}</span>}
-    </div>
-  </div>
-);
-
-/** 静物段的“已演化”徽标：标签在上，数字 96px，和标题同一水平线 */
-const EraBadge: React.FC<{ gen: number }> = ({ gen }) => (
-  <div
-    style={{
-      minWidth: 340,
-      padding: '18px 26px 20px',
-      borderRadius: 18,
-      border: `1px solid ${C.line}`,
-      background: 'linear-gradient(180deg, rgba(12,20,28,0.94), rgba(8,13,19,0.86))',
-      boxShadow: '0 0 80px rgba(108,245,210,0.10)',
-      textAlign: 'right',
-    }}
-  >
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        gap: 10,
-        fontSize: 16,
-        letterSpacing: 6,
-        color: C.accent,
-      }}
-    >
-      <span
-        style={{
-          width: 8,
-          height: 8,
-          borderRadius: 99,
-          background: C.accent,
-          boxShadow: `0 0 12px ${C.accent}`,
-        }}
-      />
-      已演化
-    </div>
-    <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'flex-end', gap: 10, marginTop: 2 }}>
-      <div
-        style={{
-          fontSize: 96,
-          fontWeight: 800,
-          lineHeight: 1,
-          letterSpacing: 1,
-          fontVariantNumeric: 'tabular-nums',
-          textShadow: '0 0 44px rgba(108,245,210,0.30)',
-        }}
-      >
-        {Math.max(0, Math.floor(gen)).toLocaleString('en-US')}
-      </div>
-      <div style={{ fontSize: 26, color: C.dim }}>代</div>
-    </div>
-    <div style={{ marginTop: 4, fontSize: 14, color: C.dim, letterSpacing: 2 }}>时间在走，画面不动</div>
-  </div>
-);
-
-/**
- * 一条“节拍轨道”：一格 = 一代，每 p 格一个刻度。
- * 光点波浪式扫过，刻度亮起 —— 把“周期”变成看得见的节拍。
- */
-const PulseTrack: React.FC<{ p: number; cells: number }> = ({ p, cells }) => {
-  const frame = useCurrentFrame();
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 4, height: 26 }}>
-      {Array.from({ length: cells }, (_, i) => {
-        const tick = i % p === 0;
-        const wave = (Math.sin(frame / 7 - i * 0.34) + 1) / 2;
-        return (
-          <div
-            key={i}
-            style={{
-              flex: 1,
-              height: tick ? 20 : 5,
-              borderRadius: 3,
-              background: tick ? C.accent : 'rgba(120,200,220,0.28)',
-              opacity: tick ? 0.5 + 0.5 * wave : 0.1 + 0.14 * wave,
-              boxShadow: tick && wave > 0.72 ? `0 0 12px ${C.accentSoft}` : 'none',
-            }}
-          />
-        );
-      })}
-    </div>
-  );
-};
-
-const PULSE_ROWS = [
-  { name: '闪光灯', p: 2 },
-  { name: '脉冲星', p: 3 },
-  { name: '十五面体', p: 15 },
-];
-
 // ── 1) 静物：先亮明主题，再逐个摆出来 ─────────────────────────────────────
 const STILLS = [
   { rows: ['OO', 'OO'], name: '方块', note: '四格，最简的静止' },
@@ -170,59 +90,6 @@ const STILLS = [
   { rows: ['OO.', 'O.O', '.O.'], name: '小船', note: '五格，斜着也稳' },
   { rows: ['.O.', 'O.O', '.O.'], name: '浴缸', note: '中间永远空着' },
 ];
-
-/** 底部补一条“稳定不是不动”的说明，填掉原来空着的下半屏 */
-const StabilityStrip: React.FC<{ gen: number }> = ({ gen }) => {
-  const frame = useCurrentFrame();
-  const block = framesOf('still-strip-block', toBitmap(STILLS[0].rows), 1);
-  return (
-    <div
-      style={{
-        marginTop: 26,
-        height: 150,
-        padding: '18px 24px',
-        borderRadius: 18,
-        border: `1px solid ${C.line}`,
-        background: 'rgba(9,15,22,0.66)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 30,
-        overflow: 'hidden',
-      }}
-    >
-      <div style={{ width: 560 }}>
-        <div style={{ fontSize: 15, letterSpacing: 6, color: C.accent }}>稳定不是不动</div>
-        <div style={{ marginTop: 7, fontSize: 24, fontWeight: 700, lineHeight: 1.45 }}>
-          每一代都重新判定，每一代都回到同一个形状。
-        </div>
-        <div style={{ marginTop: 6, fontSize: 16, color: C.dim }}>
-          平衡不是一次通过，是连续通过。
-        </div>
-      </div>
-
-      <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 18 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-          {Array.from({ length: 5 }).map((_, i) => {
-            const pulse = 0.45 + 0.55 * ((Math.sin(frame / 8 - i * 0.8) + 1) / 2);
-            return (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <div style={{ opacity: 0.35 + 0.65 * pulse }}>
-                  <LifeGrid frames={block} gi={0} px={12} gap={3} radius={3} />
-                </div>
-                {i < 4 && <div style={{ fontSize: 14, color: 'rgba(108,245,210,0.35)' }}>→</div>}
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ fontSize: 15, color: C.dim, lineHeight: 1.6 }}>
-          第 1 代 → … → 第 {Math.floor(gen).toLocaleString('en-US')} 代
-          <br />
-          <span style={{ color: C.accent, fontSize: 22, fontWeight: 700 }}>0 次变化</span>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 export const StillsScene: React.FC = () => {
   const frame = useCurrentFrame();
@@ -232,10 +99,7 @@ export const StillsScene: React.FC = () => {
     extrapolateRight: 'clamp',
   });
   const cardsIn = interpolate(frame, [44, 58], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-  // 从第 8 帧开始从 10,000 往上跳：呼应“一万代也不动一下”
-  const gen = 10000 + Math.max(0, frame - 8) * 64;
-  const headerIn = spring({ frame: frame - 46, fps, config: { damping: 200, mass: 0.8 } });
-  const quoteIn = interpolate(frame, [54, 68], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const gen = 120 + Math.max(0, frame - 8) * 64;
 
   return (
     <Backdrop>
@@ -248,41 +112,31 @@ export const StillsScene: React.FC = () => {
           transform: `scale(${1 + (1 - intro) * 0.04})`,
         }}
       >
-        <Eyebrow>从规则到秩序</Eyebrow>
-        <div style={{ fontSize: 92, fontWeight: 800, letterSpacing: 4 }}>由规则演变出秩序</div>
+        <Eyebrow>组件 · 其一</Eyebrow>
+        <div style={{ fontSize: 92, fontWeight: 800, letterSpacing: 4 }}>固定组件</div>
         <div style={{ marginTop: 26, fontSize: 34, color: C.text, letterSpacing: 3, opacity: 0.9 }}>
-          把时间拉长，规则会自己长出形状。
+          有些形状，一万代也不动一下
         </div>
       </AbsoluteFill>
 
       {/* 标题退场后进入展示 */}
       {cardsIn > 0 && (
-        <AbsoluteFill style={{ padding: '0 104px', justifyContent: 'center', opacity: cardsIn }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 40 }}>
-            <div style={{ maxWidth: 1190, opacity: headerIn, transform: `translateY(${(1 - headerIn) * 18}px)` }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-                <div style={{ width: 4, height: 92, borderRadius: 4, background: C.accent, opacity: 0.9 }} />
-                <div>
-                  <Eyebrow style={{ marginBottom: 8 }}>秩序的产物</Eyebrow>
-                  <div style={{ fontSize: 92, fontWeight: 800, letterSpacing: 10, lineHeight: 0.98, color: '#eafff8' }}>
-                    静物
-                  </div>
-                </div>
-              </div>
-              <div style={{ marginTop: 18, fontSize: 26, color: C.text, letterSpacing: 1, opacity: quoteIn }}>
-                每一代都被重新判定，结果永远是自己。
-              </div>
-              <div style={{ marginTop: 8, fontSize: 20, color: C.dim, maxWidth: 900, lineHeight: 1.6, opacity: quoteIn }}>
-                平衡得很精确 —— 少一格会塌，多一格会炸。
+        <AbsoluteFill style={{ padding: '86px 104px', opacity: cardsIn }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <div>
+              <Eyebrow>固定组件 · 静物</Eyebrow>
+              <Heading size={54}>每一代都被重新判定，结果永远是自己</Heading>
+              <div style={{ marginTop: 16, fontSize: 23, color: C.dim, maxWidth: 820, lineHeight: 1.6 }}>
+                它们叫静物。平衡得很精确 —— 少一格会塌，多一格会炸。
               </div>
             </div>
-            <EraBadge gen={gen} />
+            <BigCounter gen={gen} label="已经算过的代数" size={72} />
           </div>
 
-          <div style={{ display: 'flex', gap: 26, marginTop: 40 }}>
+          <div style={{ display: 'flex', gap: 26, marginTop: 54 }}>
             {STILLS.map((s, i) => {
               const frames = framesOf(`still-${s.name}`, toBitmap(s.rows), 1);
-              const a = spring({ frame: frame - 52 - i * 5, fps, config: { damping: 200, mass: 0.7 } });
+              const a = spring({ frame: frame - 58 - i * 7, fps, config: { damping: 200, mass: 0.7 } });
               return (
                 <div
                   key={s.name}
@@ -290,14 +144,14 @@ export const StillsScene: React.FC = () => {
                     flex: 1,
                     opacity: a,
                     transform: `translateY(${(1 - a) * 26}px)`,
-                    padding: '20px 22px 16px',
+                    padding: '24px 22px 20px',
                     borderRadius: 18,
                     border: `1px solid ${C.line}`,
                     background: 'rgba(10,16,23,0.75)',
                   }}
                 >
-                  <div style={{ height: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    <LifeGrid frames={frames} gi={0} px={30} gap={6} radius={5} />
+                  <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <LifeGrid frames={frames} gi={0} px={32} gap={6} radius={5} />
                   </div>
                   <div style={{ marginTop: 14, display: 'flex', alignItems: 'baseline', gap: 10 }}>
                     <div style={{ fontSize: 28, fontWeight: 700 }}>{s.name}</div>
@@ -317,27 +171,6 @@ export const StillsScene: React.FC = () => {
                 </div>
               );
             })}
-          </div>
-
-          <StabilityStrip gen={gen} />
-
-          <div
-            style={{
-              position: 'absolute',
-              left: 104,
-              right: 104,
-              bottom: 40,
-              paddingTop: 14,
-              borderTop: `1px solid ${C.line}`,
-              display: 'flex',
-              justifyContent: 'space-between',
-              fontSize: 14,
-              letterSpacing: 2,
-              color: C.dim,
-            }}
-          >
-            <span>没有总设计师，也没有随机数</span>
-            <span style={{ color: C.accent }}>所有秩序，都是它们一代代筛出来的</span>
           </div>
         </AbsoluteFill>
       )}
@@ -363,20 +196,10 @@ export const OscillatorsScene: React.FC = () => {
       <AbsoluteFill style={{ padding: '86px 104px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
           <Rise delay={0}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 20 }}>
-              <div style={{ width: 4, height: 92, borderRadius: 4, background: C.accent, opacity: 0.9 }} />
-              <div>
-                <Eyebrow style={{ marginBottom: 8 }}>秩序的产物</Eyebrow>
-                <div style={{ fontSize: 92, fontWeight: 800, letterSpacing: 10, lineHeight: 0.98, color: '#eafff8' }}>
-                  震荡子
-                </div>
-              </div>
-            </div>
-            <div style={{ marginTop: 18, fontSize: 26, color: C.text, letterSpacing: 1 }}>
-              有些形状在原地打转。
-            </div>
-            <div style={{ marginTop: 8, fontSize: 20, color: C.dim }}>
-              位置不动，但每一代都在变。
+            <Eyebrow>组件 · 其二</Eyebrow>
+            <Heading size={54}>有些形状在原地打转</Heading>
+            <div style={{ marginTop: 14, fontSize: 23, color: C.dim }}>
+              它们叫振荡子：位置不动，但每一代都在变。
             </div>
           </Rise>
         </div>
@@ -430,68 +253,8 @@ export const OscillatorsScene: React.FC = () => {
           })}
         </div>
 
-        {/* 它通向什么：周期 → 节拍 → 时钟 */}
-        <Rise delay={50} style={{ marginTop: 28 }}>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 30,
-              padding: '20px 28px',
-              borderRadius: 18,
-              border: `1px solid ${C.line}`,
-              background: 'rgba(10,16,23,0.72)',
-            }}
-          >
-            <div style={{ width: 600 }}>
-              <div style={{ fontSize: 16, letterSpacing: 6, color: C.accent }}>它通向什么</div>
-              <div style={{ marginTop: 8, fontSize: 27, fontWeight: 700, lineHeight: 1.45 }}>
-                位置不动，节拍不停
-              </div>
-              <div style={{ marginTop: 4, fontSize: 19, color: C.dim, lineHeight: 1.55 }}>
-                后来搭出的生命游戏电路，把它们当时钟用：给整台机器打拍子。
-              </div>
-            </div>
-
-            <div style={{ width: 1, alignSelf: 'stretch', background: C.line }} />
-
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 9 }}>
-              {PULSE_ROWS.map((r) => (
-                <div key={r.name} style={{ display: 'flex', alignItems: 'center', gap: 13 }}>
-                  <div style={{ width: 72, fontSize: 15, color: C.dim }}>{r.name}</div>
-                  <div style={{ flex: 1 }}>
-                    <PulseTrack p={r.p} cells={26} />
-                  </div>
-                  <div style={{ width: 34, textAlign: 'right', fontSize: 15, color: C.accent }}>
-                    p{r.p}
-                  </div>
-                </div>
-              ))}
-              <div style={{ textAlign: 'right', fontSize: 13, color: C.dim, letterSpacing: 2 }}>
-                一格 = 一代
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <div style={{ fontSize: 28, color: C.dim }}>→</div>
-              <div
-                style={{
-                  padding: '12px 20px',
-                  borderRadius: 14,
-                  border: `1px solid ${C.accentSoft}`,
-                  background: 'rgba(108,245,210,0.08)',
-                  textAlign: 'center',
-                }}
-              >
-                <div style={{ fontSize: 22, fontWeight: 700, color: C.accent }}>时钟</div>
-                <div style={{ fontSize: 13, color: C.dim, letterSpacing: 2 }}>clock</div>
-              </div>
-            </div>
-          </div>
-        </Rise>
-
-        <Rise delay={104} style={{ marginTop: 20 }}>
-          <div style={{ fontSize: 21, color: C.dim }}>
+        <Rise delay={46} style={{ marginTop: 34 }}>
+          <div style={{ fontSize: 22, color: C.dim }}>
             静物不变，振荡子来回变 —— 但都留在原地。真正会走的，还在后面。
           </div>
         </Rise>
@@ -500,7 +263,7 @@ export const OscillatorsScene: React.FC = () => {
   );
 };
 
-// ── 3) 滑翔机（静态）：先把这五格看清楚，文字一段一段来 ────────────────────
+// ── 3) 滑翔机（静态）：先把这五格看清楚 ────────────────────────────────────
 const GLIDER_ROWS = ['.O.', '..O', 'OOO'];
 
 export const GliderStaticScene: React.FC = () => {
@@ -512,52 +275,48 @@ export const GliderStaticScene: React.FC = () => {
 
   return (
     <Backdrop>
-      <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 60, justifyContent: 'center' }}>
-          <div style={{ width: 400, display: 'flex', justifyContent: 'center' }}>
-            <div
-              style={{
-                padding: 34,
-                borderRadius: 24,
-                border: `1px solid ${C.line}`,
-                background: 'rgba(8,13,19,0.85)',
-                boxShadow: `0 0 ${60 * glow}px rgba(108,245,210,0.18)`,
-                transform: `scale(${0.94 + 0.06 * s})`,
-              }}
-            >
-              <LifeGrid frames={frames} gi={0} px={74} gap={8} radius={8} glow={glow} />
-            </div>
+      <AbsoluteFill style={{ padding: '0 110px', flexDirection: 'row', alignItems: 'center', gap: 80 }}>
+        <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
+          <div
+            style={{
+              padding: 34,
+              borderRadius: 24,
+              border: `1px solid ${C.line}`,
+              background: 'rgba(8,13,19,0.85)',
+              boxShadow: `0 0 ${60 * glow}px rgba(108,245,210,0.18)`,
+              transform: `scale(${0.94 + 0.06 * s})`,
+            }}
+          >
+            <LifeGrid frames={frames} gi={0} px={74} gap={8} radius={8} glow={glow} />
           </div>
+        </div>
 
-          <div style={{ width: 620 }}>
-            <Rise delay={0}>
-              <Eyebrow>滑翔机</Eyebrow>
-              <Heading size={48}>一个只有五格的图形</Heading>
-            </Rise>
-            <Rise delay={16} style={{ marginTop: 22 }}>
-              <div style={{ fontSize: 30, color: C.text, lineHeight: 1.6, fontWeight: 700 }}>经过演化，会发生什么</div>
-            </Rise>
-            <Rise delay={66} style={{ marginTop: 38 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 20, color: C.accent }}>
-                <div style={{ width: 30, height: 2, background: C.accent, opacity: 0.6 }} />
-                下一步：把它放进画布
-              </div>
-            </Rise>
-          </div>
+        <div style={{ width: 720 }}>
+          <Rise delay={0}>
+            <Eyebrow>组件 · 其三</Eyebrow>
+            <Heading size={62}>滑翔机</Heading>
+            <div style={{ marginTop: 24, fontSize: 26, color: C.text, lineHeight: 1.7, opacity: 0.9 }}>
+              五格而已。放在那儿不动的时候，它看起来一点也不特别。
+            </div>
+            <div style={{ marginTop: 18, fontSize: 24, color: C.dim, lineHeight: 1.7 }}>
+              可一旦把它丢进画布、让它跑起来 —— 它会自己朝一个方向，一直走下去。
+            </div>
+          </Rise>
+          <Rise delay={26} style={{ marginTop: 40 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 20, color: C.accent }}>
+              <div style={{ width: 30, height: 2, background: C.accent, opacity: 0.6 }} />
+              下一步：把它放进画布
+            </div>
+          </Rise>
         </div>
       </AbsoluteFill>
     </Backdrop>
   );
 };
 
-// ── 4) 滑翔枪：左右不回绕（不再从左边绕回来），上下保留 ────────────────────
-const GUN_BOARD = placeBitmap(getPattern('gosperglidergun'), 74, 40, 4, 14);
-const GUN_FRAMES = framesOf('gun-fire-v7', GUN_BOARD, 260, { wrapX: false, wrapY: true });
-
-// 抖音竖版复用枪的演化帧
-export const GUN_FRAMES_V = GUN_FRAMES;
-export const GUN_BOARD_W = 74;
-export const GUN_BOARD_H = 40;
+// ── 4) 滑翔枪 ─────────────────────────────────────────────────────────────
+const GUN_BOARD = placeBitmap(getPattern('gosperglidergun'), 74, 32, 4, 11);
+const GUN_FRAMES = framesOf('gun-fire', GUN_BOARD, 220);
 
 export const GunScene: React.FC = () => {
   const frame = useCurrentFrame();
@@ -570,7 +329,7 @@ export const GunScene: React.FC = () => {
         <div style={{ display: 'flex', gap: 46, alignItems: 'center' }}>
           <div style={{ width: 620 }}>
             <Rise delay={0}>
-              <Eyebrow>1970 · 无限增长</Eyebrow>
+              <Eyebrow>组件 · 其四</Eyebrow>
               <Heading size={50}>滑翔枪</Heading>
             </Rise>
             <div style={{ marginTop: 26 }}>
@@ -583,15 +342,6 @@ export const GunScene: React.FC = () => {
                 ]}
               />
             </div>
-
-            {/* 左下补三张参数卡：周期 30、枪体 36×9、产出无限 */}
-            <Rise delay={96} style={{ marginTop: 34 }}>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <StatTile k="周期" v="30" u="代" />
-                <StatTile k="枪体" v="36 × 9" u="格" />
-                <StatTile k="产出" v="∞" u="不停止" />
-              </div>
-            </Rise>
           </div>
 
           <div style={{ flex: 1, display: 'flex', justifyContent: 'flex-end' }}>
@@ -616,87 +366,147 @@ export const GunScene: React.FC = () => {
   );
 };
 
-/** 大字计数器（滑翔枪段右上角用；函数声明提升，GunScene 可以先引用） */
-function BigCounter({
-  gen,
-  label,
-  color = C.accent,
-  size = 64,
-}: {
-  gen: number;
-  label: string;
-  color?: string;
-  size?: number;
-}) {
-  return (
-    <div style={{ textAlign: 'right' }}>
-      <div style={{ fontSize: 18, color: C.dim, letterSpacing: 4 }}>{label}</div>
-      <div
-        style={{
-          fontSize: size,
-          fontWeight: 800,
-          color,
-          fontVariantNumeric: 'tabular-nums',
-          letterSpacing: 1,
-          lineHeight: 1.05,
-          textShadow: `0 0 30px ${color}33`,
-        }}
-      >
-        {Math.max(0, Math.floor(gen)).toLocaleString('en-US')}
-      </div>
-    </div>
-  );
-}
+// ── 5) 逻辑电路：两条信号相撞抵消 ───────────────────────────────────────────
+const COLLIDE_BOARD = (() => {
+  const base = placeBitmap(getPattern('glider'), 46, 28, 4, 8);
+  const other = getPattern('glider');
+  const flipped: Bitmap = { w: other.w, h: other.h, cells: other.cells.slice() };
+  for (let y = 0; y < other.h; y++) {
+    for (let x = 0; x < other.w; x++) {
+      flipped.cells[y * other.w + x] = other.cells[y * other.w + (other.w - 1 - x)];
+    }
+  }
+  return mergeInto(base, flipped, 34, 10);
+})();
 
-// ── 4.5) 滑翔枪预告卡：填掉 36–38 秒原来的黑屏 ──────────────────────────────
-export const GunTeaserScene: React.FC = () => {
+const COLLIDE_FRAMES = framesOf('glider-collide', COLLIDE_BOARD, 90);
+
+export const CircuitsScene: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-  const title = spring({ frame: frame - 2, fps, config: { damping: 200, mass: 0.7 } });
-  // 两行之间留 1.3 秒：第一行读完，第二行再进来
-  const l1 = spring({ frame: frame - 20, fps, config: { damping: 200, mass: 0.7 } });
-  const l2 = spring({ frame: frame - 58, fps, config: { damping: 200, mass: 0.7 } });
+  const gi = Math.min(COLLIDE_FRAMES.length - 1, 20 + Math.floor(frame * 0.6));
+  const hitAt = 60;
+  const ring = interpolate(gi, [hitAt, hitAt + 18], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+  const after = gi > hitAt;
+  const boardDim = interpolate(frame, [78, 100], [1, 0.45], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
-    <AbsoluteFill style={{ background: '#05080c', color: C.text, fontFamily: FONT, overflow: 'hidden' }}>
-      <Audio src={staticFile('sfx/whoosh.wav')} volume={0.42} />
-      <AbsoluteFill
-        style={{
-          background:
-            'radial-gradient(60% 55% at 50% 42%, rgba(108,245,210,0.12), rgba(5,8,12,0) 70%)',
-        }}
-      />
-      <AbsoluteFill style={{ justifyContent: 'center', alignItems: 'center' }}>
-        <div style={{ opacity: title, transform: `translateY(${(1 - title) * 22}px)`, textAlign: 'center' }}>
-          <Eyebrow>更进一步</Eyebrow>
-          <div style={{ fontSize: 116, fontWeight: 800, letterSpacing: 8, lineHeight: 1 }}>滑翔枪</div>
+    <Backdrop>
+      <AbsoluteFill style={{ padding: '76px 100px' }}>
+        <Rise delay={0}>
+          <Eyebrow>组件 · 其五</Eyebrow>
+          <Heading size={48}>两颗滑翔机撞上，会一起消失</Heading>
+        </Rise>
+
+        <div style={{ display: 'flex', gap: 52, marginTop: 28, alignItems: 'center' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <div
+            style={{
+              position: 'relative',
+              padding: 18,
+              borderRadius: 20,
+              border: `1px solid ${C.line}`,
+              background: 'rgba(8,13,19,0.82)',
+              opacity: boardDim,
+            }}
+          >
+            <LifeGrid frames={COLLIDE_FRAMES} gi={gi} px={17} gap={2} radius={2} showGrid />
+            {ring > 0 && (
+              <div
+                style={{
+                  position: 'absolute',
+                  left: '50%',
+                  top: '50%',
+                  width: 60 + 200 * ring,
+                  height: 60 + 200 * ring,
+                  marginLeft: -(30 + 100 * ring),
+                  marginTop: -(30 + 100 * ring),
+                  borderRadius: '50%',
+                  border: `2px solid rgba(108,245,210,${0.7 * (1 - ring)})`,
+                  opacity: 1 - ring,
+                }}
+              />
+            )}
+            <div
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: '42%',
+                textAlign: 'center',
+                fontSize: 34,
+                fontWeight: 800,
+                letterSpacing: 10,
+                color: C.accent,
+                opacity: after
+                  ? interpolate(gi, [hitAt + 4, hitAt + 14], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' })
+                  : 0,
+                textShadow: '0 0 26px rgba(5,8,12,0.95)',
+              }}
+            >
+              湮灭
+            </div>
+          </div>
+            <div
+              style={{
+                fontSize: 18,
+                color: C.dim,
+                textAlign: 'center',
+                opacity: interpolate(frame, [86, 104], [0, 1], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' }),
+              }}
+            >
+              画布回到空无一物 —— 这就是「抵消」
+            </div>
+          </div>
+
+          <div style={{ width: 740 }}>
+            <Lines
+              width={720}
+              lines={[
+                { at: 4, text: '两颗滑翔机正面相撞，会精确抵消。', big: true },
+                { at: 84, text: '抵消，就是「关」；不抵消，就是「开」。一个开关有了。' },
+                { at: 140, text: '把开关接起来：与门、或非门、触发器、加法器……' },
+                { at: 196, text: '2000 年，Paul Rendell 在里面搭出了一台图灵机。', big: true },
+              ]}
+            />
+          </div>
         </div>
-        <div
-          style={{
-            marginTop: 40,
-            fontSize: 40,
-            letterSpacing: 3,
-            color: C.text,
-            opacity: l1,
-            transform: `translateY(${(1 - l1) * 18}px)`,
-          }}
-        >
-          一把枪，不发射子弹。
-        </div>
-        <div
-          style={{
-            marginTop: 16,
-            fontSize: 30,
-            letterSpacing: 2,
-            color: C.accent,
-            opacity: l2,
-            transform: `translateY(${(1 - l2) * 18}px)`,
-          }}
-        >
-          它每 30 代，生出一艘滑翔机。
+
+        {/* 递进：从一颗滑翔机，到能算数的机器 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 46, paddingLeft: 4 }}>
+          {[
+            { t: '滑翔机', n: '1 个比特' },
+            { t: '滑翔机流', n: '1 条信号线' },
+            { t: '湮灭', n: '逻辑门' },
+            { t: '门阵列', n: '图灵机' },
+          ].map((s, i) => {
+            const a = interpolate(frame, [112 + i * 26, 126 + i * 26], [0, 1], {
+              extrapolateLeft: 'clamp',
+              extrapolateRight: 'clamp',
+            });
+            return (
+              <div key={s.t} style={{ display: 'flex', alignItems: 'center', gap: 14, opacity: a }}>
+                <div
+                  style={{
+                    padding: '12px 20px',
+                    borderRadius: 12,
+                    border: `1px solid ${i === 3 ? C.accent : C.line}`,
+                    background: i === 3 ? 'rgba(108,245,210,0.1)' : 'rgba(10,16,23,0.7)',
+                  }}
+                >
+                  <div style={{ fontSize: 20, fontWeight: 700, color: i === 3 ? C.accent : C.text }}>{s.t}</div>
+                  <div style={{ fontSize: 16, color: C.dim, marginTop: 3 }}>{s.n}</div>
+                </div>
+                {i < 3 && (
+                  <div style={{ fontSize: 22, color: C.dim, opacity: a, transform: `translateX(${(1 - a) * -8}px)` }}>
+                    →
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </AbsoluteFill>
-    </AbsoluteFill>
+    </Backdrop>
   );
 };
 
@@ -705,18 +515,13 @@ export const InsertScene: React.FC<{
   file: string;
   step?: string;
   caption: string;
-  steps?: { at: number; text: string }[];
   rate?: number;
   startFrom?: number;
-  outAt?: number;
-}> = ({ file, step, caption, steps, rate = 1, startFrom = 0, outAt = 208 }) => {
+}> = ({ file, step, caption, rate = 1, startFrom = 0 }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const s = spring({ frame: frame - 3, fps, config: { damping: 200, mass: 0.8 } });
-  const out = interpolate(frame, [outAt - 12, outAt], [1, 0], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  });
+  const out = interpolate(frame, [196, 208], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
 
   return (
     <AbsoluteFill style={{ background: '#05080c', color: C.text, fontFamily: FONT, opacity: out }}>
@@ -736,25 +541,7 @@ export const InsertScene: React.FC<{
       <AbsoluteFill style={{ padding: '64px 96px' }}>
         <div style={{ opacity: s, transform: `translateY(${(1 - s) * 16}px)` }}>
           <div style={{ fontSize: 18, letterSpacing: 6, color: C.accent }}>{step ?? '实机演示'}</div>
-          {steps ? (
-            <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 14, fontSize: 36, fontWeight: 700 }}>
-              {steps.map((x, i) => {
-                const a = interpolate(frame, [x.at, x.at + 8], [0, 1], {
-                  extrapolateLeft: 'clamp',
-                  extrapolateRight: 'clamp',
-                });
-                const active = frame >= x.at && (i === steps.length - 1 || frame < steps[i + 1].at);
-                return (
-                  <div key={x.text} style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    {i > 0 && a > 0.5 && <span style={{ color: C.dim, fontWeight: 400 }}>·</span>}
-                    <span style={{ opacity: a, color: active ? C.accent : C.text }}>{x.text}</span>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
-            <div style={{ marginTop: 12, fontSize: 38, fontWeight: 700 }}>{caption}</div>
-          )}
+          <div style={{ marginTop: 12, fontSize: 38, fontWeight: 700 }}>{caption}</div>
         </div>
       </AbsoluteFill>
     </AbsoluteFill>
