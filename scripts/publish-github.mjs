@@ -6,8 +6,9 @@
 // 凭据查找顺序：环境变量 GITHUB_TOKEN → %LOCALAPPDATA%\life-studio\credentials.json
 // （里面放 { "githubToken": "...", "repo": "My-GameOfLife", "owner": "..." }，不进仓库）
 // token 需要目标仓库的 Contents 读写权限，想顺手触发 Pages 重新部署还需要 Pages 读写权限。
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+import { MAX_BLOB, RELEASE_FILES, SKIP_DIRS, SKIP_PATHS } from './publish-rules.mjs';
 
 function loadCredentials() {
   const env = process.env.LOCALAPPDATA;
@@ -33,18 +34,17 @@ const CHECK_ONLY = process.argv.includes('--check');
 const DRY = process.argv.includes('--dry');
 const REPO = process.env.REPO_NAME || (cred && cred.repo) || 'My-GameOfLife';
 const PRIVATE = (process.env.REPO_PRIVATE ?? 'true') !== 'false';
-const ROOT = resolve('.');
-const SKIP_DIRS = new Set(['node_modules', 'build', 'dist', '.pnpm-store', '.git', '.tools']);
-// 整目录跳过：渲染中间产物和工程内依赖
-const SKIP_PATHS = new Set(['promo/out', 'AGENTS.md', 'CLAUDE.md']);
-// 单个 blob 走 REST 上传时，超过这个体积会被挡（实测 20 MB 的 mp4 直接 401），
-// 这类文件改走 Release 资产（上传接口 201，支持 2 GB）。
-const MAX_BLOB = 12 * 1024 * 1024;
+// 工程目录（源码、构建产物）与仓库镜像（../git文件）分开：
+// 发布只读镜像，镜像里就是仓库的全部文件，本地工程目录不会被发布脚本翻动。
+const SRC = resolve('.');
+const MIRROR = resolve('../git文件');
+const ROOT = existsSync(MIRROR) ? MIRROR : SRC;
 const RELEASE_TAG = 'promo-v1';
-const RELEASE_FILES = ['assets/promo.mp4'];
 // 一次性的清理清单：这些路径在仓库历史里存在过，但以后不该再出现
 const DELETED_PATHS = ['assets/promo.mp4'];
 const API = 'https://api.github.com';
+const SOURCE_LABEL = ROOT === MIRROR ? 'git文件（仓库镜像）' : '当前目录';
+console.log(`发布源：${SOURCE_LABEL}`);
 
 async function api(path, init = {}) {
   const res = await fetch(API + path, {
@@ -247,11 +247,11 @@ async function ensureRelease(tag, name, body) {
   return JSON.parse(text);
 }
 
-const releaseTargets = bigFiles.filter((f) => RELEASE_FILES.includes(f));
+const releaseTargets = RELEASE_FILES.filter((f) => existsSync(join(SRC, f)));
 if (releaseTargets.length) {
   const rel = await ensureRelease(RELEASE_TAG, '宣传片 v1', '生命游戏宣传片成片（1920×1080 / 30fps / 61.5 秒，带配乐）');
   for (const f of releaseTargets) {
-    const buf = readFileSync(join(ROOT, f));
+    const buf = readFileSync(join(SRC, f));
     const fileName = f.split('/').pop();
     // 同名旧资产先删掉再传，否则上传接口会 422 already_exists
     const stale = (rel.assets || []).find((a) => a.name === fileName && a.size !== buf.length);
@@ -306,8 +306,8 @@ if (releaseTargets.length) {
       }
     }
   }
-  if (bigFiles.length > releaseTargets.length) {
-    console.log(`（其余大文件未上传：${bigFiles.filter((f) => !releaseTargets.includes(f)).join(', ')}）`);
+  if (bigFiles.length) {
+    console.log(`（其余大文件未上传：${bigFiles.join(', ')}）`);
   }
 }
 // 如果仓库已经开过 Pages，顺便触发一次重新构建，省得等自动那几分钟。

@@ -136,14 +136,6 @@ export class Renderer {
   private img: ImageData | null = null;
   private buf: Uint32Array | null = null;
   private world: World | null = null;
-  /**
-   * 环绕模式铺砖用的纹理。
-   * createPattern 每帧新建是浪费，但也不能一直缓存：Chrome 用的是画布在
-   * createPattern 那一刻的快照，离屏画布之后再更新，旧 pattern 不会跟着变。
-   * 所以只在"离屏内容没变"的帧之间复用（悬停/幽灵预览这类重画），一旦
-   * paintRect 写入了新像素就丢掉重建。
-   */
-  private tilePattern: CanvasPattern | null = null;
   dpr = 1;
   cssW = 0;
   cssH = 0;
@@ -161,8 +153,6 @@ export class Renderer {
     this.off.height = world.height;
     this.img = this.offCtx.createImageData(world.width, world.height);
     this.buf = new Uint32Array(this.img.data.buffer);
-    // 离屏画布尺寸变了，旧纹理必须丢掉，否则会按上一张世界的尺寸平铺
-    this.tilePattern = null;
     this.paintAll();
   }
 
@@ -214,21 +204,15 @@ export class Renderer {
       }
     }
     this.offCtx.putImageData(img, 0, 0, ax0, ay0, ax1 - ax0, ay1 - ay0);
-    // 离屏内容变了：铺砖纹理下次必须重建（见 tilePattern 的说明）
-    this.tilePattern = null;
   }
 
-  /**
-   * 把世界标脏的区域刷到离屏画布。
-   * 返回是否真的重画了——主循环靠它判断这一帧要不要重画主画布。
-   */
-  sync(): boolean {
+  /** 把世界标脏的区域刷到离屏画布。 */
+  sync(): void {
     const w = this.world;
-    if (!w) return false;
+    if (!w) return;
     const d = w.consumeDirty();
-    if (!d) return false;
+    if (!d) return;
     this.paintRect(d.x0, d.y0, d.x1, d.y1);
-    return true;
   }
 
   render(view: Viewport, opts: RenderOptions, overlay?: RenderOverlay): void {
@@ -383,11 +367,7 @@ export class Renderer {
     ctx.save();
     ctx.translate(nx, ny);
     ctx.scale(scale, scale);
-    let pattern = this.tilePattern;
-    if (!pattern) {
-      pattern = ctx.createPattern(this.off, 'repeat');
-      this.tilePattern = pattern;
-    }
+    const pattern = ctx.createPattern(this.off, 'repeat');
     if (pattern) {
       ctx.fillStyle = pattern;
       ctx.imageSmoothingEnabled = scale < 1;

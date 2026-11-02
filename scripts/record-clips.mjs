@@ -8,9 +8,8 @@ import { pathToFileURL } from 'node:url';
 import { launch, sleep } from './cdp.mjs';
 
 const FPS = 30;
-const VERTICAL = process.argv[2] === 'random-loop-vertical';
-const W = VERTICAL ? 1080 : 1920;
-const H = VERTICAL ? 1920 : 1080;
+const W = 1920;
+const H = 1080;
 const OUT = resolve('promo/public');
 const TMP = resolve('build/clips');
 const FILE = pathToFileURL(resolve('生命游戏.html')).href;
@@ -205,132 +204,6 @@ try {
       }
       await moveTo(page, pos, [1690, 900], 620);
       await sleep(6600);
-    });
-  }
-
-  // 随机：点“随机”→ 确认 → 不限速 → 播放；呈现时用裁切，不整屏放
-  if (want('random')) {
-    await page.evaluate(`(async () => {
-      const L = window.__life;
-      L.world.clear(); L.commit();
-      L.world.randomize(0.28); L.commit(); L.world.gen = 0;
-      const c = document.getElementById('board');
-      const s = 5.4;
-      // 世界是 1024×576，中心是 512,288；之前按 512,512 取景，随机汤只露了一条边
-      L.view.setView({
-        scale: s,
-        ox: c.clientWidth / 2 - (L.world.width / 2) * s,
-        oy: c.clientHeight / 2 - (L.world.height / 2) * s,
-      });
-      await new Promise((r) => setTimeout(r, 700));
-      return true;
-    })()`);
-
-    const marks = [];
-    const mark = (name) => marks.push({ name, t: (Date.now() - markT0) / 1000 });
-    const markT0 = Date.now();
-    await record(page, 'random', async () => {
-      let pos = [1720, 760];
-      await page.evaluate(`window.__moveCur(${pos[0]}, ${pos[1]})`);
-      await sleep(1200);
-
-      const rnd = await page.evaluate(rectOf('#btn-random'));
-      if (!rnd) throw new Error('没找到随机按钮');
-      pos = await moveTo(page, pos, [rnd.x, rnd.y], 600);
-      await page.evaluate(`document.getElementById('btn-random').click()`);
-      mark('random');
-      await clickAt(page, [rnd.x, rnd.y]);
-      await sleep(500);
-
-      const ok = await page.evaluate(rectOf('#confirm-ok'));
-      if (!ok) throw new Error('没找到确认按钮');
-      pos = await moveTo(page, pos, [ok.x, ok.y], 500);
-      await page.evaluate(`document.getElementById('confirm-ok').click()`);
-      mark('confirm');
-      await clickAt(page, [ok.x, ok.y]);
-      // 确认后弹窗背板有一个淡出/模糊过渡，等它清掉再动镜头
-      await sleep(1800);
-
-      const inf = await page.evaluate(rectOf('#btn-unlimited'));
-      if (!inf) throw new Error('没找到不限速按钮');
-      pos = await moveTo(page, pos, [inf.x, inf.y], 500);
-      await page.evaluate(`document.getElementById('btn-unlimited').click()`);
-      mark('unlimited');
-      await clickAt(page, [inf.x, inf.y]);
-      await sleep(500);
-
-      const play = await page.evaluate(rectOf('#btn-play'));
-      if (!play) throw new Error('没找到播放按钮');
-      pos = await moveTo(page, pos, [play.x, play.y], 500);
-      await page.evaluate(`document.getElementById('btn-play').click()`);
-      mark('play');
-      await clickAt(page, [play.x, play.y]);
-      await moveTo(page, pos, [1700, 820], 700);
-      await sleep(6500);
-    });
-    console.log('随机片段动作时刻（秒）：', JSON.stringify(marks));
-  }
-
-  // 回环拉远：纯画布、无 UI；随机汤从特写一直拉到整张世界 + 环形重复
-  if (want('random-loop') || want('random-loop-vertical')) {
-    const vertical = which === 'random-loop-vertical';
-    await page.evaluate(`(async () => {
-      const L = window.__life;
-      const board = document.getElementById('board');
-      board.style.cssText = [
-        'position:fixed','left:0','top:0','width:100vw','height:100vh',
-        'z-index:2147483000','border-radius:0','box-shadow:none',
-        'background:#05080c','display:block'
-      ].join(';');
-      document.body.style.background = '#05080c';
-      document.body.style.overflow = 'hidden';
-
-      L.world.clear();
-      L.world.randomize(0.3);
-      L.world.edge = 'wrap';
-      L.commit();
-      L.world.gen = 0;
-
-      const sl = document.getElementById('speed');
-      sl.value = '72';
-      sl.dispatchEvent(new Event('input', { bubbles: true }));
-      await new Promise((r) => setTimeout(r, 500));
-
-      if (!L.playing) document.getElementById('btn-play').click();
-
-      const W = board.clientWidth;
-      const H = board.clientHeight;
-      const s = 14;
-      L.view.minScale = 0.1;
-      L.view.setView({ scale: s, ox: W / 2 - 512 * s, oy: H / 2 - 288 * s });
-      await new Promise((r) => setTimeout(r, 500));
-      return { W, H };
-    })()`);
-
-    await record(page, vertical ? 'random-loop-vertical' : 'random-loop', async () => {
-      await page.evaluate(`(async () => {
-        const L = window.__life;
-        const board = document.getElementById('board');
-        const W = board.clientWidth;
-        const H = board.clientHeight;
-        const s0 = 14;
-        const s1 = ${vertical ? 0.8 : 0.47};
-        const dur = ${vertical ? 4200 : 9000};
-        L.view.minScale = 0.1;
-        const t0 = performance.now();
-        const ease = (p) => p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
-        await new Promise((res) => {
-          const step = (t) => {
-            const p = Math.min(1, (t - t0) / dur);
-            const e = ease(p);
-            const s = s0 * Math.pow(s1 / s0, e);
-            L.view.setView({ scale: s, ox: W / 2 - 512 * s, oy: H / 2 - 288 * s });
-            if (p < 1) requestAnimationFrame(step); else res();
-          };
-          requestAnimationFrame(step);
-        });
-      })()`);
-      await sleep(250);
     });
   }
 

@@ -101,19 +101,14 @@ input {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  /* 小板子一样的底：里面画一只滑翔机（.O. / ..O / OOO），比原来的五个圆点更像"生命游戏" */
-  display: grid;
-  place-items: center;
-  background: #101c25;
+  background:
+    radial-gradient(circle at 30% 30%, var(--accent) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 70% 30%, var(--accent) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 50% 62%, var(--accent) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 30% 88%, var(--accent) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 70% 88%, var(--accent) 0 2px, transparent 2.5px),
+    #101c25;
   box-shadow: 0 0 0 1px var(--line-strong), 0 0 16px rgba(108, 245, 210, 0.18);
-}
-
-.logo svg {
-  width: 18px;
-  height: 18px;
-  display: block;
-  fill: var(--accent);
-  filter: drop-shadow(0 0 3px rgba(108, 245, 210, 0.55));
 }
 
 .brand-text {
@@ -907,25 +902,6 @@ button.icon {
 
 .play button.primary:hover {
   filter: brightness(1.08);
-}
-
-/* 「随机播种」用骰子图标（和宣传片里投掷的那颗一致），尺寸跟旁边的方块按钮对齐 */
-#btn-random {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 7px;
-}
-
-#btn-random svg {
-  width: 16px;
-  height: 16px;
-  display: block;
-  filter: drop-shadow(0 0 3px rgba(255, 217, 160, 0.4));
-}
-
-#btn-random:hover svg {
-  filter: drop-shadow(0 0 5px rgba(255, 217, 160, 0.6));
 }
 
 .speed,
@@ -2003,45 +1979,6 @@ kbd {
   }
 }
 
-/* 窄屏手机（≤ 520px）：播放键和「回溯 / 录制」挤在同一行放不下，
-   播放键独占一行，「回溯 + 录制」另起一行靠右，底栏变成四行。 */
-@media (max-width: 520px) {
-  .play {
-    grid-column: 1 / -1;
-    order: 0;
-  }
-  .rec {
-    grid-column: 1 / -1;
-    order: 1;
-    justify-self: end;
-  }
-  .speed {
-    order: 2;
-  }
-  .timeline {
-    order: 3;
-  }
-}
-
-/* 小屏手机（≤ 430px）：顶栏放不下 logo + 统计 + 5 个按钮，
-   先让 logo 让位，再把图标与统计收紧一点，保证「帮助」不被切到屏幕外。 */
-@media (max-width: 430px) {
-  #topbar {
-    gap: 8px;
-    padding: 0 8px;
-  }
-  .brand {
-    display: none;
-  }
-  .iconbtn {
-    width: 28px;
-    height: 28px;
-  }
-  .stat {
-    padding: 4px 7px;
-  }
-}
-
 /* ---------- 自绘下拉（替代原生 select） ---------- */
 .menubtn {
   display: inline-flex;
@@ -2405,191 +2342,13 @@ body.dragging-sort {
     grid-template-columns: 1fr;
   }
 }
-
-/* ---------- 声音设置 ---------- */
-/* 静音时喇叭只留一个叉 */
-#btn-sound .slash {
-  display: none;
-}
-
-#btn-sound.off .wave {
-  display: none;
-}
-
-#btn-sound.off .slash {
-  display: inline;
-}
-
-#btn-sound.off {
-  color: var(--dim);
-}
-
-.sound-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.sound-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.sound-row .set-label {
-  flex: 0 0 48px;
-  margin: 0;
-}
-
-.sound-row input[type='range'] {
-  flex: 1 1 auto;
-  min-width: 80px;
-}
-
-.sound-val {
-  flex: 0 0 44px;
-  text-align: right;
-  font-size: 12px;
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-}
-
-.sound-note {
-  font-size: 11.5px;
-  color: var(--dim);
-}
-
-/* 版本号：确认听到的是新版，而不是缓存里的旧页面 */
-.sound-ver {
-  margin-top: 10px;
-  font-size: 11px;
-  color: var(--dim);
-  text-align: right;
-}
-
-.sound-ver b {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.sound-live {
-  margin-top: 2px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.028);
-}
-
-.sound-live-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.sound-mode {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  color: var(--accent);
-  transition: color 0.4s;
-}
-
-/* 四个状态各有一个色调：死寂灰、平静青、绽放金、悠远蓝 */
-.sound-mode[data-mode='void'] {
-  color: #6b818c;
-}
-
-.sound-mode[data-mode='calm'] {
-  color: var(--accent);
-}
-
-.sound-mode[data-mode='bloom'] {
-  color: #ffd9a0;
-}
-
-.sound-mode[data-mode='cosmic'] {
-  color: #9fd8ff;
-}
-
-.sound-tempo {
-  font-size: 12px;
-  color: var(--dim);
-  font-variant-numeric: tabular-nums;
-}
-
-.sound-live-meta {
-  margin-top: 4px;
-  font-size: 11.5px;
-  color: var(--dim);
-  font-variant-numeric: tabular-nums;
-}
-
-.sound-bars {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 6px 8px;
-  margin-top: 10px;
-}
-
-.sound-bar-label {
-  font-size: 11px;
-  color: var(--dim);
-  white-space: nowrap;
-}
-
-.sound-bar {
-  position: relative;
-  display: block;
-  height: 6px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  overflow: hidden;
-}
-
-.sound-bar b {
-  display: block;
-  height: 100%;
-  width: 0;
-  border-radius: 4px;
-  background: linear-gradient(90deg, rgba(108, 245, 210, 0.55), #ffd9a0);
-  transition: width 0.25s linear;
-}
-
-/* 三条强度条各有一个色调：绽放金、律动橙、悠远蓝 */
-#snd-groove {
-  background: linear-gradient(90deg, rgba(255, 217, 160, 0.55), #ff9d6c);
-}
-
-#snd-space {
-  background: linear-gradient(90deg, rgba(108, 245, 210, 0.4), #9fd8ff);
-}
-
-@media (max-width: 520px) {
-  .sound-row .set-label {
-    flex-basis: 40px;
-  }
-  .sound-note {
-    display: none;
-  }
-}
 </style>
   </head>
   <body>
     <div id="app">
       <header id="topbar">
         <div class="brand">
-          <span class="logo" aria-hidden="true">
-            <!-- 滑翔机：生命游戏里最标志性的图案（.O. / ..O / OOO） -->
-            <svg viewBox="0 0 24 24">
-              <rect x="9.5" y="3.5" width="5" height="5" rx="1.1" />
-              <rect x="15.5" y="9.5" width="5" height="5" rx="1.1" />
-              <rect x="3.5" y="15.5" width="5" height="5" rx="1.1" />
-              <rect x="9.5" y="15.5" width="5" height="5" rx="1.1" />
-              <rect x="15.5" y="15.5" width="5" height="5" rx="1.1" />
-            </svg>
-          </span>
+          <span class="logo"></span>
           <div class="brand-text">
             <strong>生命游戏</strong>
             <small>Conway's Game of Life</small>
@@ -2604,14 +2363,6 @@ body.dragging-sort {
         </div>
 
         <div class="top-actions">
-          <button class="iconbtn" id="btn-sound" data-tip="声音：音乐与音效" aria-label="声音设置">
-            <svg viewBox="0 0 24 24">
-              <path d="M4 9.6h3.1L12 5.7v12.6L7.1 14.4H4z" />
-              <path class="wave" d="M15.2 9.3a3.8 3.8 0 0 1 0 5.4" />
-              <path class="wave" d="M17.9 6.8a7.4 7.4 0 0 1 0 10.4" />
-              <path class="slash" d="M15.2 9.6l4.8 4.8M20 9.6l-4.8 4.8" />
-            </svg>
-          </button>
           <button class="iconbtn" id="btn-settings" data-tip="画布设置：比例 / 尺寸 / 边界" aria-label="画布设置">
             <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>
           </button>
@@ -2690,34 +2441,7 @@ body.dragging-sort {
           <button id="btn-play" class="primary" title="播放 / 暂停 (P)">▶</button>
           <button id="btn-next" title="下一代 (→)">▶|</button>
           <button id="btn-clear" title="清空世界">清空</button>
-          <button id="btn-random" title="随机播种" aria-label="随机播种">
-            <!-- 骰子：与宣传片里「投掷一次骰子」那颗一致（金色 5 点） -->
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <defs>
-                <linearGradient id="die-face" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="#1b1b18" />
-                  <stop offset="1" stop-color="#080a0d" />
-                </linearGradient>
-              </defs>
-              <rect
-                x="2.6"
-                y="2.6"
-                width="18.8"
-                height="18.8"
-                rx="5.4"
-                fill="url(#die-face)"
-                stroke="#ffd9a0"
-                stroke-width="1.5"
-              />
-              <g fill="#ffd9a0">
-                <circle cx="8.3" cy="8.3" r="1.75" />
-                <circle cx="15.7" cy="8.3" r="1.75" />
-                <circle cx="12" cy="12" r="1.75" />
-                <circle cx="8.3" cy="15.7" r="1.75" />
-                <circle cx="15.7" cy="15.7" r="1.75" />
-              </g>
-            </svg>
-          </button>
+          <button id="btn-random" title="随机播种">随机</button>
           <button id="btn-undo" title="撤销 (Ctrl+Z)">↶</button>
           <button id="btn-redo" title="重做 (Ctrl+Shift+Z)">↷</button>
         </div>
@@ -5006,14 +4730,6 @@ body.dragging-sort {
     img = null;
     buf = null;
     world = null;
-    /**
-     * 环绕模式铺砖用的纹理。
-     * createPattern 每帧新建是浪费，但也不能一直缓存：Chrome 用的是画布在
-     * createPattern 那一刻的快照，离屏画布之后再更新，旧 pattern 不会跟着变。
-     * 所以只在"离屏内容没变"的帧之间复用（悬停/幽灵预览这类重画），一旦
-     * paintRect 写入了新像素就丢掉重建。
-     */
-    tilePattern = null;
     dpr = 1;
     cssW = 0;
     cssH = 0;
@@ -5029,7 +4745,6 @@ body.dragging-sort {
       this.off.height = world2.height;
       this.img = this.offCtx.createImageData(world2.width, world2.height);
       this.buf = new Uint32Array(this.img.data.buffer);
-      this.tilePattern = null;
       this.paintAll();
     }
     resize(cssW, cssH, dpr = window.devicePixelRatio || 1) {
@@ -5078,19 +4793,14 @@ body.dragging-sort {
         }
       }
       this.offCtx.putImageData(img, 0, 0, ax0, ay0, ax1 - ax0, ay1 - ay0);
-      this.tilePattern = null;
     }
-    /**
-     * 把世界标脏的区域刷到离屏画布。
-     * 返回是否真的重画了——主循环靠它判断这一帧要不要重画主画布。
-     */
+    /** 把世界标脏的区域刷到离屏画布。 */
     sync() {
       const w = this.world;
-      if (!w) return false;
+      if (!w) return;
       const d = w.consumeDirty();
-      if (!d) return false;
+      if (!d) return;
       this.paintRect(d.x0, d.y0, d.x1, d.y1);
-      return true;
     }
     render(view2, opts, overlay) {
       const ctx = this.ctx;
@@ -5221,11 +4931,7 @@ body.dragging-sort {
       ctx.save();
       ctx.translate(nx, ny);
       ctx.scale(scale, scale);
-      let pattern = this.tilePattern;
-      if (!pattern) {
-        pattern = ctx.createPattern(this.off, "repeat");
-        this.tilePattern = pattern;
-      }
+      const pattern = ctx.createPattern(this.off, "repeat");
       if (pattern) {
         ctx.fillStyle = pattern;
         ctx.imageSmoothingEnabled = scale < 1;
@@ -5420,954 +5126,6 @@ body.dragging-sort {
     return canvas2.toDataURL("image/png");
   }
 
-  // src/audio/engine.ts
-  var STORAGE_KEY = "life-studio:sound";
-  var DEFAULT_SETTINGS = { muted: false, music: 0.7, sfx: 0.8 };
-  var AUDIO_VERSION = "v6 · 宣传片律动 + 重心跳";
-  var TICK_MS = 30;
-  var LOOKAHEAD = 0.18;
-  var clamp2 = (v, lo, hi) => v < lo ? lo : v > hi ? hi : v;
-  var midiHz = (m) => 440 * Math.pow(2, (m - 69) / 12);
-  var CHORDS = {
-    Am: { pad: [57, 60, 64, 69], bass: 33, arp: [69, 72, 76, 81] },
-    F: { pad: [53, 57, 60, 65], bass: 29, arp: [65, 69, 72, 77] },
-    C: { pad: [48, 55, 60, 64], bass: 36, arp: [64, 67, 72, 76] },
-    G: { pad: [55, 59, 62, 67], bass: 31, arp: [67, 71, 74, 79] }
-  };
-  var PROGRESSION = ["Am", "F", "C", "G"];
-  var SoundEngine = class {
-    settings = { ...DEFAULT_SETTINGS };
-    /** 给界面看的实时状态 */
-    mode = "void";
-    tempo = 96;
-    pulse = 0;
-    space = 0;
-    /** 0..1 律动期：连续放图案 / 大量画细胞冲上去，停手后慢慢退回正常算法 */
-    groove = 0;
-    rate = 0;
-    population = 0;
-    /** 自动化测试用：各类音符排了多少次（resetDebugCounts 清零） */
-    debugCounts = {
-      kick: 0,
-      hat: 0,
-      snare: 0,
-      tom: 0,
-      clap: 0,
-      pluck: 0,
-      bass: 0,
-      pad: 0,
-      heart: 0
-    };
-    ctx = null;
-    musicBus = null;
-    sfxBus = null;
-    reverbIn = null;
-    analyser = null;
-    noiseBuf = null;
-    unlocked = false;
-    visible = true;
-    timer = null;
-    // 调度状态
-    nextStep = 0;
-    step = 0;
-    chordIdx = 0;
-    padHz = 900;
-    drumEnergy = 0;
-    /** 上一次真正铺 pad 的时刻，避免切模式时和按小节排的 pad 撞在一起 */
-    lastPadAt = 0;
-    // 环境采样
-    lastPop = 0;
-    lastSampleAt = 0;
-    prevRate = 0;
-    accel = 0;
-    zeroSince = 0;
-    editSpike = 0;
-    grooveUntil = 0;
-    // 绘画音效节流
-    lastPaintAt = 0;
-    paintAccum = 0;
-    // ── 生命周期 ────────────────────────────────────────────────
-    /** 读本地设置；不创建 AudioContext（要等一个用户手势） */
-    init() {
-      try {
-        const raw = localStorage.getItem(STORAGE_KEY);
-        if (raw) {
-          const v = JSON.parse(raw);
-          this.settings = {
-            muted: !!v.muted,
-            music: clamp2(Number(v.music ?? DEFAULT_SETTINGS.music), 0, 1),
-            sfx: clamp2(Number(v.sfx ?? DEFAULT_SETTINGS.sfx), 0, 1)
-          };
-        }
-      } catch {
-      }
-    }
-    /** 有没有真正把音频跑起来（浏览器可能要等到用户手势） */
-    get active() {
-      return !!this.ctx && this.ctx.state === "running";
-    }
-    get supported() {
-      return typeof window !== "undefined" && !!(window.AudioContext || webkitCtor());
-    }
-    /**
-     * 解锁音频。浏览器要求用户手势之后才能出声，所以第一次点按/按键时调用，
-     * 之后再调用只是 resume。失败就安静地退回无声，不影响游戏。
-     */
-    unlock() {
-      if (!this.supported) return;
-      try {
-        if (!this.ctx) {
-          const Ctor = window.AudioContext ?? webkitCtor();
-          if (!Ctor) return;
-          this.ctx = new Ctor();
-          this.buildGraph();
-          this.unlocked = true;
-        }
-        void this.ctx.resume();
-        this.applyVolumes();
-        this.startScheduler();
-      } catch {
-        this.ctx = null;
-        this.unlocked = false;
-      }
-    }
-    /** 切到后台就挂起音频，回来再恢复（省电，也避免调度器被节流后音画错位） */
-    setPageVisible(visible) {
-      this.visible = visible;
-      const ctx = this.ctx;
-      if (!ctx) return;
-      try {
-        if (!visible) void ctx.suspend();
-        else if (this.unlocked) void ctx.resume();
-      } catch {
-      }
-    }
-    setSettings(patch) {
-      this.settings = {
-        muted: patch.muted ?? this.settings.muted,
-        music: patch.music !== void 0 ? clamp2(patch.music, 0, 1) : this.settings.music,
-        sfx: patch.sfx !== void 0 ? clamp2(patch.sfx, 0, 1) : this.settings.sfx
-      };
-      this.save();
-      this.applyVolumes();
-    }
-    toggleMute() {
-      this.setSettings({ muted: !this.settings.muted });
-      return this.settings.muted;
-    }
-    save() {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(this.settings));
-      } catch {
-      }
-    }
-    buildGraph() {
-      const ctx = this.ctx;
-      if (!ctx) return;
-      const master = ctx.createGain();
-      master.gain.value = 0.9;
-      const comp = ctx.createDynamicsCompressor();
-      comp.threshold.value = -16;
-      comp.knee.value = 18;
-      comp.ratio.value = 3;
-      comp.attack.value = 4e-3;
-      comp.release.value = 0.22;
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 1024;
-      master.connect(comp);
-      comp.connect(analyser);
-      analyser.connect(ctx.destination);
-      const musicBus = ctx.createGain();
-      musicBus.gain.value = 0;
-      musicBus.connect(master);
-      const sfxBus = ctx.createGain();
-      sfxBus.gain.value = 0;
-      sfxBus.connect(master);
-      const len = Math.floor(ctx.sampleRate * 2.6);
-      const ir = ctx.createBuffer(2, len, ctx.sampleRate);
-      for (let ch = 0; ch < 2; ch++) {
-        const data = ir.getChannelData(ch);
-        let lp = 0;
-        for (let i = 0; i < len; i++) {
-          const t = i / len;
-          const n = Math.random() * 2 - 1;
-          lp = lp * 0.72 + n * 0.28;
-          data[i] = lp * Math.pow(1 - t, 2.4);
-        }
-      }
-      const conv = ctx.createConvolver();
-      conv.buffer = ir;
-      const reverbIn = ctx.createGain();
-      reverbIn.gain.value = 0.32;
-      reverbIn.connect(conv);
-      conv.connect(musicBus);
-      const noiseLen = Math.floor(ctx.sampleRate * 1.2);
-      const noise = ctx.createBuffer(1, noiseLen, ctx.sampleRate);
-      const nd = noise.getChannelData(0);
-      for (let i = 0; i < noiseLen; i++) nd[i] = Math.random() * 2 - 1;
-      this.musicBus = musicBus;
-      this.sfxBus = sfxBus;
-      this.reverbIn = reverbIn;
-      this.analyser = analyser;
-      this.noiseBuf = noise;
-    }
-    applyVolumes() {
-      const ctx = this.ctx;
-      if (!ctx || !this.musicBus || !this.sfxBus) return;
-      const now = ctx.currentTime;
-      const mute = this.settings.muted ? 0 : 1;
-      const musicGain = Math.pow(this.settings.music, 1.7) * 0.62 * mute;
-      const sfxGain = Math.pow(this.settings.sfx, 1.7) * 0.85 * mute;
-      this.musicBus.gain.setTargetAtTime(musicGain, now, 0.12);
-      this.sfxBus.gain.setTargetAtTime(sfxGain, now, 0.06);
-    }
-    /**
-     * 音符播完就把这条链路从音频图上摘掉。
-     * 不摘的话，挂机几个小时会攒下几万个空转的 gain / filter 节点；
-     * Chrome 会自动回收"已经结束的音源"，但下游节点不会自己走。
-     */
-    free(src, ...rest) {
-      src.onended = () => {
-        try {
-          src.disconnect();
-        } catch {
-        }
-        for (const n of rest) {
-          try {
-            n.disconnect();
-          } catch {
-          }
-        }
-      };
-    }
-    // ── 环境感知 ────────────────────────────────────────────────
-    /**
-     * 主循环每隔约 200ms 喂一次画布状态。
-     * 增长率 g = dP/dt，加速度 a = dg/dt，都做指数平滑；用 max(400, 人口) 归一化，
-     * 于是"放下一个五格滑翔机"和"一张大网自然波动"的响应是同一量级。
-     */
-    observe(population, scale) {
-      const now = performance.now();
-      const dt = this.lastSampleAt ? (now - this.lastSampleAt) / 1e3 : 0;
-      if (dt > 0.04 && dt < 2) {
-        const rawRate = (population - this.lastPop) / dt;
-        this.rate = this.rate * 0.7 + rawRate * 0.3;
-        const rawAccel = (this.rate - this.prevRate) / dt;
-        this.prevRate = this.rate;
-        this.accel = this.accel * 0.72 + rawAccel * 0.28;
-      }
-      this.lastPop = population;
-      this.lastSampleAt = now;
-      this.population = population;
-      if (population === 0) {
-        if (!this.zeroSince) this.zeroSince = now;
-      } else {
-        this.zeroSince = 0;
-      }
-      if (this.editSpike > 0) this.editSpike = Math.max(0, this.editSpike - dt * 0.9);
-      const denom = Math.max(400, population);
-      const growth = Math.max(0, this.rate) / denom;
-      const push = Math.max(0, this.accel) / denom;
-      const target = clamp2(growth * 7 + push * 5 + this.editSpike * 0.55, 0, 1);
-      this.pulse += (target - this.pulse) * (target > this.pulse ? 0.34 : 0.09);
-      const spaceTarget = clamp2((0.55 - scale) / 0.3, 0, 1);
-      this.space += (spaceTarget - this.space) * 0.22;
-      const empty = population === 0 && now - this.zeroSince > 1200;
-      const nextMode = this.space > 0.55 ? "cosmic" : empty ? "void" : this.pulse > 0.35 ? "bloom" : "calm";
-      if (nextMode !== this.mode) {
-        this.mode = nextMode;
-        this.onModeChange();
-      }
-      const grooveTarget = now < this.grooveUntil ? 1 : 0;
-      this.groove += (grooveTarget - this.groove) * (grooveTarget > this.groove ? 0.3 : 0.07);
-    }
-    /**
-     * 手动操作（放图案、连着画细胞）推进"律动期"。
-     * 一次操作 4~6 秒；期间再有操作就续上，停手后大约 4 秒淡回正常。
-     */
-    kickGroove(strength = 1) {
-      const now = performance.now();
-      const hold = 3600 + 1600 * Math.min(1, strength);
-      this.grooveUntil = Math.max(this.grooveUntil, now + hold);
-      this.groove = Math.min(1, this.groove + 0.3 * strength);
-    }
-    resetDebugCounts() {
-      for (const k of Object.keys(this.debugCounts)) {
-        this.debugCounts[k] = 0;
-      }
-    }
-    /**
-     * 切模式时立刻给出一个"新音色"，而不是等下一小节。
-     * 否则拉远镜头之后最多要等十几秒才听到悠远，交互上像是坏了。
-     */
-    onModeChange() {
-      const ctx = this.ctx;
-      if (!ctx || ctx.state !== "running" || !this.visible) return;
-      const now = ctx.currentTime;
-      if (now - this.lastPadAt < 0.35) return;
-      const time = now + 0.06;
-      const beatDur = 60 / this.tempo;
-      if (this.mode === "void") {
-        this.bassNote(33, time, 8, 0.028);
-        return;
-      }
-      const chord = CHORDS[PROGRESSION[this.chordIdx]];
-      const cosmic = this.mode === "cosmic";
-      if (cosmic || this.groove > 0.12) {
-        this.pad(
-          chord.pad,
-          time,
-          beatDur * 4 * (cosmic ? 1.6 : 1.05),
-          cosmic ? 0.022 : 0.1 + 0.04 * this.groove,
-          cosmic ? 1.8 : 0.8
-        );
-      }
-      this.bassNote(chord.bass, time, beatDur * (cosmic ? 5 : 2.4), cosmic ? 0.075 : 0.16);
-    }
-    // ── 目标参数（随模式平滑过渡） ──────────────────────────────
-    tempoTarget() {
-      if (this.mode === "void") return 75;
-      if (this.mode === "cosmic") return 84;
-      return this.mode === "bloom" ? 120 + 10 * this.pulse : 120;
-    }
-    padTarget() {
-      if (this.mode === "cosmic") return 700;
-      if (this.mode === "bloom") return 1e3 + 500 * this.pulse;
-      return 900;
-    }
-    drumTarget() {
-      if (this.mode === "bloom") return Math.min(1, 0.75 + 0.25 * this.pulse);
-      if (this.mode === "calm") return 0.35;
-      return 0;
-    }
-    /** 混响送出量：越远越湿 */
-    reverbTarget() {
-      return this.mode === "cosmic" ? 0.6 : this.mode === "void" ? 0.55 : 0.26;
-    }
-    // ── 调度器 ──────────────────────────────────────────────────
-    startScheduler() {
-      if (this.timer !== null) return;
-      const ctx = this.ctx;
-      if (!ctx) return;
-      this.nextStep = ctx.currentTime + 0.1;
-      this.timer = window.setInterval(() => this.tick(), TICK_MS);
-    }
-    tick() {
-      const ctx = this.ctx;
-      if (!ctx || ctx.state !== "running" || !this.visible) return;
-      if (this.settings.muted || this.settings.music <= 1e-3) {
-        this.nextStep = ctx.currentTime + 0.08;
-        return;
-      }
-      if (this.nextStep < ctx.currentTime) this.nextStep = ctx.currentTime + 0.05;
-      const horizon = ctx.currentTime + LOOKAHEAD;
-      let guard = 0;
-      while (this.nextStep < horizon && guard++ < 64) {
-        this.scheduleStep(this.step, this.nextStep);
-        this.nextStep += 60 / this.tempo / 4;
-        this.step++;
-      }
-      const k = 0.07;
-      this.tempo += (this.tempoTarget() - this.tempo) * k;
-      this.padHz += (this.padTarget() - this.padHz) * k;
-      this.drumEnergy += (this.drumTarget() - this.drumEnergy) * k;
-      if (this.reverbIn) {
-        this.reverbIn.gain.setTargetAtTime(this.reverbTarget(), ctx.currentTime, 0.4);
-      }
-    }
-    /** 一个十六分音符步 */
-    scheduleStep(step, time) {
-      const mode = this.mode;
-      const beatDur = 60 / this.tempo;
-      const inBar = step % 16;
-      const chordName = PROGRESSION[this.chordIdx];
-      const chord = CHORDS[chordName];
-      if (mode === "void") {
-        if (step % 4 === 0) this.heartbeat(time, 0.62);
-        if (step % 4 === 1) this.heartbeat(time, 0.4);
-        if (step % 32 === 0) this.bassNote(33, time, 7, 0.05);
-        return;
-      }
-      if (inBar === 0) {
-        if (time - this.lastPadAt > 0.7) {
-          const cosmic = mode === "cosmic";
-          const dur = beatDur * 4 * (cosmic ? 1.8 : 1.04);
-          const gain = cosmic ? 0.05 : mode === "bloom" ? 0.11 : 0.1;
-          this.pad(chord.pad, time, dur, gain, cosmic ? 1.6 : 0.5);
-        }
-        this.chordIdx = (this.chordIdx + 1) % PROGRESSION.length;
-      }
-      if (mode === "cosmic") {
-        if (step % 8 === 0) {
-          const notes = chord.arp;
-          this.pluck(notes[step / 8 % notes.length] + 24, time, 0.02, 2.2, step / 8 % 2 ? 0.3 : -0.3);
-        }
-        if (inBar === 0 && Math.random() < 0.4) this.shimmer(chord.arp[0] + 24, time, 0.014);
-        return;
-      }
-      if (inBar % 4 === 0) {
-        this.bassNote(chord.bass, time, beatDur * 0.48, 0.22);
-        this.kick(time, 0.18);
-      }
-      if (inBar % 4 === 2) this.bassNote(chord.bass + 12, time, beatDur * 0.3, 0.055);
-      const arpEvery = mode === "bloom" ? 1 : 2;
-      if (inBar % arpEvery === 0) {
-        const idx = Math.floor(step / arpEvery) % chord.arp.length;
-        this.pluck(
-          chord.arp[idx],
-          time,
-          (mode === "bloom" ? 0.045 : 0.04) * (0.8 + 0.4 * this.pulse),
-          mode === "bloom" ? 6 : 7,
-          [-0.25, 0.25, -0.1, 0.1][idx] ?? 0
-        );
-      }
-      const drums = this.drumEnergy;
-      if (mode === "bloom") {
-        if (inBar % 2 === 1) this.hat(time, 0.014 + 0.016 * drums, inBar % 4 === 1 ? 0.22 : -0.2);
-        if (inBar === 4 || inBar === 12) this.snare(time, 0.05 + 0.03 * drums);
-      } else if (inBar % 8 === 4) {
-        this.hat(time, 8e-3, -0.2);
-      }
-      const g = this.groove;
-      if (g > 0.25) {
-        if (inBar === 14) this.tom(time, 140, 0.03 * g);
-        if (inBar === 12) this.clap(time, 0.025 * g);
-      }
-    }
-    // ── 乐器 ────────────────────────────────────────────────────
-    /** 叠三层略微失谐的锯齿波过低通，就是宣传片里的 pad */
-    pad(notes, time, dur, gain, attack) {
-      const ctx = this.ctx;
-      if (!ctx || !this.musicBus || !this.reverbIn) return;
-      this.debugCounts.pad++;
-      this.lastPadAt = time;
-      const filter = ctx.createBiquadFilter();
-      filter.type = "lowpass";
-      filter.frequency.value = this.padHz;
-      filter.Q.value = 0.5;
-      const g = ctx.createGain();
-      const peak = Math.max(2e-4, gain);
-      g.gain.setValueAtTime(1e-4, time);
-      g.gain.linearRampToValueAtTime(peak, time + attack);
-      g.gain.setValueAtTime(peak, time + Math.max(attack, dur * 0.62));
-      g.gain.exponentialRampToValueAtTime(1e-4, time + dur);
-      filter.connect(g);
-      g.connect(this.musicBus);
-      g.connect(this.reverbIn);
-      const oscs = [];
-      for (const note of notes) {
-        for (const detune of [-6, 6]) {
-          const o = ctx.createOscillator();
-          o.type = "sawtooth";
-          o.frequency.value = midiHz(note);
-          o.detune.value = detune;
-          o.connect(filter);
-          o.start(time);
-          o.stop(time + dur + 0.06);
-          oscs.push(o);
-        }
-      }
-      const first = oscs[0];
-      if (first) this.free(first, filter, g, ...oscs.slice(1));
-    }
-    pluck(note, time, gain, decay, pan) {
-      const ctx = this.ctx;
-      if (!ctx || !this.musicBus || !this.reverbIn) return;
-      this.debugCounts.pluck++;
-      const o = ctx.createOscillator();
-      o.type = "triangle";
-      o.frequency.value = midiHz(note);
-      const g = ctx.createGain();
-      const peak = Math.max(2e-4, gain);
-      g.gain.setValueAtTime(1e-4, time);
-      g.gain.exponentialRampToValueAtTime(peak, time + 6e-3);
-      g.gain.exponentialRampToValueAtTime(1e-4, time + 1.4 / decay);
-      const p = ctx.createStereoPanner();
-      p.pan.value = clamp2(pan, -1, 1);
-      o.connect(g);
-      g.connect(p);
-      p.connect(this.musicBus);
-      p.connect(this.reverbIn);
-      o.start(time);
-      o.stop(time + 1.6 / decay);
-      this.free(o, g, p);
-    }
-    bassNote(note, time, dur, gain) {
-      const ctx = this.ctx;
-      if (!ctx || !this.musicBus) return;
-      this.debugCounts.bass++;
-      const o = ctx.createOscillator();
-      o.type = "sine";
-      o.frequency.value = midiHz(note);
-      const sub = ctx.createOscillator();
-      sub.type = "sine";
-      sub.frequency.value = midiHz(note - 12);
-      const lp = ctx.createBiquadFilter();
-      lp.type = "lowpass";
-      lp.frequency.value = 220;
-      const g = ctx.createGain();
-      const peak = Math.max(2e-4, gain);
-      g.gain.setValueAtTime(1e-4, time);
-      g.gain.linearRampToValueAtTime(peak, time + 0.02);
-      g.gain.setValueAtTime(peak, time + dur * 0.7);
-      g.gain.exponentialRampToValueAtTime(1e-4, time + dur);
-      o.connect(lp);
-      sub.connect(lp);
-      lp.connect(g);
-      g.connect(this.musicBus);
-      if (this.reverbIn) g.connect(this.reverbIn);
-      o.start(time);
-      sub.start(time);
-      o.stop(time + dur + 0.05);
-      sub.stop(time + dur + 0.05);
-      this.free(o, sub, lp, g);
-    }
-    kick(time, gain) {
-      const ctx = this.ctx;
-      if (!ctx || !this.musicBus) return;
-      this.debugCounts.kick++;
-      const o = ctx.createOscillator();
-      o.type = "sine";
-      o.frequency.setValueAtTime(196, time);
-      o.frequency.exponentialRampToValueAtTime(46, time + 0.12);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(1e-4, time);
-      g.gain.exponentialRampToValueAtTime(gain, time + 4e-3);
-      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.34);
-      o.connect(g);
-      g.connect(this.musicBus);
-      o.start(time);
-      o.stop(time + 0.36);
-      this.free(o, g);
-    }
-    /**
-     * 空世界的心跳：比普通底鼓更低、更重、更长。
-     * 三层叠起来——78→42Hz 的主体、33Hz 的超低、一下低通噪声的"咚"。
-     */
-    heartbeat(time, gain) {
-      const ctx = this.ctx;
-      if (!ctx || !this.musicBus) return;
-      this.debugCounts.heart++;
-      const o = ctx.createOscillator();
-      o.type = "sine";
-      o.frequency.setValueAtTime(78, time);
-      o.frequency.exponentialRampToValueAtTime(42, time + 0.14);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(1e-4, time);
-      g.gain.exponentialRampToValueAtTime(gain, time + 6e-3);
-      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.55);
-      o.connect(g);
-      g.connect(this.musicBus);
-      o.start(time);
-      o.stop(time + 0.6);
-      const sub = ctx.createOscillator();
-      sub.type = "sine";
-      sub.frequency.value = 33;
-      const sg = ctx.createGain();
-      sg.gain.setValueAtTime(1e-4, time);
-      sg.gain.exponentialRampToValueAtTime(gain * 0.55, time + 0.012);
-      sg.gain.exponentialRampToValueAtTime(1e-4, time + 0.5);
-      sub.connect(sg);
-      sg.connect(this.musicBus);
-      sub.start(time);
-      sub.stop(time + 0.55);
-      if (this.noiseBuf) {
-        const src = ctx.createBufferSource();
-        src.buffer = this.noiseBuf;
-        const lp = ctx.createBiquadFilter();
-        lp.type = "lowpass";
-        lp.frequency.value = 320;
-        const ng = ctx.createGain();
-        ng.gain.setValueAtTime(gain * 0.5, time);
-        ng.gain.exponentialRampToValueAtTime(1e-4, time + 0.09);
-        src.connect(lp);
-        lp.connect(ng);
-        ng.connect(this.musicBus);
-        src.start(time);
-        src.stop(time + 0.1);
-        this.free(src, lp, ng);
-      }
-      this.free(o, sub, g, sg);
-    }
-    hat(time, gain, pan) {
-      const ctx = this.ctx;
-      if (!ctx || !this.musicBus || !this.noiseBuf) return;
-      this.debugCounts.hat++;
-      const src = ctx.createBufferSource();
-      src.buffer = this.noiseBuf;
-      const hp = ctx.createBiquadFilter();
-      hp.type = "highpass";
-      hp.frequency.value = 7e3;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(gain, time);
-      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.05);
-      const p = ctx.createStereoPanner();
-      p.pan.value = clamp2(pan, -1, 1);
-      src.connect(hp);
-      hp.connect(g);
-      g.connect(p);
-      p.connect(this.musicBus);
-      src.start(time);
-      src.stop(time + 0.06);
-      this.free(src, hp, g, p);
-    }
-    snare(time, gain) {
-      const ctx = this.ctx;
-      if (!ctx || !this.musicBus || !this.noiseBuf) return;
-      this.debugCounts.snare++;
-      const src = ctx.createBufferSource();
-      src.buffer = this.noiseBuf;
-      const bp = ctx.createBiquadFilter();
-      bp.type = "bandpass";
-      bp.frequency.value = 1900;
-      bp.Q.value = 0.9;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(gain, time);
-      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.16);
-      src.connect(bp);
-      bp.connect(g);
-      g.connect(this.musicBus);
-      const body = ctx.createOscillator();
-      body.type = "sine";
-      body.frequency.value = 190;
-      const bg = ctx.createGain();
-      bg.gain.setValueAtTime(gain * 0.5, time);
-      bg.gain.exponentialRampToValueAtTime(1e-4, time + 0.1);
-      body.connect(bg);
-      bg.connect(this.musicBus);
-      src.start(time);
-      src.stop(time + 0.18);
-      body.start(time);
-      body.stop(time + 0.12);
-      this.free(src, bp, g);
-      this.free(body, bg);
-    }
-    /** 桶鼓：比底鼓高、比军鼓低，律动期用来补反拍 */
-    tom(time, hz, gain) {
-      const ctx = this.ctx;
-      if (!ctx || !this.musicBus) return;
-      this.debugCounts.tom++;
-      const base = Math.max(70, hz);
-      const o = ctx.createOscillator();
-      o.type = "sine";
-      o.frequency.setValueAtTime(base, time);
-      o.frequency.exponentialRampToValueAtTime(base * 0.62, time + 0.16);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(1e-4, time);
-      g.gain.exponentialRampToValueAtTime(Math.max(2e-4, gain), time + 5e-3);
-      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.26);
-      o.connect(g);
-      g.connect(this.musicBus);
-      o.start(time);
-      o.stop(time + 0.28);
-      this.free(o, g);
-    }
-    /** 拍手：三下短噪声叠在一起，律动期替军鼓加一层"电子感" */
-    clap(time, gain) {
-      const ctx = this.ctx;
-      const bus = this.musicBus;
-      const noise = this.noiseBuf;
-      if (!ctx || !bus || !noise) return;
-      this.debugCounts.clap++;
-      for (let i = 0; i < 3; i++) {
-        const t = time + i * 0.011;
-        const src = ctx.createBufferSource();
-        src.buffer = noise;
-        const bp = ctx.createBiquadFilter();
-        bp.type = "bandpass";
-        bp.frequency.value = 1250;
-        bp.Q.value = 1.2;
-        const g = ctx.createGain();
-        g.gain.setValueAtTime(Math.max(2e-4, gain) * (i === 2 ? 1 : 0.65), t);
-        g.gain.exponentialRampToValueAtTime(1e-4, t + 0.09);
-        src.connect(bp);
-        bp.connect(g);
-        g.connect(bus);
-        src.start(t);
-        src.stop(t + 0.1);
-        this.free(src, bp, g);
-      }
-    }
-    /** 悠远模式下偶尔出现的高音闪光：慢起慢落，几乎全给混响 */
-    shimmer(note, time, gain) {
-      const ctx = this.ctx;
-      if (!ctx || !this.musicBus || !this.reverbIn) return;
-      const o = ctx.createOscillator();
-      o.type = "sine";
-      o.frequency.value = midiHz(note);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(1e-4, time);
-      g.gain.linearRampToValueAtTime(gain, time + 1.2);
-      g.gain.exponentialRampToValueAtTime(1e-4, time + 3.6);
-      o.connect(g);
-      g.connect(this.musicBus);
-      g.connect(this.reverbIn);
-      o.start(time);
-      o.stop(time + 3.7);
-      this.free(o, g);
-    }
-    // ── 音效 ────────────────────────────────────────────────────
-    sfx(name) {
-      const ctx = this.ctx;
-      if (!ctx || !this.sfxBus || ctx.state !== "running") return;
-      if (this.settings.muted || this.settings.sfx <= 0.01) return;
-      if (name === "stamp") {
-        this.editSpike = 1;
-        this.kickGroove(1);
-      }
-      if (name === "random") this.kickGroove(1.5);
-      const t = ctx.currentTime + 0.012;
-      try {
-        switch (name) {
-          case "birth":
-            this.sfxBirth(t);
-            break;
-          case "death":
-            this.sfxDeath(t, 1);
-            break;
-          case "erase":
-            this.sfxDeath(t, 0.6);
-            break;
-          case "stamp":
-            this.sfxStamp(t);
-            break;
-          case "clear":
-            this.sfxWhoosh(t, 0.6, 2200, 0.28);
-            this.sfxThump(t, 0.16);
-            break;
-          case "random":
-            this.sfxDice(t);
-            break;
-          case "undo":
-            this.sfxBlip(t, 660, 0.05);
-            this.sfxBlip(t + 0.07, 494, 0.04);
-            break;
-          case "redo":
-            this.sfxBlip(t, 494, 0.04);
-            this.sfxBlip(t + 0.07, 660, 0.05);
-            break;
-          case "play":
-            this.sfxBlip(t, 1180, 0.05);
-            break;
-          case "pause":
-            this.sfxBlip(t, 740, 0.05);
-            break;
-          case "whoosh":
-            this.sfxWhoosh(t, 0.45, 1800, 0.2);
-            break;
-          case "click":
-            this.sfxBlip(t, 1500, 0.035);
-            break;
-        }
-      } catch {
-      }
-    }
-    /**
-     * 画笔/橡皮：每落一格都会调一次，所以这里做节流，
-     * 并且用最近落了多少格来抬音高——一笔画得越长，声音越"爬升"。
-     */
-    paintTick(kind) {
-      const ctx = this.ctx;
-      if (!ctx || !this.sfxBus || ctx.state !== "running") return;
-      if (this.settings.muted || this.settings.sfx <= 0.01) return;
-      const now = ctx.currentTime;
-      this.paintAccum = Math.min(40, this.paintAccum + 1);
-      if (now - this.lastPaintAt < 0.045) return;
-      this.lastPaintAt = now;
-      const t = now + 8e-3;
-      if (kind === "remove") {
-        this.sfxBlip(t, 420, 0.05);
-      } else {
-        const hz = 1320 + Math.min(1400, this.paintAccum * 70);
-        this.sfxBlip(t, hz, 0.035 + Math.min(0.03, this.paintAccum * 2e-3));
-        this.kickGroove(0.2);
-      }
-      this.paintAccum = 0;
-    }
-    sfxBlip(time, hz, gain) {
-      const ctx = this.ctx;
-      if (!ctx || !this.sfxBus) return;
-      const o = ctx.createOscillator();
-      o.type = "sine";
-      o.frequency.value = hz;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(1e-4, time);
-      g.gain.exponentialRampToValueAtTime(gain, time + 4e-3);
-      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.09);
-      o.connect(g);
-      g.connect(this.sfxBus);
-      o.start(time);
-      o.stop(time + 0.11);
-      this.free(o, g);
-    }
-    /** 宣传片 birth.wav：880→1320Hz 的亮叮 + 一点噪声 */
-    sfxBirth(time) {
-      const ctx = this.ctx;
-      if (!ctx || !this.sfxBus) return;
-      const o = ctx.createOscillator();
-      o.type = "sine";
-      o.frequency.setValueAtTime(880, time);
-      o.frequency.linearRampToValueAtTime(1320, time + 0.05);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(1e-4, time);
-      g.gain.exponentialRampToValueAtTime(0.16, time + 6e-3);
-      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.26);
-      const shimmerOsc = ctx.createOscillator();
-      shimmerOsc.type = "sine";
-      shimmerOsc.frequency.value = 2640;
-      const sg = ctx.createGain();
-      sg.gain.setValueAtTime(0.04, time);
-      sg.gain.exponentialRampToValueAtTime(1e-4, time + 0.16);
-      o.connect(g);
-      shimmerOsc.connect(sg);
-      g.connect(this.sfxBus);
-      sg.connect(this.sfxBus);
-      o.start(time);
-      shimmerOsc.start(time);
-      o.stop(time + 0.28);
-      shimmerOsc.stop(time + 0.18);
-      this.free(o, g);
-      this.free(shimmerOsc, sg);
-    }
-    /** 宣传片 death.wav：150→55Hz 的塌陷 + 一点漏气 */
-    sfxDeath(time, scale) {
-      const ctx = this.ctx;
-      if (!ctx || !this.sfxBus || !this.noiseBuf) return;
-      const o = ctx.createOscillator();
-      o.type = "sine";
-      o.frequency.setValueAtTime(150, time);
-      o.frequency.exponentialRampToValueAtTime(55, time + 0.26);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(1e-4, time);
-      g.gain.exponentialRampToValueAtTime(0.2 * scale, time + 0.01);
-      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.3);
-      const lp = ctx.createBiquadFilter();
-      lp.type = "lowpass";
-      lp.frequency.value = 900;
-      o.connect(lp);
-      lp.connect(g);
-      g.connect(this.sfxBus);
-      o.start(time);
-      o.stop(time + 0.32);
-      const src = ctx.createBufferSource();
-      src.buffer = this.noiseBuf;
-      const ng = ctx.createGain();
-      ng.gain.setValueAtTime(0.05 * scale, time);
-      ng.gain.exponentialRampToValueAtTime(1e-4, time + 0.12);
-      src.connect(ng);
-      ng.connect(this.sfxBus);
-      src.start(time);
-      src.stop(time + 0.14);
-      this.free(o, lp, g);
-      this.free(src, ng);
-    }
-    /** 放入图案：三个音往上一挑，像把种子按进土里 */
-    sfxStamp(time) {
-      const ctx = this.ctx;
-      const bus = this.sfxBus;
-      if (!ctx || !bus) return;
-      [69, 72, 76].forEach((note, i) => {
-        const t = time + i * 0.055;
-        const o = ctx.createOscillator();
-        o.type = "triangle";
-        o.frequency.value = midiHz(note);
-        const g = ctx.createGain();
-        g.gain.setValueAtTime(1e-4, t);
-        g.gain.exponentialRampToValueAtTime(0.12, t + 5e-3);
-        g.gain.exponentialRampToValueAtTime(1e-4, t + 0.34);
-        o.connect(g);
-        g.connect(bus);
-        o.start(t);
-        o.stop(t + 0.36);
-        this.free(o, g);
-      });
-      this.sfxThump(time, 0.1);
-    }
-    sfxThump(time, gain) {
-      const ctx = this.ctx;
-      if (!ctx || !this.sfxBus) return;
-      const o = ctx.createOscillator();
-      o.type = "sine";
-      o.frequency.setValueAtTime(120, time);
-      o.frequency.exponentialRampToValueAtTime(44, time + 0.3);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(1e-4, time);
-      g.gain.exponentialRampToValueAtTime(gain, time + 8e-3);
-      g.gain.exponentialRampToValueAtTime(1e-4, time + 0.42);
-      o.connect(g);
-      g.connect(this.sfxBus);
-      o.start(time);
-      o.stop(time + 0.44);
-      this.free(o, g);
-    }
-    /** 随机播种：四颗骰子撞在一起，最后落定 */
-    sfxDice(time) {
-      const ctx = this.ctx;
-      if (!ctx || !this.sfxBus || !this.noiseBuf) return;
-      for (let i = 0; i < 4; i++) {
-        const t = time + i * 0.075 + Math.random() * 0.03;
-        const src = ctx.createBufferSource();
-        src.buffer = this.noiseBuf;
-        const hp = ctx.createBiquadFilter();
-        hp.type = "highpass";
-        hp.frequency.value = 1800 + Math.random() * 1200;
-        const g = ctx.createGain();
-        g.gain.setValueAtTime(0.09, t);
-        g.gain.exponentialRampToValueAtTime(1e-4, t + 0.05);
-        src.connect(hp);
-        hp.connect(g);
-        g.connect(this.sfxBus);
-        src.start(t);
-        src.stop(t + 0.06);
-        this.free(src, hp, g);
-      }
-      this.sfxThump(time + 0.42, 0.12);
-    }
-    /** 转场 whoosh：低通扫频的噪声 */
-    sfxWhoosh(time, dur, cut, gain) {
-      const ctx = this.ctx;
-      if (!ctx || !this.sfxBus || !this.noiseBuf) return;
-      const src = ctx.createBufferSource();
-      src.buffer = this.noiseBuf;
-      src.loop = true;
-      const bp = ctx.createBiquadFilter();
-      bp.type = "lowpass";
-      bp.frequency.setValueAtTime(cut * 0.3, time);
-      bp.frequency.linearRampToValueAtTime(cut, time + dur * 0.6);
-      bp.frequency.linearRampToValueAtTime(cut * 0.4, time + dur);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(1e-4, time);
-      g.gain.linearRampToValueAtTime(gain, time + dur * 0.35);
-      g.gain.exponentialRampToValueAtTime(1e-4, time + dur);
-      src.connect(bp);
-      bp.connect(g);
-      g.connect(this.sfxBus);
-      src.start(time);
-      src.stop(time + dur + 0.02);
-      this.free(src, bp, g);
-    }
-    // ── 给自动化测试用的探针 ────────────────────────────────────
-    /** 当前输出电平（0..1），用来确认"真的出声了"而不是只有对象 */
-    debugLevel() {
-      const ctx = this.ctx;
-      const analyser = this.analyser;
-      if (!ctx || !analyser || ctx.state !== "running") return 0;
-      const buf = new Float32Array(analyser.fftSize);
-      analyser.getFloatTimeDomainData(buf);
-      let sum = 0;
-      for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
-      return Math.sqrt(sum / buf.length);
-    }
-    get contextState() {
-      return this.ctx ? this.ctx.state : "none";
-    }
-  };
-  function webkitCtor() {
-    const w = window;
-    return w.webkitAudioContext;
-  }
-  var sound = new SoundEngine();
-
   // src/main.ts
   var el = (id) => document.getElementById(id);
   var nf = new Intl.NumberFormat("en-US");
@@ -6412,16 +5170,8 @@ body.dragging-sort {
   var lastTs = 0;
   var uiDirty = true;
   var lastUi = 0;
-  var lastSoundSample = 0;
   var immersive = false;
   var fsTimer = 0;
-  var lastActivity = 0;
-  var lastRender = 0;
-  var IDLE_RENDER_MS = 250;
-  var ACTIVE_MS = 1200;
-  function markActivity() {
-    lastActivity = performance.now();
-  }
   var HISTORY_DEPTH_KEY = "life-studio:history-depth";
   var HISTORY_DEPTHS = [0, 500, 1e3, 3e3, 1e4, 2e4];
   var HISTORY_BYTES = 32 * 1024 * 1024;
@@ -6523,8 +5273,6 @@ body.dragging-sort {
     view.fit(world.width, world.height, renderer.cssW, renderer.cssH);
     updateZoomBounds();
     uiDirty = true;
-    markActivity();
-    sound.sfx("whoosh");
   }
   function sliderToSpeed(v) {
     return SPEED_MIN * Math.pow(SPEED_MAX / SPEED_MIN, v / 100);
@@ -6580,21 +5328,13 @@ body.dragging-sort {
     } else {
       state.acc = 0;
     }
-    if (renderer.sync()) markActivity();
-    const now = performance.now();
-    const active = state.playing || state.drag !== null || state.pinch !== null || moveState !== null || state.selection.length > 0 || now - lastActivity < ACTIVE_MS;
-    if (active || now - lastRender >= IDLE_RENDER_MS) {
-      lastRender = now;
-      renderer.render(view, { grid: state.display >= 1, bounds: state.display === 2 }, buildOverlay());
-    }
+    renderer.sync();
+    const overlay = buildOverlay();
+    renderer.render(view, { grid: state.display >= 1, bounds: state.display === 2 }, overlay);
     if (uiDirty && ts - lastUi > 80) {
       lastUi = ts;
       uiDirty = false;
       flushUi();
-    }
-    if (ts - lastSoundSample > 200) {
-      lastSoundSample = ts;
-      sound.observe(world.population, view.scale);
     }
     requestAnimationFrame(loop);
   }
@@ -6689,7 +5429,6 @@ body.dragging-sort {
     state.acc = 0;
     el("btn-play").textContent = on ? "❙❙" : "▶";
     el("btn-play").classList.toggle("primary", !on);
-    sound.sfx(on ? "play" : "pause");
   }
   var toastEl = el("toast");
   var toastTimer = 0;
@@ -6918,7 +5657,6 @@ body.dragging-sort {
       toast("没有可以撤销的操作了");
       return;
     }
-    sound.sfx("undo");
     if (entry.kind === "sel") {
       redoStack.push({ kind: "sel", rects: state.selection.map((r) => ({ ...r })), label: entry.label });
       restoreRects(entry.rects);
@@ -6935,7 +5673,6 @@ body.dragging-sort {
       toast("没有可以重做的操作了");
       return;
     }
-    sound.sfx("redo");
     if (entry.kind === "sel") {
       undoStack.push({ kind: "sel", rects: state.selection.map((r) => ({ ...r })), label: entry.label });
       restoreRects(entry.rects);
@@ -6958,7 +5695,6 @@ body.dragging-sort {
       if (world.get(wx, wy) === value) return;
       world.set(wx, wy, value);
       state.editPending = true;
-      sound.paintTick(value ? "add" : "remove");
       return;
     }
     const r = n - 1 >> 1;
@@ -6976,10 +5712,7 @@ body.dragging-sort {
         touched = true;
       }
     }
-    if (touched) {
-      state.editPending = true;
-      sound.paintTick(value ? "add" : "remove");
-    }
+    if (touched) state.editPending = true;
   }
   function paintLine(x0, y0, x1, y1, value) {
     let x = x0;
@@ -7030,7 +5763,6 @@ body.dragging-sort {
     stampPattern(world, pat, x, y, state.rotation, state.mirror);
     state.editPending = false;
     commitEdit();
-    sound.sfx("stamp");
     toast(`${pat.name} 已放置`);
   }
   function localPoint(e) {
@@ -7152,7 +5884,6 @@ body.dragging-sort {
       btn.classList.toggle("active", btn.dataset.tool === tool);
     }
     updateHint();
-    markActivity();
   }
   var BRUSH_MAX = 31;
   function adjustBrushSize(delta) {
@@ -7160,7 +5891,6 @@ body.dragging-sort {
     if (next === state.brushSize) return;
     state.brushSize = next;
     updateHint();
-    markActivity();
   }
   function updateHint() {
     const draw = el("hint").querySelector('[data-hint="draw"]');
@@ -7193,24 +5923,15 @@ body.dragging-sort {
   }
   canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   canvas.addEventListener("pointerdown", (e) => {
-    markActivity();
     const p = localPoint(e);
     state.pointers.set(e.pointerId, p);
     if (state.pointers.size === 2) {
-      const d = state.drag;
-      if (d && d.kind === "paint" && !d.moved && editBase) {
-        const base = editBase;
-        editBase = null;
-        state.editPending = false;
-        world.loadPacked(base.packed, base.population, world.gen);
-        uiDirty = true;
-      } else if (d && d.kind === "paint" && state.editPending) {
+      if (state.drag && state.drag.kind === "paint" && state.editPending) {
         commitEdit();
         state.editPending = false;
       }
       state.drag = null;
       state.pinch = null;
-      markActivity();
       return;
     }
     if (state.pointers.size > 2) return;
@@ -7353,7 +6074,6 @@ body.dragging-sort {
     paintCell(wp.x, wp.y, erase ? 0 : 1);
   });
   window.addEventListener("pointermove", (e) => {
-    markActivity();
     const p = localPoint(e);
     if (state.pointers.has(e.pointerId)) state.pointers.set(e.pointerId, p);
     if (state.pointers.size === 2) {
@@ -7407,7 +6127,6 @@ body.dragging-sort {
     }
   });
   function endPointer(e) {
-    markActivity();
     state.pointers.delete(e.pointerId);
     if (state.pointers.size < 2) state.pinch = null;
     const d = state.drag;
@@ -7470,7 +6189,6 @@ body.dragging-sort {
     "wheel",
     (e) => {
       e.preventDefault();
-      markActivity();
       const p = localPoint(e);
       const sizeTool = state.tool === "brush" || state.tool === "erase";
       if (sizeTool && (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey)) {
@@ -7485,7 +6203,6 @@ body.dragging-sort {
     { passive: false }
   );
   window.addEventListener("keydown", (e) => {
-    markActivity();
     const t = e.target;
     if (confirmOpen()) {
       if (e.key === "Escape") {
@@ -7534,13 +6251,6 @@ body.dragging-sort {
         redoEdit();
         return;
       }
-    }
-    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "m") {
-      e.preventDefault();
-      const muted = sound.toggleMute();
-      applySoundButton();
-      toast(muted ? "已静音（Ctrl+M 恢复）" : "声音已开");
-      return;
     }
     if (e.code === "Space") {
       e.preventDefault();
@@ -7635,7 +6345,6 @@ body.dragging-sort {
       if (world.gen > st.minGen) history.seek(world.gen - 1);
     }
     renderer.sync();
-    markActivity();
     flushUi();
   }
   function freeArea() {
@@ -7686,7 +6395,6 @@ body.dragging-sort {
       beginEdit("清空世界");
       world.clear();
       commitEdit();
-      sound.sfx("clear");
       toast("世界已清空");
     });
   }
@@ -7698,14 +6406,12 @@ body.dragging-sort {
       world.clear();
       world.randomize(0.28);
       commitEdit();
-      sound.sfx("random");
       toast("随机播种完成");
     });
   }
   function toggleDisplay() {
     state.display = (state.display + 1) % 3;
     applyDisplayButton();
-    markActivity();
   }
   function applyDisplayButton() {
     const btn = el("tgl-grid");
@@ -7792,9 +6498,6 @@ body.dragging-sort {
       btn.classList.toggle("active", btn.dataset.id === id);
     }
     setTool("stamp");
-    if (window.innerWidth <= 700 && !el("palette").classList.contains("collapsed")) {
-      setPaletteCollapsed(true);
-    }
   }
   function deselectPattern() {
     state.patternId = "";
@@ -8071,7 +6774,6 @@ body.dragging-sort {
       }
     }
     commitEdit();
-    sound.sfx("erase");
     toast(`已删除 ${bmp.population} 个细胞`);
   }
   function openSavePreset() {
@@ -9147,9 +7849,7 @@ body.dragging-sort {
     syncShapeFromWorld();
     view.setView(rec.view);
     uiDirty = true;
-    markActivity();
     flushUi();
-    sound.sfx("whoosh");
     toast(`已载入「${rec.name}」`);
   }
   async function toggleRecord() {
@@ -9755,134 +8455,6 @@ body.dragging-sort {
     el("fs-pop").textContent = `人口 ${nf.format(world.population)}`;
     el("fs-play").textContent = state.playing ? "❙❙" : "▶";
   }
-  var MODE_LABEL = {
-    void: "死寂",
-    calm: "平静",
-    bloom: "绽放",
-    cosmic: "悠远"
-  };
-  function applySoundButton() {
-    const btn = el("btn-sound");
-    const silent = sound.settings.muted || sound.settings.music <= 1e-3 && sound.settings.sfx <= 1e-3;
-    btn.classList.toggle("off", silent);
-    btn.dataset.tip = silent ? "声音：已静音（点击恢复 · Shift+点击设置）" : `声音：音乐 ${Math.round(sound.settings.music * 100)}% · 音效 ${Math.round(sound.settings.sfx * 100)}%（点击静音 · Shift+点击设置）`;
-    btn.setAttribute("aria-label", silent ? "声音：已静音" : "声音：点击静音");
-  }
-  function openSoundSettings() {
-    sound.unlock();
-    openModal("声音", (body) => {
-      body.innerHTML = `
-      <div class="sound-wrap">
-        <div class="sound-row">
-          <span class="set-label">音乐</span>
-          <input type="range" id="snd-music" min="0" max="100" step="1" />
-          <b class="sound-val" id="snd-music-val"></b>
-        </div>
-        <div class="sound-row">
-          <span class="set-label">音效</span>
-          <input type="range" id="snd-sfx" min="0" max="100" step="1" />
-          <b class="sound-val" id="snd-sfx-val"></b>
-        </div>
-        <div class="sound-row">
-          <span class="set-label">总开关</span>
-          <button type="button" class="chip" id="snd-mute"></button>
-          <span class="sound-note">静音后音乐和音效一起停，设置会记住</span>
-        </div>
-
-        <div class="sound-live">
-          <div class="sound-live-head">
-            <span class="sound-mode" id="snd-mode">死寂</span>
-            <span class="sound-tempo" id="snd-tempo"></span>
-          </div>
-          <div class="sound-live-meta" id="snd-meta"></div>
-          <div class="sound-bars">
-            <span class="sound-bar-label">绽放</span>
-            <span class="sound-bar"><b id="snd-pulse"></b></span>
-            <span class="sound-bar-label">律动</span>
-            <span class="sound-bar"><b id="snd-groove"></b></span>
-            <span class="sound-bar-label">悠远</span>
-            <span class="sound-bar"><b id="snd-space"></b></span>
-          </div>
-        </div>
-
-        <div class="set-warn">
-          <span>音乐跟着画布走：没有细胞时是低沉清晰的心跳（0.8 秒一轮 lub-dub）；放入细胞后是参考宣传片的律动——每一拍一记低频脉冲，加上十六分琶音和 pad，没有转场音效；细胞快速增多时踩镲和军鼓进场；镜头拉到世界之外时只剩 pad 和稀疏高音。</span>
-        </div>
-
-        <div class="sound-ver">音频版本 <b>${AUDIO_VERSION}</b>　·　听到的如果不是这个版本，按 <kbd>Ctrl</kbd>+<kbd>F5</kbd> 强制刷新</div>
-
-        <div class="btn-row" style="justify-content:flex-end;margin-top:12px">
-          <button type="button" class="btn" id="snd-demo">试听律动</button>
-          <button type="button" class="btn" id="snd-test">试听音效</button>
-          <button type="button" class="btn primary" id="snd-done">完成</button>
-        </div>
-      </div>`;
-      const musicEl = body.querySelector("#snd-music");
-      const sfxEl = body.querySelector("#snd-sfx");
-      const musicVal = body.querySelector("#snd-music-val");
-      const sfxVal = body.querySelector("#snd-sfx-val");
-      const muteEl = body.querySelector("#snd-mute");
-      const syncControls = () => {
-        musicEl.value = String(Math.round(sound.settings.music * 100));
-        sfxEl.value = String(Math.round(sound.settings.sfx * 100));
-        musicVal.textContent = `${Math.round(sound.settings.music * 100)}%`;
-        sfxVal.textContent = `${Math.round(sound.settings.sfx * 100)}%`;
-        muteEl.textContent = sound.settings.muted ? "已静音" : "声音开";
-        muteEl.classList.toggle("on", !sound.settings.muted);
-      };
-      syncControls();
-      musicEl.addEventListener("input", () => {
-        sound.setSettings({ music: Number(musicEl.value) / 100 });
-        syncControls();
-        applySoundButton();
-      });
-      sfxEl.addEventListener("input", () => {
-        sound.setSettings({ sfx: Number(sfxEl.value) / 100 });
-        syncControls();
-        applySoundButton();
-      });
-      muteEl.addEventListener("click", () => {
-        sound.toggleMute();
-        syncControls();
-        applySoundButton();
-      });
-      body.querySelector("#snd-test").addEventListener("click", () => {
-        sound.unlock();
-        sound.sfx("stamp");
-        window.setTimeout(() => sound.sfx("birth"), 140);
-      });
-      body.querySelector("#snd-demo").addEventListener("click", () => {
-        sound.unlock();
-        sound.kickGroove(1.5);
-        toast("律动期触发：鼓点 + 长笛，约 5 秒后回到正常");
-      });
-      body.querySelector("#snd-done").addEventListener("click", () => closeModal());
-      const modeEl = body.querySelector("#snd-mode");
-      const tempoEl = body.querySelector("#snd-tempo");
-      const metaEl = body.querySelector("#snd-meta");
-      const pulseEl = body.querySelector("#snd-pulse");
-      const grooveEl = body.querySelector("#snd-groove");
-      const spaceEl = body.querySelector("#snd-space");
-      const refresh = () => {
-        modeEl.textContent = MODE_LABEL[sound.mode] ?? sound.mode;
-        modeEl.dataset.mode = sound.mode;
-        tempoEl.textContent = `${Math.round(sound.tempo)} BPM${sound.groove > 0.35 ? " · 律动中" : ""}`;
-        const rate = sound.rate;
-        const rateText = `${rate >= 0 ? "+" : ""}${Math.round(rate)} 细胞/秒`;
-        metaEl.textContent = `人口 ${nf.format(sound.population)} · 变化 ${rateText} · 缩放 ${fmtZoom(view.scale)}`;
-        pulseEl.style.width = `${Math.round(sound.pulse * 100)}%`;
-        grooveEl.style.width = `${Math.round(sound.groove * 100)}%`;
-        spaceEl.style.width = `${Math.round(sound.space * 100)}%`;
-      };
-      refresh();
-      const timer = window.setInterval(refresh, 250);
-      modalCleanup = () => window.clearInterval(timer);
-    });
-  }
-  function fmtZoom(s) {
-    if (s >= 1) return `${(Math.round(s * 10) / 10).toFixed(1)}×`;
-    return `${(Math.round(s * 100) / 100).toFixed(2)}×`;
-  }
   function pokeFsBar() {
     const bar = el("fs-bar");
     bar.classList.remove("fade");
@@ -9954,10 +8526,6 @@ body.dragging-sort {
         {
           keys: ["手机"],
           text: "单指绘制、双指捏合缩放、双指拖动平移；顶栏可以横向滑动看更多按钮"
-        },
-        {
-          keys: ["喇叭", "Ctrl+M"],
-          text: "点一下喇叭（或按 <kbd>Ctrl</kbd>+<kbd>M</kbd>）立刻静音，再点恢复；<kbd>Shift</kbd> + 点击喇叭（或右键）打开声音设置"
         }
       ]
     },
@@ -10142,24 +8710,10 @@ body.dragging-sort {
       if (state.playing) setPlaying(false);
       history.seek(Number(tl.value));
       renderer.sync();
-      markActivity();
       flushUi();
     });
     el("btn-record").addEventListener("click", () => void toggleRecord());
     el("btn-studio").addEventListener("click", () => openStudioBridge(0));
-    el("btn-sound").addEventListener("click", (e) => {
-      if (e.shiftKey || e.altKey) {
-        openSoundSettings();
-        return;
-      }
-      const muted = sound.toggleMute();
-      applySoundButton();
-      toast(muted ? "已静音：再点一下喇叭恢复（Shift+点击调音量）" : "声音已开");
-    });
-    el("btn-sound").addEventListener("contextmenu", (e) => {
-      e.preventDefault();
-      openSoundSettings();
-    });
     el("btn-fullscreen").addEventListener("click", toggleImmersive);
     el("btn-help").addEventListener("click", openHelp);
     el("btn-settings").addEventListener("click", openCanvasSettings);
@@ -10201,9 +8755,6 @@ body.dragging-sort {
     });
   }
   async function boot() {
-    sound.init();
-    applySoundButton();
-    console.info(`生命游戏 · 音频 ${AUDIO_VERSION}`);
     store = new Store();
     try {
       await store.init();
@@ -10269,9 +8820,6 @@ body.dragging-sort {
         },
         get library() {
           return library;
-        },
-        get sound() {
-          return sound;
         },
         step(n = 1) {
           for (let i = 0; i < n; i++) advanceOne();
@@ -10373,7 +8921,6 @@ body.dragging-sort {
           beginEdit(`放置 ${p.name}`);
           stampPattern(world, p, x, y, 0, false);
           commitEdit();
-          sound.kickGroove(1);
           return patternSize(p, 0);
         },
         fit: () => fitContent(),
@@ -10392,7 +8939,6 @@ body.dragging-sort {
       view.panBy(renderer.cssW / 2 - p0.x, renderer.cssH / 2 - p0.y);
       updateZoomBounds();
       uiDirty = true;
-      markActivity();
     }).observe(stageEl);
     initTooltips();
     updateZoomBounds();
@@ -10410,14 +8956,7 @@ body.dragging-sort {
     window.addEventListener("pagehide", () => void autoSaveNow());
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "hidden") void autoSaveNow();
-      sound.setPageVisible(document.visibilityState !== "hidden");
     });
-    const unlockSound = () => {
-      sound.unlock();
-      applySoundButton();
-    };
-    document.addEventListener("pointerdown", unlockSound, { once: true, capture: true });
-    window.addEventListener("keydown", unlockSound, { once: true });
     if (auto) toast(`已恢复上次的现场（第 ${nf.format(auto.gen)} 代）`);
   }
   void boot();

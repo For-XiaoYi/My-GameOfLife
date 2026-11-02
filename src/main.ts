@@ -16,7 +16,6 @@ import { parsePatternText, toRle } from './core/rle.ts';
 import { Store, uid, type SnapshotRecord, type ClipRecord } from './core/storage.ts';
 import { Viewport } from './view/viewport.ts';
 import { Renderer, makeThumb, paintWorldPreview, type Ghost, type ShapePreview } from './render/renderer.ts';
-import { sound, AUDIO_VERSION } from './audio/engine.ts';
 
 // ──────────────────────────────────────────────────────────────────────────
 // DOM 小工具
@@ -103,32 +102,8 @@ const state = {
 let lastTs = 0;
 let uiDirty = true;
 let lastUi = 0;
-let lastSoundSample = 0;
 let immersive = false;
 let fsTimer = 0;
-
-// ──────────────────────────────────────────────────────────────────────────
-// 按需重绘
-//
-// 画布是 2D canvas：内容会一直留在上面，不动就没必要每帧重画。
-// 之前主循环无条件 60fps 全屏重绘，暂停状态下主线程仍有近一半时间在画东西。
-// 现在的策略：
-//   · 有操作（指针 / 键盘 / 世界变化 / 播放 / 拖拽 / 有选区）→ 保持满帧；
-//   · 完全静止 → 每 250ms 补一帧兜底（4fps），肉眼看不出来，CPU 几乎归零。
-// 兜底帧是故意的：万一哪条改动路径忘了 markActivity，最多 250ms 后画面仍是新的。
-// ──────────────────────────────────────────────────────────────────────────
-/** 最近一次"画面可能要变"的时刻。 */
-let lastActivity = 0;
-/** 上一帧真正重画主画布的时刻。 */
-let lastRender = 0;
-/** 静止时的兜底重画间隔。 */
-const IDLE_RENDER_MS = 250;
-/** 操作结束后继续保持满帧的时长（悬停幽灵、惯性手感）。 */
-const ACTIVE_MS = 1200;
-
-function markActivity(): void {
-  lastActivity = performance.now();
-}
 
 // ──────────────────────────────────────────────────────────────────────────
 // 回溯深度：代数上限（内存上限固定 32MB，两者先到先算）
@@ -263,8 +238,6 @@ function applyWorldShape(w: number, h: number, edge: EdgeMode): void {
   view.fit(world.width, world.height, renderer.cssW, renderer.cssH);
   updateZoomBounds();
   uiDirty = true;
-  markActivity();
-  sound.sfx('whoosh');
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -337,36 +310,15 @@ function loop(ts: number): void {
     state.acc = 0;
   }
 
-  // 世界脏区刷到离屏位图；确实改了内容就当成本帧有活动
-  if (renderer.sync()) markActivity();
-
-  // 这些状态下画面每帧都可能变，必须满帧重绘
-  const now = performance.now();
-  const active =
-    state.playing ||
-    state.drag !== null ||
-    state.pinch !== null ||
-    moveState !== null ||
-    state.selection.length > 0 ||
-    now - lastActivity < ACTIVE_MS;
-
-  if (active || now - lastRender >= IDLE_RENDER_MS) {
-    lastRender = now;
-    renderer.render(view, { grid: state.display >= 1, bounds: state.display === 2 }, buildOverlay());
-  }
+  renderer.sync();
+  const overlay = buildOverlay();
+  renderer.render(view, { grid: state.display >= 1, bounds: state.display === 2 }, overlay);
 
   if (uiDirty && ts - lastUi > 80) {
     lastUi = ts;
     uiDirty = false;
     flushUi();
   }
-
-  // 音乐每 200ms 取一次画布状态（人口 + 缩放），驱动和声/节奏
-  if (ts - lastSoundSample > 200) {
-    lastSoundSample = ts;
-    sound.observe(world.population, view.scale);
-  }
-
   requestAnimationFrame(loop);
 }
 
@@ -489,8 +441,6 @@ function setPlaying(on: boolean): void {
   state.acc = 0;
   el('btn-play').textContent = on ? '❙❙' : '▶';
   el('btn-play').classList.toggle('primary', !on);
-  // 启动时、以及打开弹窗导致的自动暂停都不该有声音：只有 unlocked 之后才会响
-  sound.sfx(on ? 'play' : 'pause');
 }
 
 const toastEl = el('toast');
@@ -795,7 +745,6 @@ function undoEdit(): void {
     toast('没有可以撤销的操作了');
     return;
   }
-  sound.sfx('undo');
   if (entry.kind === 'sel') {
     redoStack.push({ kind: 'sel', rects: state.selection.map((r) => ({ ...r })), label: entry.label });
     restoreRects(entry.rects);
@@ -813,7 +762,6 @@ function redoEdit(): void {
     toast('没有可以重做的操作了');
     return;
   }
-  sound.sfx('redo');
   if (entry.kind === 'sel') {
     undoStack.push({ kind: 'sel', rects: state.selection.map((r) => ({ ...r })), label: entry.label });
     restoreRects(entry.rects);
@@ -837,7 +785,6 @@ function paintCell(x: number, y: number, value: number): void {
     if (world.get(wx, wy) === value) return;
     world.set(wx, wy, value);
     state.editPending = true;
-    sound.paintTick(value ? 'add' : 'remove');
     return;
   }
   const r = (n - 1) >> 1;
@@ -855,10 +802,7 @@ function paintCell(x: number, y: number, value: number): void {
       touched = true;
     }
   }
-  if (touched) {
-    state.editPending = true;
-    sound.paintTick(value ? 'add' : 'remove');
-  }
+  if (touched) state.editPending = true;
 }
 
 function paintLine(x0: number, y0: number, x1: number, y1: number, value: number): void {
@@ -912,7 +856,6 @@ function placePattern(p: { x: number; y: number }): void {
   stampPattern(world, pat, x, y, state.rotation, state.mirror);
   state.editPending = false;
   commitEdit();
-  sound.sfx('stamp');
   toast(`${pat.name} 已放置`);
 }
 
@@ -1089,7 +1032,6 @@ function setTool(tool: ToolName): void {
     btn.classList.toggle('active', btn.dataset.tool === tool);
   }
   updateHint();
-  markActivity();
 }
 
 const BRUSH_MAX = 31;
@@ -1099,7 +1041,6 @@ function adjustBrushSize(delta: number): void {
   if (next === state.brushSize) return;
   state.brushSize = next;
   updateHint();
-  markActivity();
 }
 
 function updateHint(): void {
@@ -1135,28 +1076,16 @@ function updateHint(): void {
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
 canvas.addEventListener('pointerdown', (e) => {
-  markActivity();
   const p = localPoint(e);
   state.pointers.set(e.pointerId, p);
 
   if (state.pointers.size === 2) {
-    // 第二根手指按下 = 这是双指手势，不是画画。
-    // 第一根手指按下时已经落了一笔，若不撤掉，每次捏合都会在世界里多出一个细胞。
-    // 只撤"还没拖动过"的那一笔：真画了一路再补第二根手指，说明是有意画的，保留。
-    const d = state.drag;
-    if (d && d.kind === 'paint' && !d.moved && editBase) {
-      const base = editBase;
-      editBase = null;
-      state.editPending = false;
-      world.loadPacked(base.packed, base.population, world.gen);
-      uiDirty = true;
-    } else if (d && d.kind === 'paint' && state.editPending) {
+    if (state.drag && state.drag.kind === 'paint' && state.editPending) {
       commitEdit();
       state.editPending = false;
     }
     state.drag = null;
     state.pinch = null;
-    markActivity();
     return;
   }
   if (state.pointers.size > 2) return;
@@ -1310,7 +1239,6 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 
 window.addEventListener('pointermove', (e) => {
-  markActivity();
   const p = localPoint(e);
 
   if (state.pointers.has(e.pointerId)) state.pointers.set(e.pointerId, p);
@@ -1371,7 +1299,6 @@ window.addEventListener('pointermove', (e) => {
 });
 
 function endPointer(e: PointerEvent): void {
-  markActivity();
   state.pointers.delete(e.pointerId);
   if (state.pointers.size < 2) state.pinch = null;
 
@@ -1439,7 +1366,6 @@ canvas.addEventListener(
   'wheel',
   (e) => {
     e.preventDefault();
-    markActivity();
     const p = localPoint(e);
     const sizeTool = state.tool === 'brush' || state.tool === 'erase';
     // 滚轮默认缩放；画笔/橡皮下 Ctrl+滚轮改笔刷大小（Alt/Shift 也行）
@@ -1459,7 +1385,6 @@ canvas.addEventListener(
 // 键盘
 // ──────────────────────────────────────────────────────────────────────────
 window.addEventListener('keydown', (e) => {
-  markActivity();
   const t = e.target as HTMLElement | null;
   // 确认框开着的时候，键盘只服务于它
   if (confirmOpen()) {
@@ -1513,15 +1438,6 @@ window.addEventListener('keydown', (e) => {
       redoEdit();
       return;
     }
-  }
-
-  // Ctrl+M / Cmd+M：一键静音（音效和音乐一起）
-  if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'm') {
-    e.preventDefault();
-    const muted = sound.toggleMute();
-    applySoundButton();
-    toast(muted ? '已静音（Ctrl+M 恢复）' : '声音已开');
-    return;
   }
 
   if (e.code === 'Space') {
@@ -1623,7 +1539,6 @@ function stepOnce(dir: number): void {
     if (world.gen > st.minGen) history.seek(world.gen - 1);
   }
   renderer.sync();
-  markActivity();
   flushUi();
 }
 
@@ -1684,7 +1599,6 @@ function clearWorld(): void {
     beginEdit('清空世界');
     world.clear();
     commitEdit();
-    sound.sfx('clear');
     toast('世界已清空');
   });
 }
@@ -1697,7 +1611,6 @@ function randomWorld(): void {
     world.clear();
     world.randomize(0.28);
     commitEdit();
-    sound.sfx('random');
     toast('随机播种完成');
   });
 }
@@ -1706,7 +1619,6 @@ function toggleDisplay(): void {
   // 三态：0 关闭 → 1 只画网格 → 2 网格 + 世界边界 → 回到 0
   state.display = ((state.display + 1) % 3) as 0 | 1 | 2;
   applyDisplayButton();
-  markActivity();
 }
 
 function applyDisplayButton(): void {
@@ -1806,10 +1718,6 @@ function selectPattern(id: string): void {
     btn.classList.toggle('active', btn.dataset.id === id);
   }
   setTool('stamp');
-  // 手机上图案库是浮在画布上的抽屉：选完就收起来，否则选完还得再找一次收起按钮
-  if (window.innerWidth <= 700 && !el('palette').classList.contains('collapsed')) {
-    setPaletteCollapsed(true);
-  }
 }
 
 /** 取消选中：贴图工具下光标不再跟着一个幽灵图案。 */
@@ -2142,7 +2050,6 @@ function deleteSelection(): void {
     }
   }
   commitEdit();
-  sound.sfx('erase');
   toast(`已删除 ${bmp.population} 个细胞`);
 }
 
@@ -3417,9 +3324,7 @@ function loadSnapshot(rec: SnapshotRecord): void {
   syncShapeFromWorld();
   view.setView(rec.view);
   uiDirty = true;
-  markActivity();
   flushUi();
-  sound.sfx('whoosh');
   toast(`已载入「${rec.name}」`);
 }
 
@@ -4112,151 +4017,6 @@ function updateFsBar(): void {
   el('fs-play').textContent = state.playing ? '❙❙' : '▶';
 }
 
-// ──────────────────────────────────────────────────────────────────────────
-// 声音设置
-// ──────────────────────────────────────────────────────────────────────────
-const MODE_LABEL: Record<string, string> = {
-  void: '死寂',
-  calm: '平静',
-  bloom: '绽放',
-  cosmic: '悠远',
-};
-
-/** 顶栏喇叭图标：静音时把波纹换成叉 */
-function applySoundButton(): void {
-  const btn = el('btn-sound');
-  const silent = sound.settings.muted || (sound.settings.music <= 0.001 && sound.settings.sfx <= 0.001);
-  btn.classList.toggle('off', silent);
-  btn.dataset.tip = silent
-    ? '声音：已静音（点击恢复 · Shift+点击设置）'
-    : `声音：音乐 ${Math.round(sound.settings.music * 100)}% · 音效 ${Math.round(sound.settings.sfx * 100)}%（点击静音 · Shift+点击设置）`;
-  btn.setAttribute('aria-label', silent ? '声音：已静音' : '声音：点击静音');
-}
-
-function openSoundSettings(): void {
-  sound.unlock();
-  openModal('声音', (body) => {
-    body.innerHTML = `
-      <div class="sound-wrap">
-        <div class="sound-row">
-          <span class="set-label">音乐</span>
-          <input type="range" id="snd-music" min="0" max="100" step="1" />
-          <b class="sound-val" id="snd-music-val"></b>
-        </div>
-        <div class="sound-row">
-          <span class="set-label">音效</span>
-          <input type="range" id="snd-sfx" min="0" max="100" step="1" />
-          <b class="sound-val" id="snd-sfx-val"></b>
-        </div>
-        <div class="sound-row">
-          <span class="set-label">总开关</span>
-          <button type="button" class="chip" id="snd-mute"></button>
-          <span class="sound-note">静音后音乐和音效一起停，设置会记住</span>
-        </div>
-
-        <div class="sound-live">
-          <div class="sound-live-head">
-            <span class="sound-mode" id="snd-mode">死寂</span>
-            <span class="sound-tempo" id="snd-tempo"></span>
-          </div>
-          <div class="sound-live-meta" id="snd-meta"></div>
-          <div class="sound-bars">
-            <span class="sound-bar-label">绽放</span>
-            <span class="sound-bar"><b id="snd-pulse"></b></span>
-            <span class="sound-bar-label">律动</span>
-            <span class="sound-bar"><b id="snd-groove"></b></span>
-            <span class="sound-bar-label">悠远</span>
-            <span class="sound-bar"><b id="snd-space"></b></span>
-          </div>
-        </div>
-
-        <div class="set-warn">
-          <span>音乐跟着画布走：没有细胞时是低沉清晰的心跳（0.8 秒一轮 lub-dub）；放入细胞后是参考宣传片的律动——每一拍一记低频脉冲，加上十六分琶音和 pad，没有转场音效；细胞快速增多时踩镲和军鼓进场；镜头拉到世界之外时只剩 pad 和稀疏高音。</span>
-        </div>
-
-        <div class="sound-ver">音频版本 <b>${AUDIO_VERSION}</b>　·　听到的如果不是这个版本，按 <kbd>Ctrl</kbd>+<kbd>F5</kbd> 强制刷新</div>
-
-        <div class="btn-row" style="justify-content:flex-end;margin-top:12px">
-          <button type="button" class="btn" id="snd-demo">试听律动</button>
-          <button type="button" class="btn" id="snd-test">试听音效</button>
-          <button type="button" class="btn primary" id="snd-done">完成</button>
-        </div>
-      </div>`;
-
-    const musicEl = body.querySelector<HTMLInputElement>('#snd-music')!;
-    const sfxEl = body.querySelector<HTMLInputElement>('#snd-sfx')!;
-    const musicVal = body.querySelector<HTMLElement>('#snd-music-val')!;
-    const sfxVal = body.querySelector<HTMLElement>('#snd-sfx-val')!;
-    const muteEl = body.querySelector<HTMLButtonElement>('#snd-mute')!;
-
-    const syncControls = (): void => {
-      musicEl.value = String(Math.round(sound.settings.music * 100));
-      sfxEl.value = String(Math.round(sound.settings.sfx * 100));
-      musicVal.textContent = `${Math.round(sound.settings.music * 100)}%`;
-      sfxVal.textContent = `${Math.round(sound.settings.sfx * 100)}%`;
-      muteEl.textContent = sound.settings.muted ? '已静音' : '声音开';
-      muteEl.classList.toggle('on', !sound.settings.muted);
-    };
-    syncControls();
-
-    musicEl.addEventListener('input', () => {
-      sound.setSettings({ music: Number(musicEl.value) / 100 });
-      syncControls();
-      applySoundButton();
-    });
-    sfxEl.addEventListener('input', () => {
-      sound.setSettings({ sfx: Number(sfxEl.value) / 100 });
-      syncControls();
-      applySoundButton();
-    });
-    muteEl.addEventListener('click', () => {
-      sound.toggleMute();
-      syncControls();
-      applySoundButton();
-    });
-
-    body.querySelector('#snd-test')!.addEventListener('click', () => {
-      sound.unlock();
-      sound.sfx('stamp');
-      window.setTimeout(() => sound.sfx('birth'), 140);
-    });
-    // 试听律动：直接推一段律动期，方便确认"鼓点 + 长笛"真的生效了
-    body.querySelector('#snd-demo')!.addEventListener('click', () => {
-      sound.unlock();
-      sound.kickGroove(1.5);
-      toast('律动期触发：鼓点 + 长笛，约 5 秒后回到正常');
-    });
-    body.querySelector('#snd-done')!.addEventListener('click', () => closeModal());
-
-    // 实时状态：让"音乐为什么变了"看得见
-    const modeEl = body.querySelector<HTMLElement>('#snd-mode')!;
-    const tempoEl = body.querySelector<HTMLElement>('#snd-tempo')!;
-    const metaEl = body.querySelector<HTMLElement>('#snd-meta')!;
-    const pulseEl = body.querySelector<HTMLElement>('#snd-pulse')!;
-    const grooveEl = body.querySelector<HTMLElement>('#snd-groove')!;
-    const spaceEl = body.querySelector<HTMLElement>('#snd-space')!;
-    const refresh = (): void => {
-      modeEl.textContent = MODE_LABEL[sound.mode] ?? sound.mode;
-      modeEl.dataset.mode = sound.mode;
-      tempoEl.textContent = `${Math.round(sound.tempo)} BPM${sound.groove > 0.35 ? ' · 律动中' : ''}`;
-      const rate = sound.rate;
-      const rateText = `${rate >= 0 ? '+' : ''}${Math.round(rate)} 细胞/秒`;
-      metaEl.textContent = `人口 ${nf.format(sound.population)} · 变化 ${rateText} · 缩放 ${fmtZoom(view.scale)}`;
-      pulseEl.style.width = `${Math.round(sound.pulse * 100)}%`;
-      grooveEl.style.width = `${Math.round(sound.groove * 100)}%`;
-      spaceEl.style.width = `${Math.round(sound.space * 100)}%`;
-    };
-    refresh();
-    const timer = window.setInterval(refresh, 250);
-    modalCleanup = () => window.clearInterval(timer);
-  });
-}
-
-function fmtZoom(s: number): string {
-  if (s >= 1) return `${(Math.round(s * 10) / 10).toFixed(1)}×`;
-  return `${(Math.round(s * 100) / 100).toFixed(2)}×`;
-}
-
 function pokeFsBar(): void {
   const bar = el('fs-bar');
   bar.classList.remove('fade');
@@ -4348,10 +4108,6 @@ const HELP_SECTIONS: HelpSection[] = [
       {
         keys: ['手机'],
         text: '单指绘制、双指捏合缩放、双指拖动平移；顶栏可以横向滑动看更多按钮',
-      },
-      {
-        keys: ['喇叭', 'Ctrl+M'],
-        text: '点一下喇叭（或按 <kbd>Ctrl</kbd>+<kbd>M</kbd>）立刻静音，再点恢复；<kbd>Shift</kbd> + 点击喇叭（或右键）打开声音设置',
       },
     ],
   },
@@ -4552,26 +4308,11 @@ function bindUi(): void {
     if (state.playing) setPlaying(false);
     history.seek(Number(tl.value));
     renderer.sync();
-    markActivity();
     flushUi();
   });
 
   el('btn-record').addEventListener('click', () => void toggleRecord());
   el('btn-studio').addEventListener('click', () => openStudioBridge(0));
-  // 点一下喇叭 = 一键静音；Shift/Alt + 点击、或者右键 = 打开声音设置
-  el('btn-sound').addEventListener('click', (e) => {
-    if (e.shiftKey || e.altKey) {
-      openSoundSettings();
-      return;
-    }
-    const muted = sound.toggleMute();
-    applySoundButton();
-    toast(muted ? '已静音：再点一下喇叭恢复（Shift+点击调音量）' : '声音已开');
-  });
-  el('btn-sound').addEventListener('contextmenu', (e) => {
-    e.preventDefault();
-    openSoundSettings();
-  });
   el('btn-fullscreen').addEventListener('click', toggleImmersive);
   el('btn-help').addEventListener('click', openHelp);
   el('btn-settings').addEventListener('click', openCanvasSettings);
@@ -4624,9 +4365,6 @@ function bindUi(): void {
 // 启动
 // ──────────────────────────────────────────────────────────────────────────
 async function boot(): Promise<void> {
-  sound.init();
-  applySoundButton();
-  console.info(`生命游戏 · 音频 ${AUDIO_VERSION}`);
   store = new Store();
   try {
     await store.init();
@@ -4697,7 +4435,6 @@ async function boot(): Promise<void> {
       get view() { return view; },
       get store() { return store; },
       get library() { return library; },
-      get sound() { return sound; },
       step(n = 1) { for (let i = 0; i < n; i++) advanceOne(); },
       commit: () => commitEdit(),
       set(x: number, y: number, v: number) { world.set(x, y, v); },
@@ -4776,8 +4513,6 @@ async function boot(): Promise<void> {
         beginEdit(`放置 ${p.name}`);
         stampPattern(world, p, x, y, 0, false);
         commitEdit();
-        // 自动化测试也走"放图案"这条路径：同样算一次加入，给音乐推律动
-        sound.kickGroove(1);
         return patternSize(p, 0);
       },
       fit: () => fitContent(),
@@ -4794,7 +4529,6 @@ async function boot(): Promise<void> {
     view.panBy(renderer.cssW / 2 - p0.x, renderer.cssH / 2 - p0.y);
     updateZoomBounds();
     uiDirty = true;
-    markActivity();
   }).observe(stageEl);
 
   initTooltips();
@@ -4814,16 +4548,7 @@ async function boot(): Promise<void> {
   window.addEventListener('pagehide', () => void autoSaveNow());
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') void autoSaveNow();
-    sound.setPageVisible(document.visibilityState !== 'hidden');
   });
-
-  // 浏览器要求先有用户手势才能出声：第一次点按或按键时解锁，之后一直有效
-  const unlockSound = (): void => {
-    sound.unlock();
-    applySoundButton();
-  };
-  document.addEventListener('pointerdown', unlockSound, { once: true, capture: true });
-  window.addEventListener('keydown', unlockSound, { once: true });
 
   if (auto) toast(`已恢复上次的现场（第 ${nf.format(auto.gen)} 代）`);
 }

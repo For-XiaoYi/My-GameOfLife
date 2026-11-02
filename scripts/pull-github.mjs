@@ -1,4 +1,4 @@
-// 拉取 GitHub 上的最新版到 build/remote/，并与本地逐文件比对（不覆盖本地）
+// 拉取 GitHub 上的最新版到 ../git文件/，并与工程目录逐文件比对（不覆盖工程目录）
 // 用法：node scripts/pull-github.mjs [owner/repo]
 import { mkdirSync, readFileSync, writeFileSync, existsSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -66,7 +66,7 @@ const blobs = tree.tree.filter((n) => n.type === 'blob');
 console.log(`远端文件：${blobs.length} 个（提交 ${head.sha.slice(0, 7)}）`);
 
 const root = resolve('.');
-const outRoot = resolve('build/remote');
+const outRoot = resolve('../git文件');
 const rows = [];
 for (const node of blobs) {
   const local = join(root, node.path);

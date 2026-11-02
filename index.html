@@ -11,16 +11,7 @@
     <div id="app">
       <header id="topbar">
         <div class="brand">
-          <span class="logo" aria-hidden="true">
-            <!-- 滑翔机：生命游戏里最标志性的图案（.O. / ..O / OOO） -->
-            <svg viewBox="0 0 24 24">
-              <rect x="9.5" y="3.5" width="5" height="5" rx="1.1" />
-              <rect x="15.5" y="9.5" width="5" height="5" rx="1.1" />
-              <rect x="3.5" y="15.5" width="5" height="5" rx="1.1" />
-              <rect x="9.5" y="15.5" width="5" height="5" rx="1.1" />
-              <rect x="15.5" y="15.5" width="5" height="5" rx="1.1" />
-            </svg>
-          </span>
+          <span class="logo"></span>
           <div class="brand-text">
             <strong>生命游戏</strong>
             <small>Conway's Game of Life</small>
@@ -35,14 +26,6 @@
         </div>
 
         <div class="top-actions">
-          <button class="iconbtn" id="btn-sound" data-tip="声音：音乐与音效" aria-label="声音设置">
-            <svg viewBox="0 0 24 24">
-              <path d="M4 9.6h3.1L12 5.7v12.6L7.1 14.4H4z" />
-              <path class="wave" d="M15.2 9.3a3.8 3.8 0 0 1 0 5.4" />
-              <path class="wave" d="M17.9 6.8a7.4 7.4 0 0 1 0 10.4" />
-              <path class="slash" d="M15.2 9.6l4.8 4.8M20 9.6l-4.8 4.8" />
-            </svg>
-          </button>
           <button class="iconbtn" id="btn-settings" data-tip="画布设置：比例 / 尺寸 / 边界" aria-label="画布设置">
             <svg viewBox="0 0 24 24"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>
           </button>
@@ -121,34 +104,7 @@
           <button id="btn-play" class="primary" title="播放 / 暂停 (P)">▶</button>
           <button id="btn-next" title="下一代 (→)">▶|</button>
           <button id="btn-clear" title="清空世界">清空</button>
-          <button id="btn-random" title="随机播种" aria-label="随机播种">
-            <!-- 骰子：与宣传片里「投掷一次骰子」那颗一致（金色 5 点） -->
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <defs>
-                <linearGradient id="die-face" x1="0" y1="0" x2="1" y2="1">
-                  <stop offset="0" stop-color="#1b1b18" />
-                  <stop offset="1" stop-color="#080a0d" />
-                </linearGradient>
-              </defs>
-              <rect
-                x="2.6"
-                y="2.6"
-                width="18.8"
-                height="18.8"
-                rx="5.4"
-                fill="url(#die-face)"
-                stroke="#ffd9a0"
-                stroke-width="1.5"
-              />
-              <g fill="#ffd9a0">
-                <circle cx="8.3" cy="8.3" r="1.75" />
-                <circle cx="15.7" cy="8.3" r="1.75" />
-                <circle cx="12" cy="12" r="1.75" />
-                <circle cx="8.3" cy="15.7" r="1.75" />
-                <circle cx="15.7" cy="15.7" r="1.75" />
-              </g>
-            </svg>
-          </button>
+          <button id="btn-random" title="随机播种">随机</button>
           <button id="btn-undo" title="撤销 (Ctrl+Z)">↶</button>
           <button id="btn-redo" title="重做 (Ctrl+Shift+Z)">↷</button>
         </div>

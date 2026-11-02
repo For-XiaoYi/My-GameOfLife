@@ -93,19 +93,14 @@ input {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  /* 小板子一样的底：里面画一只滑翔机（.O. / ..O / OOO），比原来的五个圆点更像"生命游戏" */
-  display: grid;
-  place-items: center;
-  background: #101c25;
+  background:
+    radial-gradient(circle at 30% 30%, var(--accent) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 70% 30%, var(--accent) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 50% 62%, var(--accent) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 30% 88%, var(--accent) 0 2px, transparent 2.5px),
+    radial-gradient(circle at 70% 88%, var(--accent) 0 2px, transparent 2.5px),
+    #101c25;
   box-shadow: 0 0 0 1px var(--line-strong), 0 0 16px rgba(108, 245, 210, 0.18);
-}
-
-.logo svg {
-  width: 18px;
-  height: 18px;
-  display: block;
-  fill: var(--accent);
-  filter: drop-shadow(0 0 3px rgba(108, 245, 210, 0.55));
 }
 
 .brand-text {
@@ -899,25 +894,6 @@ button.icon {
 
 .play button.primary:hover {
   filter: brightness(1.08);
-}
-
-/* 「随机播种」用骰子图标（和宣传片里投掷的那颗一致），尺寸跟旁边的方块按钮对齐 */
-#btn-random {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 7px;
-}
-
-#btn-random svg {
-  width: 16px;
-  height: 16px;
-  display: block;
-  filter: drop-shadow(0 0 3px rgba(255, 217, 160, 0.4));
-}
-
-#btn-random:hover svg {
-  filter: drop-shadow(0 0 5px rgba(255, 217, 160, 0.6));
 }
 
 .speed,
@@ -1995,45 +1971,6 @@ kbd {
   }
 }
 
-/* 窄屏手机（≤ 520px）：播放键和「回溯 / 录制」挤在同一行放不下，
-   播放键独占一行，「回溯 + 录制」另起一行靠右，底栏变成四行。 */
-@media (max-width: 520px) {
-  .play {
-    grid-column: 1 / -1;
-    order: 0;
-  }
-  .rec {
-    grid-column: 1 / -1;
-    order: 1;
-    justify-self: end;
-  }
-  .speed {
-    order: 2;
-  }
-  .timeline {
-    order: 3;
-  }
-}
-
-/* 小屏手机（≤ 430px）：顶栏放不下 logo + 统计 + 5 个按钮，
-   先让 logo 让位，再把图标与统计收紧一点，保证「帮助」不被切到屏幕外。 */
-@media (max-width: 430px) {
-  #topbar {
-    gap: 8px;
-    padding: 0 8px;
-  }
-  .brand {
-    display: none;
-  }
-  .iconbtn {
-    width: 28px;
-    height: 28px;
-  }
-  .stat {
-    padding: 4px 7px;
-  }
-}
-
 /* ---------- 自绘下拉（替代原生 select） ---------- */
 .menubtn {
   display: inline-flex;
@@ -2395,174 +2332,5 @@ body.dragging-sort {
 @media (max-width: 700px) {
   .set-wrap {
     grid-template-columns: 1fr;
-  }
-}
-
-/* ---------- 声音设置 ---------- */
-/* 静音时喇叭只留一个叉 */
-#btn-sound .slash {
-  display: none;
-}
-
-#btn-sound.off .wave {
-  display: none;
-}
-
-#btn-sound.off .slash {
-  display: inline;
-}
-
-#btn-sound.off {
-  color: var(--dim);
-}
-
-.sound-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.sound-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.sound-row .set-label {
-  flex: 0 0 48px;
-  margin: 0;
-}
-
-.sound-row input[type='range'] {
-  flex: 1 1 auto;
-  min-width: 80px;
-}
-
-.sound-val {
-  flex: 0 0 44px;
-  text-align: right;
-  font-size: 12px;
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-}
-
-.sound-note {
-  font-size: 11.5px;
-  color: var(--dim);
-}
-
-/* 版本号：确认听到的是新版，而不是缓存里的旧页面 */
-.sound-ver {
-  margin-top: 10px;
-  font-size: 11px;
-  color: var(--dim);
-  text-align: right;
-}
-
-.sound-ver b {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.sound-live {
-  margin-top: 2px;
-  padding: 12px 14px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.028);
-}
-
-.sound-live-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.sound-mode {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  color: var(--accent);
-  transition: color 0.4s;
-}
-
-/* 四个状态各有一个色调：死寂灰、平静青、绽放金、悠远蓝 */
-.sound-mode[data-mode='void'] {
-  color: #6b818c;
-}
-
-.sound-mode[data-mode='calm'] {
-  color: var(--accent);
-}
-
-.sound-mode[data-mode='bloom'] {
-  color: #ffd9a0;
-}
-
-.sound-mode[data-mode='cosmic'] {
-  color: #9fd8ff;
-}
-
-.sound-tempo {
-  font-size: 12px;
-  color: var(--dim);
-  font-variant-numeric: tabular-nums;
-}
-
-.sound-live-meta {
-  margin-top: 4px;
-  font-size: 11.5px;
-  color: var(--dim);
-  font-variant-numeric: tabular-nums;
-}
-
-.sound-bars {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 6px 8px;
-  margin-top: 10px;
-}
-
-.sound-bar-label {
-  font-size: 11px;
-  color: var(--dim);
-  white-space: nowrap;
-}
-
-.sound-bar {
-  position: relative;
-  display: block;
-  height: 6px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.06);
-  overflow: hidden;
-}
-
-.sound-bar b {
-  display: block;
-  height: 100%;
-  width: 0;
-  border-radius: 4px;
-  background: linear-gradient(90deg, rgba(108, 245, 210, 0.55), #ffd9a0);
-  transition: width 0.25s linear;
-}
-
-/* 三条强度条各有一个色调：绽放金、律动橙、悠远蓝 */
-#snd-groove {
-  background: linear-gradient(90deg, rgba(255, 217, 160, 0.55), #ff9d6c);
-}
-
-#snd-space {
-  background: linear-gradient(90deg, rgba(108, 245, 210, 0.4), #9fd8ff);
-}
-
-@media (max-width: 520px) {
-  .sound-row .set-label {
-    flex-basis: 40px;
-  }
-  .sound-note {
-    display: none;
   }
 }
